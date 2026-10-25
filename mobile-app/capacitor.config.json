@@ -3,7 +3,7 @@
   "appName": "SpaceMusic",
   "webDir": "www",
   "server": {
-    "url": "https://crouch-mouth-print.ngrok-free.dev",
+    "url": "https://spacemusic.tail8ccfdf.ts.net",
     "cleartext": false
   }
 }

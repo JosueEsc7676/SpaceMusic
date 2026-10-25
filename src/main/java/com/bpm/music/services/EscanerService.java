@@ -278,7 +278,9 @@ public class EscanerService {
             if (nombre.startsWith(".") || nombre.startsWith("._") || nombre.startsWith("~")) continue;
             if (f.isDirectory()) {
                 if (!CARPETAS_EXCLUIDAS.contains(nombre.toLowerCase(Locale.ROOT))) listar(f, out, profundidad + 1);
-            } else if (EXTENSIONES.contains(MetadataService.extension(nombre)) && f.length() >= 32 * 1024) {
+            } else if (EXTENSIONES.contains(MetadataService.extension(nombre)) && f.length() >= 32 * 1024
+                    // Si se modificó hace menos de 20 s probablemente aún se está copiando/descargando
+                    && System.currentTimeMillis() - f.lastModified() > 20_000) {
                 out.add(f);
             }
         }
