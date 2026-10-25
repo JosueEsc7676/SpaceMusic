@@ -62,7 +62,7 @@ public class MetadataService {
             Tag tag = af.getTag();
             if (tag != null) {
                 titulo = limpio(tag.getFirst(FieldKey.TITLE));
-                artista = limpio(primero(tag, FieldKey.ARTIST, FieldKey.ALBUM_ARTIST));
+                artista = primerArtista(limpio(primero(tag, FieldKey.ARTIST, FieldKey.ALBUM_ARTIST)));
                 album = limpio(tag.getFirst(FieldKey.ALBUM));
                 genero = limpiarGenero(tag.getFirst(FieldKey.GENRE));
                 letraTag = tag.getFirst(FieldKey.LYRICS);
@@ -133,6 +133,18 @@ public class MetadataService {
         s = s.replace('\u0000', ' ').trim();
         if (s.isEmpty()) return null;
         return s.length() > 250 ? s.substring(0, 250) : s;
+    }
+
+    /**
+     * Programas como spotDL juntan varios artistas con "/" ("Fred again../LATIN MAFIA").
+     * Se usa el primero, salvo nombres cortos como "AC/DC".
+     */
+    static String primerArtista(String a) {
+        if (a == null) return null;
+        String[] partes = a.split("\\s*[/;]\\s*");
+        if (partes.length < 2) return a;
+        for (String p : partes) if (p.length() < 3) return a;
+        return partes[0].trim();
     }
 
     /** "(17)" o "17" (códigos ID3v1) → nombre del género; deja el texto tal cual. */
