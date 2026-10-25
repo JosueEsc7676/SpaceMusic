@@ -1,6 +1,6 @@
 {
-  "appId": "com.example.app",
-  "appName": "mobile-app",
+  "appId": "com.bpm.spacemusic",
+  "appName": "SpaceMusic",
   "webDir": "www",
   "server": {
     "url": "https://crouch-mouth-print.ngrok-free.dev",

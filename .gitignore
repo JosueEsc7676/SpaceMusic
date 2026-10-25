@@ -44,3 +44,6 @@ node_modules/
 config/application.properties
 /data/
 /out/
+
+### Datos locales de desarrollo ###
+/data/

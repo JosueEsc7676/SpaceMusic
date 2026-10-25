@@ -1,0 +1,24 @@
+# Servicio systemd para SpaceMusic (Ubuntu)
+# Instalar:  sudo cp deploy/spacemusic.service /etc/systemd/system/
+#            sudo systemctl daemon-reload && sudo systemctl enable --now spacemusic
+# Ver logs:  journalctl -u spacemusic -f
+[Unit]
+Description=SpaceMusic - servidor de música
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=joss200509
+WorkingDirectory=/opt/spacemusic
+# config/application.properties dentro de WorkingDirectory se carga solo
+ExecStart=/usr/bin/java -Xms128m -Xmx768m -jar /opt/spacemusic/spacemusic.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=10
+# Seguridad básica
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

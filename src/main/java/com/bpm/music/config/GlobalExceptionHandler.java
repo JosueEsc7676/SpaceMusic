@@ -48,7 +48,10 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.FORBIDDEN, "No tienes permiso para esto");
     }
 
-    @ExceptionHandler({MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class})
+    @ExceptionHandler({MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class,
+            org.springframework.web.multipart.support.MissingServletRequestPartException.class,
+            org.springframework.web.multipart.MultipartException.class,
+            org.springframework.http.converter.HttpMessageNotReadableException.class})
     public ResponseEntity<Map<String, Object>> parametros(Exception e) {
         return error(HttpStatus.BAD_REQUEST, "Parámetros inválidos");
     }

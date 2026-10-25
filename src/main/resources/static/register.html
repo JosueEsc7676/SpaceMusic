@@ -1,171 +1,31 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SpaceMusic — Crear cuenta</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
-.bg{position:fixed;inset:0;background:radial-gradient(ellipse at 70% 50%,rgba(29,185,84,.15) 0%,transparent 60%);pointer-events:none;}
-.card{background:#111;border:1px solid #222;border-radius:20px;padding:40px;width:100%;max-width:460px;position:relative;z-index:1;}
-.logo{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:28px;}
-.logo i{font-size:26px;color:#1db954;} .logo span{font-size:20px;font-weight:800;}
-h1{font-size:22px;font-weight:700;text-align:center;margin-bottom:4px;}
-.sub{color:#b3b3b3;font-size:13px;text-align:center;margin-bottom:24px;}
-.avatar-picker{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:20px;}
-.avatar-preview{width:80px;height:80px;border-radius:50%;object-fit:cover;border:2.5px solid #1db954;cursor:pointer;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:32px;color:#555;overflow:hidden;}
-.avatar-preview img{width:100%;height:100%;object-fit:cover;}
-.avatar-hint{font-size:11px;color:#666;}
-.field{margin-bottom:14px;}
-label{display:block;font-size:11px;font-weight:600;color:#b3b3b3;margin-bottom:5px;letter-spacing:.5px;text-transform:uppercase;}
-input{width:100%;background:#1a1a1a;border:1.5px solid #2a2a2a;border-radius:10px;padding:11px 14px;color:#fff;font-size:14px;font-family:inherit;transition:border .2s;}
-input:focus{outline:none;border-color:#1db954;}
-input::placeholder{color:#555;}
-.hint{font-size:11px;color:#555;margin-top:4px;}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.btn{width:100%;background:#1db954;color:#000;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;transition:background .2s,transform .15s;}
-.btn:hover{background:#1ed760;transform:scale(1.01);}
-.btn:disabled{background:#2a2a2a;color:#555;cursor:not-allowed;transform:none;}
-.link-row{text-align:center;font-size:13px;color:#b3b3b3;margin-top:14px;}
-.link-row a{color:#1db954;text-decoration:none;font-weight:500;}
-.error-msg{background:rgba(231,76,60,.12);border:1px solid rgba(231,76,60,.3);border-radius:8px;padding:10px 12px;font-size:13px;color:#e74c3c;margin-bottom:12px;display:none;}
-.success-msg{background:rgba(29,185,84,.12);border:1px solid rgba(29,185,84,.3);border-radius:8px;padding:10px 12px;font-size:13px;color:#1db954;margin-bottom:12px;text-align:center;display:none;}
-.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
-@keyframes spin{to{transform:rotate(360deg)}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b0f">
+  <title>Crear cuenta · SpaceMusic</title>
+  <link rel="icon" href="/img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
+  <link rel="stylesheet" href="/css/auth.css">
+  <script src="/js/auth-page.js" defer></script>
 </head>
-<body>
-<div class="bg"></div>
-<div class="card">
-    <div class="logo">
-        <i class="fas fa-compact-disc"></i>
-        <span>SpaceMusic</span>
-    </div>
-    <h1>Crea tu cuenta</h1>
-    <p class="sub">Únete y lleva tu música a donde vayas</p>
-
-    <!-- Foto de perfil -->
-    <div class="avatar-picker">
-        <div class="avatar-preview" id="avatarPreview" onclick="document.getElementById('avatarInput').click()">
-            <i class="fas fa-user"></i>
-        </div>
-        <span class="avatar-hint">Toca para elegir tu foto de perfil (opcional)</span>
-        <input type="file" id="avatarInput" accept="image/*" style="display:none">
-    </div>
-
-    <div class="error-msg"   id="errorMsg"></div>
-    <div class="success-msg" id="successMsg"></div>
-
-    <div class="field">
-        <label>Correo electrónico</label>
-        <input type="email" id="email" placeholder="tu@correo.com">
-    </div>
-    <div class="row2">
-        <div class="field">
-            <label>Nombre de usuario</label>
-            <input type="text" id="username" placeholder="mi_usuario" maxlength="30">
-            <div class="hint">Solo letras, números y _</div>
-        </div>
-        <div class="field">
-            <label>Nombre visible</label>
-            <input type="text" id="nombreDisplay" placeholder="Tu Nombre">
-        </div>
-    </div>
-    <div class="field">
-        <label>Contraseña</label>
-        <input type="password" id="password" placeholder="Mínimo 8 caracteres">
-    </div>
-    <div class="field">
-        <label>Confirmar contraseña</label>
-        <input type="password" id="confirm" placeholder="Repite tu contraseña">
-    </div>
-
-    <button class="btn" id="regBtn" onclick="doRegister()">Crear cuenta</button>
-
-    <div class="link-row">¿Ya tienes cuenta? <a href="/login.html">Inicia sesión</a></div>
-</div>
-
-<script>
-let avatarFile = null;
-
-document.getElementById('avatarInput').onchange = (e) => {
-    avatarFile = e.target.files[0];
-    if (!avatarFile) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-        document.getElementById('avatarPreview').innerHTML =
-            `<img src="${ev.target.result}">`;
-    };
-    reader.readAsDataURL(avatarFile);
-};
-
-async function doRegister() {
-    const btn     = document.getElementById('regBtn');
-    const errEl   = document.getElementById('errorMsg');
-    const succEl  = document.getElementById('successMsg');
-    const email   = document.getElementById('email').value.trim();
-    const username= document.getElementById('username').value.trim();
-    const nombre  = document.getElementById('nombreDisplay').value.trim();
-    const pass    = document.getElementById('password').value;
-    const confirm = document.getElementById('confirm').value;
-
-    errEl.style.display = succEl.style.display = 'none';
-
-    if (!email || !username || !pass) {
-        errEl.textContent = 'Completa los campos obligatorios.';
-        errEl.style.display = 'block'; return;
-    }
-    if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
-        errEl.textContent = 'El usuario solo puede tener letras, números y _. (3-30 caracteres)';
-        errEl.style.display = 'block'; return;
-    }
-    if (pass.length < 8) {
-        errEl.textContent = 'La contraseña debe tener al menos 8 caracteres.';
-        errEl.style.display = 'block'; return;
-    }
-    if (pass !== confirm) {
-        errEl.textContent = 'Las contraseñas no coinciden.';
-        errEl.style.display = 'block'; return;
-    }
-
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>Creando cuenta...';
-
-    try {
-        const res  = await fetch('/api/auth/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, username, password: pass, nombreDisplay: nombre || username })
-        });
-        const data = await res.json();
-
-        if (data.error) {
-            errEl.textContent = data.error;
-            errEl.style.display = 'block'; return;
-        }
-
-        // Si hay foto, subirla después de registrar (necesita token)
-        // Por ahora mostramos éxito
-        succEl.innerHTML = '✅ Cuenta creada. <strong>Revisa tu correo</strong> para verificar tu cuenta antes de entrar.';
-        succEl.style.display = 'block';
-        document.querySelectorAll('input').forEach(i => i.value = '');
-        btn.innerHTML = 'Cuenta creada ✓';
-
-        setTimeout(() => location.href = '/login.html', 4000);
-
-    } catch(e) {
-        errEl.textContent = 'Error de conexión.';
-        errEl.style.display = 'block';
-    } finally {
-        btn.disabled = false;
-        if (!document.getElementById('successMsg').style.display === 'block') {
-            btn.innerHTML = 'Crear cuenta';
-        }
-    }
-}
-</script>
+<body data-page="register">
+<main class="card">
+  <a class="brand" href="/login.html"><img src="/img/icon.svg" alt="">SpaceMusic</a>
+  <h1>Crea tu cuenta</h1>
+  <p class="sub">Es gratis y solo toma un minuto</p>
+  <div id="msg" class="msg" role="alert"></div>
+  <form id="form" novalidate>
+    <div class="field"><label for="email">Correo</label><input id="email" type="email" autocomplete="email" placeholder="tu@correo.com" autofocus required></div>
+    <div class="field"><label for="username">Usuario</label><input id="username" type="text" autocomplete="username" placeholder="ej. maria.g" required maxlength="30"></div>
+    <div class="field"><label for="nombre">Nombre visible</label><input id="nombre" type="text" autocomplete="name" placeholder="Cómo quieres que te llamen" maxlength="100"></div>
+    <div class="field"><label for="password">Contraseña</label><div class="pw"><input id="password" type="password" autocomplete="new-password" placeholder="" data-strength required><button type="button" aria-label="Mostrar contraseña">Ver</button></div><div class="strength"><i></i></div><div class="hint">Mínimo 8 caracteres, con letras y números.</div></div>
+    <div class="field"><label for="password2">Repite la contraseña</label><div class="pw"><input id="password2" type="password" autocomplete="new-password" placeholder=""  required><button type="button" aria-label="Mostrar contraseña">Ver</button></div></div>
+    <button class="btn" id="btn" type="submit">Crear cuenta</button>
+  </form>
+  <div class="links">¿Ya tienes cuenta? <a href="/login.html">Inicia sesión</a></div>
+</main>
 </body>
 </html>
