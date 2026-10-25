@@ -39,3 +39,8 @@ build/
 ### Node ###
 node_modules/
 ._*
+
+### Config privada (contraseñas) ###
+config/application.properties
+/data/
+/out/

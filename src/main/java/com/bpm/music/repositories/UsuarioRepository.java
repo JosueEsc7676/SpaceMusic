@@ -8,14 +8,16 @@ import java.util.Optional;
 
 public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
-    Optional<Usuario> findByEmail(String email);
-    Optional<Usuario> findByUsername(String username);
+    Optional<Usuario> findByEmailIgnoreCase(String email);
+    Optional<Usuario> findByUsernameIgnoreCase(String username);
     Optional<Usuario> findByResetToken(String token);
     Optional<Usuario> findByVerificationToken(String token);
 
-    boolean existsByEmail(String email);
-    boolean existsByUsername(String username);
+    boolean existsByEmailIgnoreCase(String email);
+    boolean existsByUsernameIgnoreCase(String username);
+    boolean existsByRol(Usuario.Rol rol);
 
-    // Para el panel admin: solicitudes pendientes
+    long countByRol(Usuario.Rol rol);
+
     List<Usuario> findBySolicitudColaborador(Usuario.EstadoSolicitud estado);
 }

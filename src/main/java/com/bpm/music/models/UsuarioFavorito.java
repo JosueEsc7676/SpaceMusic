@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
 @Table(name = "usuario_favorito",
        uniqueConstraints = @UniqueConstraint(columnNames = {"usuario_id", "cancion_id"}),
        indexes = @Index(name = "idx_uf_usuario", columnList = "usuario_id"))
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

@@ -1,0 +1,28 @@
+# =====================================================================
+#  Copia este archivo como  config/application.properties  y rellena
+#  tus valores. Ese archivo NO se sube a git.
+#  En el servidor, pon la carpeta config/ junto al .jar.
+# =====================================================================
+
+# ── Base de datos MySQL ──
+spring.datasource.url=jdbc:mysql://localhost:3306/musicdb?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+spring.datasource.username=usuario
+spring.datasource.password=contraseña
+
+# ── Rutas ──
+music.path=/home/usuario/musica
+music.playlist-images-path=/home/usuario/spacemusic-uploads
+
+# ── URL pública (la que usan los usuarios para entrar) ──
+app.base-url=http://mi-servidor:8080
+
+# ── Clave JWT: texto aleatorio de 64+ caracteres ──
+#    Genérala con:  openssl rand -base64 48
+jwt.secret=CAMBIA_ESTO_POR_UNA_CLAVE_LARGA_Y_ALEATORIA
+
+# ── Correo (Gmail → Contraseñas de aplicación) ──
+spring.mail.username=tucorreo@gmail.com
+spring.mail.password=xxxx xxxx xxxx xxxx
+
+# ── Clave para crear el primer administrador ──
+app.setup-key=una-clave-secreta

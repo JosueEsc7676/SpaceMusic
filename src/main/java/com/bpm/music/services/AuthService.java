@@ -3,466 +3,353 @@ package com.bpm.music.services;
 import com.bpm.music.models.Usuario;
 import com.bpm.music.repositories.UsuarioRepository;
 import com.bpm.music.security.JwtUtil;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.bpm.music.security.LoginRateLimiter;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Pattern;
 
 @Service
 public class AuthService {
 
-    @Autowired private UsuarioRepository repo;
-    @Autowired private PasswordEncoder encoder;
-    @Autowired private JwtUtil jwtUtil;
-    @Autowired private JavaMailSender mailSender;
+    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]{2,}$");
+    private static final Pattern USERNAME = Pattern.compile("^[A-Za-z0-9._-]{3,30}$");
+    private static final SecureRandom RANDOM = new SecureRandom();
 
-    @Value("${app.base-url:http://localhost:8080}")
-    private String appBaseUrl;
+    private final UsuarioRepository repo;
+    private final PasswordEncoder encoder;
+    private final JwtUtil jwtUtil;
+    private final MailService mail;
+    private final LoginRateLimiter limiter;
+    private final String setupKey;
+    private final boolean requiereVerificacion;
 
-    @Value("${app.setup-key:spacemusic-setup-2024}")
-    private String setupKey;
-
-    @Value("${spring.mail.username}")
-    private String fromEmail;
-
-    // =============================================
-    // REGISTRO
-    // =============================================
-    @Transactional
-    public Map<String, Object> registrar(String email, String username,
-                                         String password, String nombreDisplay) {
-        Map<String, Object> result = new HashMap<>();
-
-        if (repo.existsByEmail(email)) {
-            result.put("error", "El correo ya está registrado");
-            return result;
-        }
-        if (repo.existsByUsername(username)) {
-            result.put("error", "Ese nombre de usuario ya está en uso");
-            return result;
-        }
-
-        String verToken = UUID.randomUUID().toString();
-
-        Usuario usuario = Usuario.builder()
-                .email(email.toLowerCase().trim())
-                .username(username.trim())
-                .password(encoder.encode(password))
-                .nombreDisplay(nombreDisplay != null ? nombreDisplay : username)
-                .rol(Usuario.Rol.USER)
-                .verificationToken(verToken)
-                .build();
-
-        repo.save(usuario);
-
-        // Enviar email de verificación
-        _enviarVerificacion(email, username, verToken);
-
-        result.put("ok", true);
-        result.put("message", "Cuenta creada. Revisa tu correo para verificar tu cuenta.");
-        return result;
+    public AuthService(UsuarioRepository repo, PasswordEncoder encoder, JwtUtil jwtUtil, MailService mail,
+                       LoginRateLimiter limiter,
+                       @Value("${app.setup-key:}") String setupKey,
+                       @Value("${app.require-email-verification:true}") boolean requiereVerificacion) {
+        this.repo = repo;
+        this.encoder = encoder;
+        this.jwtUtil = jwtUtil;
+        this.mail = mail;
+        this.limiter = limiter;
+        this.setupKey = setupKey;
+        this.requiereVerificacion = requiereVerificacion;
     }
 
-    // =============================================
-    // VERIFICAR EMAIL
-    // =============================================
+    // ═══════════════════════ Estado inicial ═══════════════════════
+
+    public Map<String, Object> estado() {
+        boolean hayAdmin = repo.existsByRol(Usuario.Rol.ADMIN);
+        return Map.of(
+                "necesitaAdmin", !hayAdmin,
+                "requiereClave", !setupKey.isBlank(),
+                "requiereVerificacion", requiereVerificacion && mail.configurado());
+    }
+
+    // ═══════════════════════ Registro ═══════════════════════
+
+    @Transactional
+    public Map<String, Object> registrar(String email, String username, String password, String nombreDisplay) {
+        String error = validar(email, username, password);
+        if (error != null) return Map.of("error", error);
+        email = email.trim().toLowerCase(Locale.ROOT);
+        username = username.trim();
+
+        if (repo.existsByEmailIgnoreCase(email)) return Map.of("error", "El correo ya está registrado");
+        if (repo.existsByUsernameIgnoreCase(username)) return Map.of("error", "Ese nombre de usuario ya está en uso");
+
+        boolean verificar = requiereVerificacion && mail.configurado();
+        String token = verificar ? token() : null;
+
+        Usuario u = Usuario.builder()
+                .email(email)
+                .username(username)
+                .password(encoder.encode(password))
+                .nombreDisplay(recortar(nombreDisplay, 100, username))
+                .rol(Usuario.Rol.USER)
+                .emailVerificado(!verificar)
+                .verificationToken(token)
+                .build();
+        repo.save(u);
+
+        if (verificar) {
+            mail.verificacion(email, u.getNombreVisible(), token);
+            return Map.of("ok", true, "verificar", true,
+                    "message", "Cuenta creada. Te enviamos un correo a " + email + " para confirmarla.");
+        }
+        return Map.of("ok", true, "verificar", false, "message", "Cuenta creada. Ya puedes iniciar sesión.");
+    }
+
     @Transactional
     public Map<String, Object> verificarEmail(String token) {
-        Map<String, Object> result = new HashMap<>();
+        if (token == null || token.isBlank()) return Map.of("error", "Enlace inválido");
         Optional<Usuario> opt = repo.findByVerificationToken(token);
-
-        if (opt.isEmpty()) {
-            result.put("error", "Token inválido o ya usado");
-            return result;
-        }
-
+        if (opt.isEmpty()) return Map.of("error", "El enlace no es válido o ya se usó");
         Usuario u = opt.get();
         u.setEmailVerificado(true);
         u.setVerificationToken(null);
         repo.save(u);
-
-        result.put("ok", true);
-        result.put("message", "Email verificado. Ya puedes iniciar sesión.");
-        return result;
+        return Map.of("ok", true);
     }
 
-    // =============================================
-    // LOGIN
-    // =============================================
     @Transactional
-    public Map<String, Object> login(String emailOrUsername, String password) {
-        Map<String, Object> result = new HashMap<>();
+    public Map<String, Object> reenviarVerificacion(String email) {
+        Map<String, Object> ok = Map.of("ok", true, "message", "Si la cuenta existe y no está verificada, te enviamos un correo.");
+        if (email == null) return ok;
+        repo.findByEmailIgnoreCase(email.trim()).filter(u -> !u.isEmailVerificado()).ifPresent(u -> {
+            String t = token();
+            u.setVerificationToken(t);
+            repo.save(u);
+            mail.verificacion(u.getEmail(), u.getNombreVisible(), t);
+        });
+        return ok;
+    }
 
-        // Buscar por email o username
-        Optional<Usuario> opt = emailOrUsername.contains("@")
-                ? repo.findByEmail(emailOrUsername.toLowerCase().trim())
-                : repo.findByUsername(emailOrUsername.trim());
+    // ═══════════════════════ Login ═══════════════════════
 
-        if (opt.isEmpty()) {
-            result.put("error", "Usuario o contraseña incorrectos");
-            return result;
+    @Transactional
+    public Map<String, Object> login(String usuarioOEmail, String password, String ip) {
+        if (usuarioOEmail == null || usuarioOEmail.isBlank() || password == null || password.isEmpty()) {
+            return Map.of("error", "Escribe tu usuario y contraseña");
         }
+        long espera = limiter.segundosBloqueado(ip, usuarioOEmail);
+        if (espera > 0) {
+            return Map.of("error", "Demasiados intentos fallidos. Intenta de nuevo en " + Math.max(1, espera / 60) + " min.");
+        }
+        String id = usuarioOEmail.trim();
+        Optional<Usuario> opt = id.contains("@") ? repo.findByEmailIgnoreCase(id) : repo.findByUsernameIgnoreCase(id);
 
+        if (opt.isEmpty() || !encoder.matches(password, opt.get().getPassword())) {
+            limiter.registrarFallo(ip, usuarioOEmail);
+            return Map.of("error", "Usuario o contraseña incorrectos");
+        }
         Usuario u = opt.get();
-
-        if (!u.isActivo()) {
-            result.put("error", "Cuenta desactivada. Contacta al administrador.");
-            return result;
+        if (!u.isActivo()) return Map.of("error", "Tu cuenta está desactivada. Contacta al administrador.");
+        if (!u.isEmailVerificado() && requiereVerificacion && mail.configurado()) {
+            return Map.of("error", "Confirma tu correo antes de entrar. Revisa tu bandeja de entrada.", "needsVerification", true);
         }
 
-        if (!encoder.matches(password, u.getPassword())) {
-            result.put("error", "Usuario o contraseña incorrectos");
-            return result;
-        }
-
-        if (!u.isEmailVerificado()) {
-            result.put("error", "Debes verificar tu correo antes de entrar.");
-            result.put("needsVerification", true);
-            return result;
-        }
-
-        // Actualizar último login
+        limiter.registrarExito(ip, usuarioOEmail);
         u.setUltimoLogin(LocalDateTime.now());
         repo.save(u);
-
-        String token = jwtUtil.generateToken(u.getId(), u.getUsername(), u.getRol().name());
-
-        result.put("ok", true);
-        result.put("token", token);
-        result.put("usuario", _toPublicMap(u));
-        return result;
+        return sesion(u);
     }
 
-    // =============================================
-    // SOLICITAR RECUPERACIÓN DE CONTRASEÑA
-    // =============================================
+    /** Token nuevo con el rol actual (por si un admin lo cambió). */
+    public Map<String, Object> refrescar(Long userId) {
+        Usuario u = repo.findById(userId).orElseThrow(() -> new NoSuchElementException("Usuario no encontrado"));
+        if (!u.isActivo()) return Map.of("error", "Tu cuenta está desactivada");
+        return sesion(u);
+    }
+
+    private Map<String, Object> sesion(Usuario u) {
+        Map<String, Object> r = new HashMap<>();
+        r.put("ok", true);
+        r.put("token", jwtUtil.generateToken(u.getId(), u.getUsername(), u.getRol().name()));
+        r.put("usuario", perfilPublico(u));
+        return r;
+    }
+
+    // ═══════════════════════ Recuperar contraseña ═══════════════════════
+
     @Transactional
     public Map<String, Object> solicitarReset(String email) {
-        Map<String, Object> result = new HashMap<>();
-
-        Optional<Usuario> opt = repo.findByEmail(email.toLowerCase().trim());
-        // Responder igual aunque no exista (seguridad)
-        result.put("ok", true);
-        result.put("message", "Si el correo existe, recibirás un enlace de recuperación.");
-
-        if (opt.isEmpty()) return result;
-
-        Usuario u = opt.get();
-        String resetToken = UUID.randomUUID().toString();
-
-        u.setResetToken(resetToken);
-        u.setResetTokenExpiry(LocalDateTime.now().plusHours(2)); // válido 2 horas
-        repo.save(u);
-
-        _enviarReset(email, u.getUsername(), resetToken);
-        return result;
+        Map<String, Object> ok = Map.of("ok", true, "message", "Si el correo está registrado, recibirás un enlace para cambiar la contraseña.");
+        if (email == null || email.isBlank()) return ok;
+        repo.findByEmailIgnoreCase(email.trim()).filter(Usuario::isActivo).ifPresent(u -> {
+            String t = token();
+            u.setResetToken(t);
+            u.setResetTokenExpiry(LocalDateTime.now().plusHours(2));
+            repo.save(u);
+            mail.recuperacion(u.getEmail(), u.getNombreVisible(), t);
+        });
+        return ok;
     }
 
-    // =============================================
-    // RESETEAR CONTRASEÑA
-    // =============================================
     @Transactional
-    public Map<String, Object> resetPassword(String token, String newPassword) {
-        Map<String, Object> result = new HashMap<>();
-
+    public Map<String, Object> resetPassword(String token, String nueva) {
+        if (token == null || token.isBlank()) return Map.of("error", "Enlace inválido");
         Optional<Usuario> opt = repo.findByResetToken(token);
-        if (opt.isEmpty()) {
-            result.put("error", "Token inválido o ya usado");
-            return result;
-        }
-
+        if (opt.isEmpty()) return Map.of("error", "El enlace no es válido o ya se usó");
         Usuario u = opt.get();
-
-        if (u.getResetTokenExpiry() == null ||
-                LocalDateTime.now().isAfter(u.getResetTokenExpiry())) {
-            result.put("error", "El enlace expiró. Solicita uno nuevo.");
-            return result;
+        if (u.getResetTokenExpiry() == null || LocalDateTime.now().isAfter(u.getResetTokenExpiry())) {
+            return Map.of("error", "El enlace expiró. Solicita uno nuevo.");
         }
-
-        if (newPassword == null || newPassword.length() < 8) {
-            result.put("error", "La contraseña debe tener al menos 8 caracteres");
-            return result;
-        }
-
-        u.setPassword(encoder.encode(newPassword));
+        String err = validarPassword(nueva);
+        if (err != null) return Map.of("error", err);
+        u.setPassword(encoder.encode(nueva));
         u.setResetToken(null);
         u.setResetTokenExpiry(null);
+        u.setEmailVerificado(true); // si recibió el correo, el correo es suyo
         repo.save(u);
-
-        result.put("ok", true);
-        result.put("message", "Contraseña actualizada correctamente.");
-        return result;
+        return Map.of("ok", true, "message", "Contraseña actualizada. Ya puedes iniciar sesión.");
     }
 
-    // =============================================
-    // ACTUALIZAR PERFIL (foto y nombre display)
-    // =============================================
+    // ═══════════════════════ Perfil ═══════════════════════
+
+    public Map<String, Object> perfil(Long userId) {
+        return perfilPublico(repo.findById(userId).orElseThrow(() -> new NoSuchElementException("Usuario no encontrado")));
+    }
+
     @Transactional
-    public Map<String, Object> actualizarPerfil(Long userId, String nombreDisplay, String fotoPerfil) {
+    public Map<String, Object> actualizarPerfil(Long userId, String nombreDisplay) {
         Usuario u = repo.findById(userId).orElseThrow();
-        if (nombreDisplay != null && !nombreDisplay.isBlank()) u.setNombreDisplay(nombreDisplay);
-        if (fotoPerfil    != null && !fotoPerfil.isBlank())    u.setFotoPerfil(fotoPerfil);
+        if (nombreDisplay != null && !nombreDisplay.isBlank()) u.setNombreDisplay(recortar(nombreDisplay, 100, u.getUsername()));
         repo.save(u);
-        return Map.of("ok", true, "usuario", _toPublicMap(u));
+        return Map.of("ok", true, "usuario", perfilPublico(u));
     }
 
-    // =============================================
-    // OBTENER PERFIL
-    // =============================================
-    public Map<String, Object> getPerfil(Long userId) {
-        Usuario u = repo.findById(userId).orElseThrow();
-        return _toPublicMap(u);
-    }
-
-    // =============================================
-    // HELPERS
-    // =============================================
-    private Map<String, Object> _toPublicMap(Usuario u) {
-        Map<String, Object> m = new HashMap<>();
-        m.put("id",            u.getId());
-        m.put("username",      u.getUsername());
-        m.put("email",         u.getEmail());
-        m.put("nombreDisplay", u.getNombreDisplay());
-        m.put("fotoPerfil",    u.getFotoPerfil());
-        m.put("rol",           u.getRol().name());
-        m.put("fechaRegistro", u.getFechaRegistro());
-        m.put("ultimoLogin",   u.getUltimoLogin());
-        m.put("solicitudColaborador", u.getSolicitudColaborador().name());
-        return m;
-    }
-
-    // =============================================
-    // CREAR PRIMER ADMIN — solo funciona si NO existe ningún admin
-    // =============================================
     @Transactional
-    public Map<String, Object> crearPrimerAdmin(String email, String username,
-                                                String password, String nombreDisplay,
-                                                String setupKey) {
-        Map<String, Object> result = new HashMap<>();
-
-        // Verificar clave de setup (definida en application.properties)
-        if (!setupKey.equals(this.setupKey)) {
-            result.put("error", "Clave de setup incorrecta");
-            return result;
-        }
-
-        // Solo permitir si NO existe ningún admin
-        boolean adminExiste = repo.findAll().stream()
-                .anyMatch(u -> u.getRol() == com.bpm.music.models.Usuario.Rol.ADMIN);
-        if (adminExiste) {
-            result.put("error", "Ya existe un administrador. Este endpoint está deshabilitado.");
-            return result;
-        }
-
-        if (repo.existsByEmail(email)) {
-            result.put("error", "El correo ya está registrado");
-            return result;
-        }
-        if (repo.existsByUsername(username)) {
-            result.put("error", "El nombre de usuario ya está en uso");
-            return result;
-        }
-        if (password == null || password.length() < 8) {
-            result.put("error", "La contraseña debe tener al menos 8 caracteres");
-            return result;
-        }
-
-        Usuario admin = Usuario.builder()
-                .email(email.toLowerCase().trim())
-                .username(username.trim())
-                .password(encoder.encode(password))
-                .nombreDisplay(nombreDisplay != null ? nombreDisplay : username)
-                .rol(com.bpm.music.models.Usuario.Rol.ADMIN)
-                .activo(true)
-                .emailVerificado(true)  // admin no necesita verificar email
-                .build();
-
-        repo.save(admin);
-
-        String token = jwtUtil.generateToken(admin.getId(), admin.getUsername(), admin.getRol().name());
-        result.put("ok", true);
-        result.put("token", token);
-        result.put("usuario", _toPublicMap(admin));
-        result.put("message", "✅ Admin creado. Guarda bien estas credenciales.");
-        return result;
+    public Map<String, Object> cambiarPassword(Long userId, String actual, String nueva) {
+        Usuario u = repo.findById(userId).orElseThrow();
+        if (actual == null || !encoder.matches(actual, u.getPassword())) return Map.of("error", "La contraseña actual no es correcta");
+        String err = validarPassword(nueva);
+        if (err != null) return Map.of("error", err);
+        if (encoder.matches(nueva, u.getPassword())) return Map.of("error", "La nueva contraseña debe ser distinta");
+        u.setPassword(encoder.encode(nueva));
+        repo.save(u);
+        return Map.of("ok", true, "message", "Contraseña actualizada");
     }
 
-    // =============================================
-    // CAMBIAR EMAIL
-    // =============================================
     @Transactional
     public Map<String, Object> cambiarEmail(Long userId, String nuevoEmail, String password) {
-        Map<String, Object> result = new HashMap<>();
         Usuario u = repo.findById(userId).orElseThrow();
+        if (password == null || !encoder.matches(password, u.getPassword())) return Map.of("error", "Contraseña incorrecta");
+        if (nuevoEmail == null || !EMAIL.matcher(nuevoEmail.trim()).matches()) return Map.of("error", "Escribe un correo válido");
+        String email = nuevoEmail.trim().toLowerCase(Locale.ROOT);
+        if (email.equalsIgnoreCase(u.getEmail())) return Map.of("error", "Ese ya es tu correo");
+        if (repo.existsByEmailIgnoreCase(email)) return Map.of("error", "Ese correo ya está en uso");
 
-        if (!encoder.matches(password, u.getPassword())) {
-            result.put("error", "Contraseña incorrecta"); return result;
+        if (!mail.configurado()) {
+            u.setEmail(email);
+            repo.save(u);
+            return Map.of("ok", true, "message", "Correo actualizado", "usuario", perfilPublico(u));
         }
-        if (repo.existsByEmail(nuevoEmail.toLowerCase().trim())) {
-            result.put("error", "Ese correo ya está en uso"); return result;
-        }
-
-        String verToken = java.util.UUID.randomUUID().toString();
-        u.setVerificationToken(verToken);
-        // Guardar nuevo email temporalmente en resetToken field hasta verificar
-        u.setResetToken("email:" + nuevoEmail.toLowerCase().trim());
-        u.setResetTokenExpiry(java.time.LocalDateTime.now().plusHours(24));
+        String t = token();
+        u.setEmailPendiente(email);
+        u.setVerificationToken(t);
+        u.setResetTokenExpiry(LocalDateTime.now().plusHours(24));
         repo.save(u);
-
-        _enviarVerificacionNuevoEmail(nuevoEmail, u.getUsername(), verToken);
-        result.put("ok", true);
-        result.put("message", "Se envió un enlace de confirmación a " + nuevoEmail);
-        return result;
+        mail.cambioEmail(email, u.getNombreVisible(), t);
+        return Map.of("ok", true, "message", "Te enviamos un enlace a " + email + " para confirmar el cambio.");
     }
 
     @Transactional
     public Map<String, Object> confirmarCambioEmail(String token) {
-        Map<String, Object> result = new HashMap<>();
-        var opt = repo.findByVerificationToken(token);
-        if (opt.isEmpty()) { result.put("error", "Token inválido"); return result; }
-
+        Optional<Usuario> opt = token == null ? Optional.empty() : repo.findByVerificationToken(token);
+        if (opt.isEmpty() || opt.get().getEmailPendiente() == null) return Map.of("error", "El enlace no es válido");
         Usuario u = opt.get();
-        if (u.getResetToken() == null || !u.getResetToken().startsWith("email:")) {
-            result.put("error", "Token inválido"); return result;
+        if (u.getResetTokenExpiry() != null && LocalDateTime.now().isAfter(u.getResetTokenExpiry())) {
+            return Map.of("error", "El enlace expiró");
         }
-        if (u.getResetTokenExpiry() != null &&
-                java.time.LocalDateTime.now().isAfter(u.getResetTokenExpiry())) {
-            result.put("error", "Token expirado"); return result;
-        }
-
-        String nuevoEmail = u.getResetToken().substring(6);
-        u.setEmail(nuevoEmail);
+        if (repo.existsByEmailIgnoreCase(u.getEmailPendiente())) return Map.of("error", "Ese correo ya está en uso");
+        u.setEmail(u.getEmailPendiente());
+        u.setEmailPendiente(null);
         u.setVerificationToken(null);
-        u.setResetToken(null);
         u.setResetTokenExpiry(null);
+        u.setEmailVerificado(true);
         repo.save(u);
-
-        result.put("ok", true);
-        result.put("message", "Email actualizado correctamente");
-        return result;
+        return Map.of("ok", true);
     }
 
-    // =============================================
-    // CAMBIAR CONTRASEÑA (desde perfil, con contraseña actual)
-    // =============================================
-    @Transactional
-    public Map<String, Object> cambiarPassword(Long userId, String actual, String nueva) {
-        Map<String, Object> result = new HashMap<>();
-        if (nueva == null || nueva.length() < 8) {
-            result.put("error", "La nueva contraseña debe tener al menos 8 caracteres"); return result;
-        }
-        Usuario u = repo.findById(userId).orElseThrow();
-        if (!encoder.matches(actual, u.getPassword())) {
-            result.put("error", "La contraseña actual es incorrecta"); return result;
-        }
-        u.setPassword(encoder.encode(nueva));
-        repo.save(u);
-        result.put("ok", true);
-        result.put("message", "Contraseña actualizada correctamente");
-        return result;
-    }
-
-    // =============================================
-    // SOLICITAR SER COLABORADOR
-    // =============================================
     @Transactional
     public Map<String, Object> solicitarColaborador(Long userId, String motivo) {
-        Map<String, Object> result = new HashMap<>();
         Usuario u = repo.findById(userId).orElseThrow();
-
-        if (u.getRol() == com.bpm.music.models.Usuario.Rol.ADMIN) {
-            result.put("error", "Los administradores no necesitan solicitar"); return result;
-        }
-        if (u.getRol() == com.bpm.music.models.Usuario.Rol.COLABORADOR) {
-            result.put("error", "Ya eres colaborador"); return result;
-        }
-        if (u.getSolicitudColaborador() == com.bpm.music.models.Usuario.EstadoSolicitud.PENDIENTE) {
-            result.put("error", "Ya tienes una solicitud pendiente"); return result;
-        }
-
-        u.setSolicitudColaborador(com.bpm.music.models.Usuario.EstadoSolicitud.PENDIENTE);
-        u.setMotivoSolicitud(motivo != null ? motivo.trim() : "");
-        u.setFechaSolicitud(java.time.LocalDateTime.now());
+        if (u.getRol() != Usuario.Rol.USER) return Map.of("error", "Ya tienes permisos de colaborador");
+        if (u.getSolicitudColaborador() == Usuario.EstadoSolicitud.PENDIENTE) return Map.of("error", "Ya tienes una solicitud pendiente");
+        u.setSolicitudColaborador(Usuario.EstadoSolicitud.PENDIENTE);
+        u.setMotivoSolicitud(recortar(motivo, 500, ""));
+        u.setFechaSolicitud(LocalDateTime.now());
+        u.setRespuestaAdmin(null);
         repo.save(u);
-
-        result.put("ok", true);
-        result.put("message", "Solicitud enviada. El administrador la revisará pronto.");
-        return result;
+        return Map.of("ok", true, "message", "Solicitud enviada. Un administrador la revisará.", "usuario", perfilPublico(u));
     }
 
-    // =============================================
-    // ACTUALIZAR PERFIL COMPLETO
-    // =============================================
     @Transactional
-    public Map<String, Object> actualizarPerfilCompleto(Long userId, Map<String, String> datos) {
+    public void guardarFoto(Long userId, String url) {
         Usuario u = repo.findById(userId).orElseThrow();
-        if (datos.containsKey("nombreDisplay") && !datos.get("nombreDisplay").isBlank())
-            u.setNombreDisplay(datos.get("nombreDisplay").trim());
-        if (datos.containsKey("fotoPerfil") && !datos.get("fotoPerfil").isBlank())
-            u.setFotoPerfil(datos.get("fotoPerfil").trim());
+        u.setFotoPerfil(url);
         repo.save(u);
-        return Map.of("ok", true, "usuario", _toPublicMap(u));
     }
 
-    private void _enviarVerificacionNuevoEmail(String email, String username, String token) {
-        try {
-            org.springframework.mail.SimpleMailMessage msg = new org.springframework.mail.SimpleMailMessage();
-            msg.setFrom(fromEmail);
-            msg.setTo(email);
-            msg.setSubject("SpaceMusic - Confirmar cambio de email");
-            msg.setText("Hola " + username + ",\n\n" +
-                    "Haz clic para confirmar tu nuevo email:\n" +
-                    appBaseUrl + "/api/auth/confirm-email?token=" + token + "\n\n" +
-                    "El enlace expira en 24 horas.\n\n— SpaceMusic");
-            mailSender.send(msg);
-        } catch (Exception e) {
-            System.err.println("Email error: " + e.getMessage());
+    // ═══════════════════════ Primer administrador ═══════════════════════
+
+    @Transactional
+    public Map<String, Object> crearPrimerAdmin(String email, String username, String password,
+                                                String nombreDisplay, String clave, boolean desdeLocalhost) {
+        if (repo.existsByRol(Usuario.Rol.ADMIN)) return Map.of("error", "Ya existe un administrador");
+        if (setupKey.isBlank()) {
+            if (!desdeLocalhost) return Map.of("error", "Configura app.setup-key o crea el admin desde el propio servidor (localhost)");
+        } else if (clave == null || !java.security.MessageDigest.isEqual(clave.getBytes(), setupKey.getBytes())) {
+            return Map.of("error", "Clave de instalación incorrecta");
         }
+        String error = validar(email, username, password);
+        if (error != null) return Map.of("error", error);
+        if (repo.existsByEmailIgnoreCase(email.trim())) return Map.of("error", "El correo ya está registrado");
+        if (repo.existsByUsernameIgnoreCase(username.trim())) return Map.of("error", "El nombre de usuario ya está en uso");
+
+        Usuario admin = repo.save(Usuario.builder()
+                .email(email.trim().toLowerCase(Locale.ROOT))
+                .username(username.trim())
+                .password(encoder.encode(password))
+                .nombreDisplay(recortar(nombreDisplay, 100, username.trim()))
+                .rol(Usuario.Rol.ADMIN)
+                .activo(true)
+                .emailVerificado(true)
+                .build());
+        Map<String, Object> r = new HashMap<>(sesion(admin));
+        r.put("message", "Administrador creado");
+        return r;
     }
 
-    private void _enviarVerificacion(String email, String username, String token) {
-        try {
-            SimpleMailMessage msg = new SimpleMailMessage();
-            msg.setFrom(fromEmail);
-            msg.setTo(email);
-            msg.setSubject("SpaceMusic - Verifica tu cuenta");
-            msg.setText(
-                    "Hola " + username + ",\n\n" +
-                            "Gracias por registrarte en SpaceMusic. " +
-                            "Haz clic en el enlace para verificar tu cuenta:\n\n" +
-                            appBaseUrl + "/api/auth/verify?token=" + token + "\n\n" +
-                            "Si no creaste esta cuenta, ignora este mensaje.\n\n" +
-                            "— SpaceMusic"
-            );
-            mailSender.send(msg);
-        } catch (Exception e) {
-            System.err.println("⚠️ Error enviando email de verificación: " + e.getMessage());
-        }
+    // ═══════════════════════ Helpers ═══════════════════════
+
+    public static Map<String, Object> perfilPublico(Usuario u) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", u.getId());
+        m.put("username", u.getUsername());
+        m.put("email", u.getEmail());
+        m.put("nombreDisplay", u.getNombreVisible());
+        m.put("fotoPerfil", u.getFotoPerfil());
+        m.put("rol", u.getRol().name());
+        m.put("fechaRegistro", u.getFechaRegistro());
+        m.put("ultimoLogin", u.getUltimoLogin());
+        m.put("solicitudColaborador", u.getSolicitudColaborador().name());
+        m.put("respuestaAdmin", u.getRespuestaAdmin());
+        m.put("emailPendiente", u.getEmailPendiente());
+        return m;
     }
 
-    private void _enviarReset(String email, String username, String token) {
-        try {
-            SimpleMailMessage msg = new SimpleMailMessage();
-            msg.setFrom(fromEmail);
-            msg.setTo(email);
-            msg.setSubject("SpaceMusic - Recuperar contraseña");
-            msg.setText(
-                    "Hola " + username + ",\n\n" +
-                            "Recibimos una solicitud para restablecer tu contraseña.\n" +
-                            "Haz clic en el enlace (válido por 2 horas):\n\n" +
-                            appBaseUrl + "/reset-password.html?token=" + token + "\n\n" +
-                            "Si no solicitaste esto, ignora este mensaje. Tu contraseña no cambiará.\n\n" +
-                            "— SpaceMusic"
-            );
-            mailSender.send(msg);
-        } catch (Exception e) {
-            System.err.println("⚠️ Error enviando email de reset: " + e.getMessage());
-        }
+    private String validar(String email, String username, String password) {
+        if (email == null || !EMAIL.matcher(email.trim()).matches()) return "Escribe un correo válido";
+        if (username == null || !USERNAME.matcher(username.trim()).matches())
+            return "El usuario debe tener de 3 a 30 caracteres: letras, números, punto, guion o guion bajo";
+        return validarPassword(password);
+    }
+
+    private static String validarPassword(String p) {
+        if (p == null || p.length() < 8) return "La contraseña debe tener al menos 8 caracteres";
+        if (p.length() > 128) return "La contraseña es demasiado larga";
+        if (p.chars().noneMatch(Character::isLetter) || p.chars().noneMatch(Character::isDigit))
+            return "La contraseña debe tener letras y números";
+        return null;
+    }
+
+    private static String recortar(String s, int max, String porDefecto) {
+        if (s == null || s.isBlank()) return porDefecto;
+        s = s.trim();
+        return s.length() > max ? s.substring(0, max) : s;
+    }
+
+    private static String token() {
+        byte[] b = new byte[32];
+        RANDOM.nextBytes(b);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(b);
     }
 }

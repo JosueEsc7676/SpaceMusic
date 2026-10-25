@@ -1,14 +1,15 @@
 package com.bpm.music.controllers;
 
+import com.bpm.music.dtos.CancionDTO;
 import com.bpm.music.services.EstadisticasService;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
+/** Estadísticas globales (solo ADMIN, ver SecurityConfig). */
 @RestController
 @RequestMapping("/api/estadisticas")
-@CrossOrigin(origins = "*")
 public class EstadisticasController {
 
     private final EstadisticasService service;
@@ -17,34 +18,29 @@ public class EstadisticasController {
         this.service = service;
     }
 
-    // Resumen general: totales, horas, géneros, etc.
     @GetMapping
-    public ResponseEntity<Map<String, Object>> getResumen() {
-        return ResponseEntity.ok(service.getResumenGeneral());
+    public Map<String, Object> resumen() {
+        return service.resumen();
     }
 
-    // Top artistas por reproducciones
     @GetMapping("/top-artistas")
-    public ResponseEntity<Object> getTopArtistas(
-            @RequestParam(defaultValue = "10") int limite) {
-        return ResponseEntity.ok(service.getTopArtistas(limite));
+    public List<Map<String, Object>> topArtistas(@RequestParam(defaultValue = "10") int limite) {
+        return service.topArtistas(Math.min(limite, 100));
     }
 
-    // Top géneros
     @GetMapping("/top-generos")
-    public ResponseEntity<Object> getTopGeneros() {
-        return ResponseEntity.ok(service.getTopGeneros());
+    public List<Map<String, Object>> topGeneros() {
+        return service.topGeneros();
     }
 
-    // Canciones agregadas por mes (últimos 12 meses)
     @GetMapping("/por-mes")
-    public ResponseEntity<Object> getPorMes() {
-        return ResponseEntity.ok(service.getCancionesPorMes());
+    public List<Map<String, Object>> porMes() {
+        return service.cancionesPorMes();
     }
 
-    // Distribución de duración de canciones
-    @GetMapping("/duracion")
-    public ResponseEntity<Object> getDistribucionDuracion() {
-        return ResponseEntity.ok(service.getDistribucionDuracion());
+    @GetMapping("/tendencias")
+    public List<CancionDTO> tendencias(@RequestParam(defaultValue = "7") int dias,
+                                       @RequestParam(defaultValue = "20") int limite) {
+        return service.tendencias(Math.max(1, dias), Math.min(limite, 100));
     }
 }

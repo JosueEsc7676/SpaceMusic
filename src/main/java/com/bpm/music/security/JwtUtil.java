@@ -1,69 +1,74 @@
 package com.bpm.music.security;
 
-import io.jsonwebtoken.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.Date;
 
 @Component
 public class JwtUtil {
 
-    @Value("${jwt.secret}")
-    private String secret;
+    private static final Logger log = LoggerFactory.getLogger(JwtUtil.class);
 
-    @Value("${jwt.expiration:86400000}") // 24 horas por defecto
-    private long expirationMs;
+    private final SecretKey key;
+    private final long expirationMs;
 
-    private SecretKey getKey() {
-        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    public JwtUtil(@Value("${jwt.secret:}") String secret,
+                   @Value("${jwt.expiration:604800000}") long expirationMs) {
+        this.expirationMs = expirationMs;
+        this.key = construirClave(secret);
     }
 
-    // Generar token con userId, username y rol
+    private static SecretKey construirClave(String secret) {
+        try {
+            byte[] material;
+            if (secret == null || secret.isBlank()) {
+                material = new byte[64];
+                new SecureRandom().nextBytes(material);
+                log.warn("jwt.secret no está configurado: se generó una clave temporal. " +
+                        "Las sesiones se cerrarán al reiniciar el servidor.");
+            } else {
+                // SHA-512 permite usar claves de cualquier longitud de forma segura
+                material = MessageDigest.getInstance("SHA-512").digest(secret.getBytes(StandardCharsets.UTF_8));
+            }
+            return Keys.hmacShaKeyFor(material);
+        } catch (Exception e) {
+            throw new IllegalStateException("No se pudo crear la clave JWT", e);
+        }
+    }
+
     public String generateToken(Long userId, String username, String rol) {
+        Date ahora = new Date();
         return Jwts.builder()
                 .subject(String.valueOf(userId))
                 .claim("username", username)
                 .claim("rol", rol)
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + expirationMs))
-                .signWith(getKey())
+                .issuedAt(ahora)
+                .expiration(new Date(ahora.getTime() + expirationMs))
+                .signWith(key)
                 .compact();
     }
 
-    // Extraer userId del token
-    public Long getUserId(String token) {
-        return Long.parseLong(getClaims(token).getSubject());
-    }
-
-    // Extraer username
-    public String getUsername(String token) {
-        return getClaims(token).get("username", String.class);
-    }
-
-    // Extraer rol
-    public String getRol(String token) {
-        return getClaims(token).get("rol", String.class);
-    }
-
-    // Validar token
-    public boolean isValid(String token) {
+    /** Devuelve los claims si el token es válido, o null si no lo es. */
+    public Claims parse(String token) {
         try {
-            getClaims(token);
-            return true;
+            return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
         } catch (JwtException | IllegalArgumentException e) {
-            return false;
+            return null;
         }
     }
 
-    private Claims getClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(getKey())
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+    public boolean isValid(String token) {
+        return parse(token) != null;
     }
 }

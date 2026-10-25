@@ -2,11 +2,13 @@ package com.bpm.music.models;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "usuario")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -41,14 +43,18 @@ public class Usuario {
     @Builder.Default
     private boolean emailVerificado = false;
 
-    // Token para recuperación de contraseña
+    /** Token para recuperar la contraseña. */
     @Column(length = 200)
     private String resetToken;
     private LocalDateTime resetTokenExpiry;
 
-    // Token para verificación de email
+    /** Token para verificar el correo (registro o cambio de correo). */
     @Column(length = 200)
     private String verificationToken;
+
+    /** Nuevo correo pendiente de confirmar. */
+    @Column(length = 255)
+    private String emailPendiente;
 
     @Builder.Default
     private LocalDateTime fechaRegistro = LocalDateTime.now();
@@ -61,25 +67,28 @@ public class Usuario {
     private EstadoSolicitud solicitudColaborador = EstadoSolicitud.NINGUNA;
 
     @Column(length = 500)
-    private String motivoSolicitud;     // mensaje que el usuario escribe al solicitar
+    private String motivoSolicitud;
 
     private LocalDateTime fechaSolicitud;
 
     @Column(length = 200)
-    private String respuestaAdmin;      // nota del admin al aprobar/rechazar
+    private String respuestaAdmin;
 
-    // ─── Roles ───
-    public enum Rol {
-        USER,           // usuario normal
-        COLABORADOR,    // puede subir LRC, subir canciones, editar nombres
-        ADMIN           // acceso total + panel admin
+    public String getNombreVisible() {
+        return (nombreDisplay != null && !nombreDisplay.isBlank()) ? nombreDisplay : username;
     }
 
-    // ─── Estados de solicitud ───
+    public EstadoSolicitud getSolicitudColaborador() {
+        return solicitudColaborador != null ? solicitudColaborador : EstadoSolicitud.NINGUNA;
+    }
+
+    public enum Rol {
+        USER,           // usuario normal
+        COLABORADOR,    // puede subir letras y canciones y editar datos
+        ADMIN           // acceso total
+    }
+
     public enum EstadoSolicitud {
-        NINGUNA,    // nunca ha solicitado
-        PENDIENTE,  // solicitud enviada, esperando respuesta
-        APROBADA,   // aprobada → rol cambia a COLABORADOR
-        RECHAZADA   // rechazada
+        NINGUNA, PENDIENTE, APROBADA, RECHAZADA
     }
 }

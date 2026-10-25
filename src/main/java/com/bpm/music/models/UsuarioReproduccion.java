@@ -2,20 +2,22 @@ package com.bpm.music.models;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 /**
- * Cada vez que un usuario reproduce una canción se registra aquí.
- * Esto permite estadísticas POR USUARIO separadas de las globales.
+ * Cada reproducción de un usuario. Permite estadísticas personales,
+ * "escuchado recientemente" y recomendaciones.
  */
 @Entity
 @Table(name = "usuario_reproduccion",
-       indexes = {
-           @Index(name = "idx_ur_usuario", columnList = "usuario_id"),
-           @Index(name = "idx_ur_cancion", columnList = "cancion_id"),
-           @Index(name = "idx_ur_fecha",   columnList = "fecha")
-       })
-@Data
+        indexes = {
+                @Index(name = "idx_ur_usuario", columnList = "usuario_id"),
+                @Index(name = "idx_ur_cancion", columnList = "cancion_id"),
+                @Index(name = "idx_ur_fecha", columnList = "fecha")
+        })
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -36,6 +38,9 @@ public class UsuarioReproduccion {
     @Builder.Default
     private LocalDateTime fecha = LocalDateTime.now();
 
-    // Para saber desde dónde se reprodujo
-    private String contexto; // 'album', 'playlist', 'search', 'radio', etc.
+    /** Desde dónde se reprodujo: album, playlist, search, radio, etc. */
+    private String contexto;
+
+    /** Segundos realmente escuchados (null en registros antiguos). */
+    private Integer segundos;
 }

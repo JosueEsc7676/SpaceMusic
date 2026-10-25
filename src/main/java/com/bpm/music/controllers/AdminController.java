@@ -2,134 +2,174 @@ package com.bpm.music.controllers;
 
 import com.bpm.music.models.Usuario;
 import com.bpm.music.repositories.UsuarioRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.bpm.music.security.CurrentUser;
+import com.bpm.music.services.AuthService;
+import com.bpm.music.services.EscanerService;
+import com.bpm.music.services.MailService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
+/** Panel de administración (solo ADMIN, ver SecurityConfig). */
 @RestController
 @RequestMapping("/api/admin")
-@CrossOrigin(origins = "*")
 public class AdminController {
 
-    @Autowired
-    private UsuarioRepository usuarioRepo;
+    private final UsuarioRepository usuarios;
+    private final EscanerService escaner;
+    private final MailService mail;
 
-    // ── Lista todos los usuarios ──
+    public AdminController(UsuarioRepository usuarios, EscanerService escaner, MailService mail) {
+        this.usuarios = usuarios;
+        this.escaner = escaner;
+        this.mail = mail;
+    }
+
+    // ═══════════════════ Usuarios ═══════════════════
+
     @GetMapping("/usuarios")
-    public ResponseEntity<List<Map<String, Object>>> listarUsuarios() {
-        return ResponseEntity.ok(
-                usuarioRepo.findAll().stream()
-                        .map(this::toMap)
-                        .collect(Collectors.toList())
-        );
+    public List<Map<String, Object>> listar() {
+        return usuarios.findAll().stream()
+                .sorted(Comparator.comparing(Usuario::getId))
+                .map(this::toMap).toList();
     }
 
-    // ── Solicitudes pendientes de colaborador ──
     @GetMapping("/solicitudes")
-    public ResponseEntity<List<Map<String, Object>>> getSolicitudes() {
-        return ResponseEntity.ok(
-                usuarioRepo.findBySolicitudColaborador(Usuario.EstadoSolicitud.PENDIENTE)
-                        .stream()
-                        .map(this::toMap)
-                        .collect(Collectors.toList())
-        );
+    public List<Map<String, Object>> solicitudes() {
+        return usuarios.findBySolicitudColaborador(Usuario.EstadoSolicitud.PENDIENTE).stream().map(this::toMap).toList();
     }
 
-    // ── Aprobar solicitud ──
     @PostMapping("/solicitudes/{userId}/aprobar")
-    public ResponseEntity<Map<String, Object>> aprobar(
-            @PathVariable Long userId,
-            @RequestBody(required = false) Map<String, String> body) {
-
-        Usuario u = usuarioRepo.findById(userId).orElseThrow();
-        u.setRol(Usuario.Rol.COLABORADOR);
+    @Transactional
+    public Map<String, Object> aprobar(@PathVariable Long userId, @RequestBody(required = false) Map<String, String> b) {
+        Usuario u = usuario(userId);
+        if (u.getRol() == Usuario.Rol.USER) u.setRol(Usuario.Rol.COLABORADOR);
         u.setSolicitudColaborador(Usuario.EstadoSolicitud.APROBADA);
-        u.setRespuestaAdmin(body != null ? body.getOrDefault("nota", "") : "");
-        usuarioRepo.save(u);
-        return ResponseEntity.ok(Map.of("ok", true, "message", "Colaborador aprobado"));
+        u.setRespuestaAdmin(nota(b));
+        usuarios.save(u);
+        mail.solicitudResuelta(u.getEmail(), u.getNombreVisible(), true, u.getRespuestaAdmin());
+        return Map.of("ok", true, "usuario", toMap(u));
     }
 
-    // ── Rechazar solicitud ──
     @PostMapping("/solicitudes/{userId}/rechazar")
-    public ResponseEntity<Map<String, Object>> rechazar(
-            @PathVariable Long userId,
-            @RequestBody(required = false) Map<String, String> body) {
-
-        Usuario u = usuarioRepo.findById(userId).orElseThrow();
+    @Transactional
+    public Map<String, Object> rechazar(@PathVariable Long userId, @RequestBody(required = false) Map<String, String> b) {
+        Usuario u = usuario(userId);
         u.setSolicitudColaborador(Usuario.EstadoSolicitud.RECHAZADA);
-        u.setRespuestaAdmin(body != null ? body.getOrDefault("nota", "") : "");
-        usuarioRepo.save(u);
-        return ResponseEntity.ok(Map.of("ok", true, "message", "Solicitud rechazada"));
+        u.setRespuestaAdmin(nota(b));
+        usuarios.save(u);
+        mail.solicitudResuelta(u.getEmail(), u.getNombreVisible(), false, u.getRespuestaAdmin());
+        return Map.of("ok", true, "usuario", toMap(u));
     }
 
-    // ── Cambiar rol manualmente ──
     @PutMapping("/usuarios/{userId}/rol")
-    public ResponseEntity<Map<String, Object>> cambiarRol(
-            @PathVariable Long userId,
-            @RequestBody Map<String, String> body) {
-
-        Usuario u = usuarioRepo.findById(userId).orElseThrow();
+    @Transactional
+    public ResponseEntity<Map<String, Object>> rol(@PathVariable Long userId, @RequestBody Map<String, String> b) {
+        Usuario u = usuario(userId);
+        Usuario.Rol nuevo;
         try {
-            u.setRol(Usuario.Rol.valueOf(body.get("rol")));
-            usuarioRepo.save(u);
-            return ResponseEntity.ok(Map.of("ok", true, "rol", u.getRol().name()));
+            nuevo = Usuario.Rol.valueOf(b.get("rol"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", "Rol inválido"));
         }
+        if (u.getRol() == Usuario.Rol.ADMIN && nuevo != Usuario.Rol.ADMIN && usuarios.countByRol(Usuario.Rol.ADMIN) <= 1) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Debe quedar al menos un administrador"));
+        }
+        u.setRol(nuevo);
+        if (nuevo != Usuario.Rol.USER && u.getSolicitudColaborador() == Usuario.EstadoSolicitud.PENDIENTE) {
+            u.setSolicitudColaborador(Usuario.EstadoSolicitud.APROBADA);
+        }
+        usuarios.save(u);
+        return ResponseEntity.ok(Map.of("ok", true, "usuario", toMap(u)));
     }
 
-    // ── Activar / desactivar usuario ──
     @PutMapping("/usuarios/{userId}/estado")
-    public ResponseEntity<Map<String, Object>> cambiarEstado(
-            @PathVariable Long userId,
-            @RequestBody Map<String, Boolean> body) {
-
-        Usuario u = usuarioRepo.findById(userId).orElseThrow();
-        u.setActivo(body.getOrDefault("activo", true));
-        usuarioRepo.save(u);
-        return ResponseEntity.ok(Map.of("ok", true, "activo", u.isActivo()));
+    @Transactional
+    public ResponseEntity<Map<String, Object>> estado(@PathVariable Long userId, @RequestBody Map<String, Boolean> b) {
+        Usuario u = usuario(userId);
+        boolean activo = b.getOrDefault("activo", true);
+        if (!activo && Objects.equals(u.getId(), CurrentUser.id())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "No puedes desactivar tu propia cuenta"));
+        }
+        u.setActivo(activo);
+        usuarios.save(u);
+        return ResponseEntity.ok(Map.of("ok", true, "usuario", toMap(u)));
     }
 
-    // ── Resumen del panel admin ──
-    @GetMapping("/resumen")
-    public ResponseEntity<Map<String, Object>> resumen() {
-        List<Usuario> todos = usuarioRepo.findAll();
-        long admins       = todos.stream().filter(u -> u.getRol() == Usuario.Rol.ADMIN).count();
-        long colaboradores= todos.stream().filter(u -> u.getRol() == Usuario.Rol.COLABORADOR).count();
-        long users        = todos.stream().filter(u -> u.getRol() == Usuario.Rol.USER).count();
-        long pendientes   = todos.stream()
-                .filter(u -> u.getSolicitudColaborador() != null && u.getSolicitudColaborador() == Usuario.EstadoSolicitud.PENDIENTE).count();
+    /** Marca el correo como verificado (útil si el correo no llegó). */
+    @PostMapping("/usuarios/{userId}/verificar")
+    @Transactional
+    public Map<String, Object> verificar(@PathVariable Long userId) {
+        Usuario u = usuario(userId);
+        u.setEmailVerificado(true);
+        u.setVerificationToken(null);
+        usuarios.save(u);
+        return Map.of("ok", true, "usuario", toMap(u));
+    }
 
-        return ResponseEntity.ok(Map.of(
-                "totalUsuarios",    todos.size(),
-                "admins",           admins,
-                "colaboradores",    colaboradores,
-                "users",            users,
-                "solicitudesPendientes", pendientes
-        ));
+    @GetMapping("/resumen")
+    public Map<String, Object> resumen() {
+        List<Usuario> todos = usuarios.findAll();
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("totalUsuarios", todos.size());
+        r.put("admins", todos.stream().filter(u -> u.getRol() == Usuario.Rol.ADMIN).count());
+        r.put("colaboradores", todos.stream().filter(u -> u.getRol() == Usuario.Rol.COLABORADOR).count());
+        r.put("users", todos.stream().filter(u -> u.getRol() == Usuario.Rol.USER).count());
+        r.put("inactivos", todos.stream().filter(u -> !u.isActivo()).count());
+        r.put("solicitudesPendientes", todos.stream()
+                .filter(u -> u.getSolicitudColaborador() == Usuario.EstadoSolicitud.PENDIENTE).count());
+        r.put("correoConfigurado", mail.configurado());
+        return r;
+    }
+
+    // ═══════════════════ Biblioteca ═══════════════════
+
+    @GetMapping("/biblioteca")
+    public Map<String, Object> biblioteca() {
+        return escaner.estado();
+    }
+
+    @PostMapping("/biblioteca/escanear")
+    public Map<String, Object> escanear() {
+        boolean iniciado = escaner.escanearEnSegundoPlano();
+        Map<String, Object> r = new LinkedHashMap<>(escaner.estado());
+        r.put("iniciado", iniciado);
+        return r;
+    }
+
+    @PostMapping("/biblioteca/metadatos")
+    public Map<String, Object> metadatos() {
+        boolean iniciado = escaner.refrescarMetadatosEnSegundoPlano();
+        Map<String, Object> r = new LinkedHashMap<>(escaner.estado());
+        r.put("iniciado", iniciado);
+        return r;
+    }
+
+    @PostMapping("/biblioteca/limpiar")
+    public Map<String, Object> limpiar(@RequestParam(defaultValue = "false") boolean forzar) {
+        return escaner.limpiarHuerfanas(forzar);
+    }
+
+    // ═══════════════════ Helpers ═══════════════════
+
+    private Usuario usuario(Long id) {
+        return usuarios.findById(id).orElseThrow(() -> new NoSuchElementException("Usuario no encontrado"));
+    }
+
+    private static String nota(Map<String, String> b) {
+        if (b == null) return "";
+        String n = b.getOrDefault("nota", "").trim();
+        return n.length() > 200 ? n.substring(0, 200) : n;
     }
 
     private Map<String, Object> toMap(Usuario u) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id",           u.getId());
-        m.put("username",     u.getUsername());
-        m.put("email",        u.getEmail());
-        m.put("nombreDisplay",u.getNombreDisplay());
-        m.put("fotoPerfil",   u.getFotoPerfil());
-        m.put("rol",          u.getRol().name());
-        m.put("activo",       u.isActivo());
+        Map<String, Object> m = new LinkedHashMap<>(AuthService.perfilPublico(u));
+        m.put("activo", u.isActivo());
         m.put("emailVerificado", u.isEmailVerificado());
-        m.put("solicitudColaborador", u.getSolicitudColaborador() != null ? u.getSolicitudColaborador().name() : "NINGUNA");
-        m.put("motivoSolicitud",      u.getMotivoSolicitud());
-        m.put("fechaSolicitud",       u.getFechaSolicitud());
-        m.put("respuestaAdmin",       u.getRespuestaAdmin());
-        m.put("fechaRegistro",        u.getFechaRegistro());
-        m.put("ultimoLogin",          u.getUltimoLogin());
+        m.put("motivoSolicitud", u.getMotivoSolicitud());
+        m.put("fechaSolicitud", u.getFechaSolicitud());
         return m;
     }
 }

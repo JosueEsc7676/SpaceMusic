@@ -1,155 +1,94 @@
 package com.bpm.music.services;
 
+import com.bpm.music.dtos.ArtistaDTO;
+import com.bpm.music.dtos.CancionDTO;
 import com.bpm.music.repositories.CancionRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.bpm.music.repositories.UsuarioRepository;
+import com.bpm.music.repositories.UsuarioReproduccionRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/** Estadísticas globales de la biblioteca (panel de administración). */
 @Service
 public class EstadisticasService {
 
-    @Autowired
-    private CancionRepository repository;
+    private static final String[] MESES = {"Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"};
 
-    // =========================
-    // RESUMEN GENERAL
-    // =========================
-    public Map<String, Object> getResumenGeneral() {
+    private final BibliotecaService biblioteca;
+    private final CancionRepository cancionRepo;
+    private final UsuarioRepository usuarioRepo;
+    private final UsuarioReproduccionRepository reproRepo;
 
-        List<Object[]> datos = repository.findEstadisticasGenerales();
+    public EstadisticasService(BibliotecaService biblioteca, CancionRepository cancionRepo,
+                               UsuarioRepository usuarioRepo, UsuarioReproduccionRepository reproRepo) {
+        this.biblioteca = biblioteca;
+        this.cancionRepo = cancionRepo;
+        this.usuarioRepo = usuarioRepo;
+        this.reproRepo = reproRepo;
+    }
 
-        Map<String, Object> resumen = new LinkedHashMap<>();
+    public Map<String, Object> resumen() {
+        List<CancionDTO> todas = biblioteca.todas();
+        long segundos = todas.stream().mapToLong(CancionDTO::getDuracionSegundos).sum();
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("totalCanciones", todas.size());
+        r.put("totalArtistas", biblioteca.artistas().size());
+        r.put("totalAlbumes", biblioteca.albumes().size());
+        r.put("totalGeneros", biblioteca.generos().size());
+        r.put("totalReproducciones", todas.stream().mapToLong(CancionDTO::getReproducciones).sum());
+        r.put("duracionTotalSegundos", segundos);
+        r.put("duracionFormateada", UsuarioService.formatear(segundos));
+        r.put("conLetra", todas.stream().filter(CancionDTO::isTieneLetra).count());
+        r.put("conLetraSincronizada", todas.stream().filter(CancionDTO::isLetraSincronizada).count());
+        r.put("totalUsuarios", usuarioRepo.count());
+        LocalDateTime hace30 = LocalDateTime.now().minusDays(30);
+        r.put("usuariosActivos30d", reproRepo.countUsuariosActivosDesde(hace30));
+        r.put("reproducciones30d", reproRepo.countByFechaAfter(hace30));
+        r.put("formatos", todas.stream()
+                .collect(Collectors.groupingBy(c -> c.getFormato() == null ? "?" : c.getFormato().toUpperCase(), TreeMap::new, Collectors.counting())));
+        return r;
+    }
 
-        if (!datos.isEmpty()) {
-            Object[] row = datos.get(0);
-            Number totalCanciones    = (Number) row[0];
-            Number totalArtistas     = (Number) row[1];
-            Number totalAlbumes      = (Number) row[2];
-            Number totalGeneros      = (Number) row[3];
-            Number totalReproducciones = (Number) row[4];
-            Number duracionTotal     = (Number) row[5]; // en segundos
-            Number favoritos         = (Number) row[6];
+    public List<Map<String, Object>> topArtistas(int limite) {
+        return biblioteca.artistas().stream()
+                .sorted(Comparator.comparingInt(ArtistaDTO::totalReproducciones).reversed())
+                .limit(limite)
+                .map(a -> Map.<String, Object>of("artista", a.nombre(), "reproducciones", a.totalReproducciones(),
+                        "canciones", a.totalCanciones(), "portadaUrl", Objects.toString(a.portadaUrl(), "")))
+                .toList();
+    }
 
-            long segundos = duracionTotal != null ? duracionTotal.longValue() : 0;
-            long horas    = segundos / 3600;
-            long minutos  = (segundos % 3600) / 60;
+    public List<Map<String, Object>> topGeneros() {
+        List<Map<String, Object>> g = biblioteca.generos();
+        long total = g.stream().mapToLong(m -> ((Number) m.get("totalCanciones")).longValue()).sum();
+        return g.stream().map(m -> {
+            Map<String, Object> x = new LinkedHashMap<>(m);
+            long n = ((Number) m.get("totalCanciones")).longValue();
+            x.put("genero", m.get("nombre"));
+            x.put("canciones", n);
+            x.put("porcentaje", total == 0 ? 0 : Math.round(n * 1000.0 / total) / 10.0);
+            return x;
+        }).toList();
+    }
 
-            resumen.put("totalCanciones",     totalCanciones != null ? totalCanciones.intValue() : 0);
-            resumen.put("totalArtistas",      totalArtistas != null ? totalArtistas.intValue() : 0);
-            resumen.put("totalAlbumes",       totalAlbumes != null ? totalAlbumes.intValue() : 0);
-            resumen.put("totalGeneros",       totalGeneros != null ? totalGeneros.intValue() : 0);
-            resumen.put("totalReproducciones",totalReproducciones != null ? totalReproducciones.intValue() : 0);
-            resumen.put("duracionTotalSegundos", segundos);
-            resumen.put("duracionFormateada", horas + "h " + minutos + "m");
-            resumen.put("totalFavoritos",     favoritos != null ? favoritos.intValue() : 0);
+    public List<Map<String, Object>> cancionesPorMes() {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Object[] row : cancionRepo.findCancionesPorMes()) {
+            int anio = ((Number) row[0]).intValue(), mes = ((Number) row[1]).intValue();
+            out.add(0, Map.of("anio", anio, "mes", mes, "cantidad", ((Number) row[2]).intValue(),
+                    "etiqueta", MESES[Math.max(0, Math.min(11, mes - 1))] + " " + (anio % 100)));
         }
-
-        return resumen;
+        return out;
     }
 
-    // =========================
-    // TOP ARTISTAS
-    // =========================
-    public List<Map<String, Object>> getTopArtistas(int limite) {
-
-        List<Object[]> datos = repository.findTopArtistasPorReproducciones(limite);
-
-        return datos.stream().map(row -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("artista",        (String) row[0]);
-            map.put("reproducciones", ((Number) row[1]).intValue());
-            map.put("canciones",      ((Number) row[2]).intValue());
-            return map;
-        }).collect(Collectors.toList());
-    }
-
-    // =========================
-    // TOP GÉNEROS
-    // =========================
-    public List<Map<String, Object>> getTopGeneros() {
-
-        List<Object[]> datos = repository.findGenerosPorReproducciones();
-
-        int totalReproducciones = datos.stream()
-                .mapToInt(row -> ((Number) row[1]).intValue())
-                .sum();
-
-        return datos.stream().map(row -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            String genero  = row[0] != null ? (String) row[0] : "Desconocido";
-            int repros     = ((Number) row[1]).intValue();
-            int canciones  = ((Number) row[2]).intValue();
-            double pct     = totalReproducciones > 0
-                    ? Math.round((repros * 100.0 / totalReproducciones) * 10.0) / 10.0
-                    : 0.0;
-
-            map.put("genero",         genero);
-            map.put("reproducciones", repros);
-            map.put("canciones",      canciones);
-            map.put("porcentaje",     pct);
-            return map;
-        }).collect(Collectors.toList());
-    }
-
-    // =========================
-    // CANCIONES POR MES
-    // =========================
-    public List<Map<String, Object>> getCancionesPorMes() {
-
-        List<Object[]> datos = repository.findCancionesPorMes();
-
-        return datos.stream().map(row -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("anio",     ((Number) row[0]).intValue());
-            map.put("mes",      ((Number) row[1]).intValue());
-            map.put("cantidad", ((Number) row[2]).intValue());
-            // Nombre del mes en español
-            map.put("etiqueta", nombreMes(((Number) row[1]).intValue()) + " " + ((Number) row[0]).intValue());
-            return map;
-        }).collect(Collectors.toList());
-    }
-
-    // =========================
-    // DISTRIBUCIÓN DE DURACIÓN
-    // =========================
-    public Map<String, Object> getDistribucionDuracion() {
-
-        List<Object[]> datos = repository.findDistribucionDuracion();
-
-        // Buckets: <2min, 2-4min, 4-6min, >6min
-        int menosDe2 = 0, entre2y4 = 0, entre4y6 = 0, masDe6 = 0;
-
-        for (Object[] row : datos) {
-            int seg = ((Number) row[0]).intValue();
-            if      (seg < 120)  menosDe2++;
-            else if (seg < 240)  entre2y4++;
-            else if (seg < 360)  entre4y6++;
-            else                 masDe6++;
-        }
-
-        Map<String, Object> dist = new LinkedHashMap<>();
-        dist.put("menosDe2min",  menosDe2);
-        dist.put("entre2y4min",  entre2y4);
-        dist.put("entre4y6min",  entre4y6);
-        dist.put("masDe6min",    masDe6);
-
-        // Duración promedio
-        OptionalDouble promedio = datos.stream()
-                .mapToInt(r -> ((Number) r[0]).intValue())
-                .average();
-        dist.put("promedioSegundos", promedio.isPresent() ? (int) promedio.getAsDouble() : 0);
-
-        return dist;
-    }
-
-    // =========================
-    // HELPERS
-    // =========================
-    private String nombreMes(int mes) {
-        String[] meses = {"Ene","Feb","Mar","Abr","May","Jun",
-                          "Jul","Ago","Sep","Oct","Nov","Dic"};
-        return (mes >= 1 && mes <= 12) ? meses[mes - 1] : "?";
+    /** Lo más escuchado por todos en los últimos días. */
+    public List<CancionDTO> tendencias(int dias, int limite) {
+        List<Long> ids = reproRepo.findTendencias(LocalDateTime.now().minusDays(dias), PageRequest.of(0, limite))
+                .stream().map(r -> ((Number) r[0]).longValue()).toList();
+        return biblioteca.porIds(ids);
     }
 }

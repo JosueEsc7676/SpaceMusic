@@ -18,7 +18,8 @@ import java.time.LocalDateTime;
            @Index(name = "idx_sesion_fecha",  columnList = "sesion_id, fecha_reproduccion DESC"),
            @Index(name = "idx_cancion_sesion", columnList = "cancion_id, sesion_id")
        })
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

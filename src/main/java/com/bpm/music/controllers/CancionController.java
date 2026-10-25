@@ -1,198 +1,181 @@
 package com.bpm.music.controllers;
 
+import com.bpm.music.dtos.AlbumDTO;
 import com.bpm.music.dtos.CancionDTO;
-import com.bpm.music.models.Cancion;
-import com.bpm.music.services.CancionService;
+import com.bpm.music.security.CurrentUser;
+import com.bpm.music.services.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.ResourceRegion;
 import org.springframework.http.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
-import java.util.HashMap;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/api/canciones")
-@CrossOrigin(origins = "*")
 public class CancionController {
 
-    private final CancionService service;
+    private final BibliotecaService biblioteca;
+    private final CancionService canciones;
+    private final UsuarioService usuarios;
+    private final LetrasService letras;
+    private final boolean permitirDescargas;
 
-    @Value("${music.path}")
-    private String rutaMusica;
-
-    // Chunk máximo por request: 2 MB — ideal para streaming fluido
-    private static final long CHUNK_SIZE = 2 * 1024 * 1024;
-
-    public CancionController(CancionService service) {
-        this.service = service;
+    public CancionController(BibliotecaService biblioteca, CancionService canciones, UsuarioService usuarios,
+                             LetrasService letras, @Value("${app.allow-downloads:true}") boolean permitirDescargas) {
+        this.biblioteca = biblioteca;
+        this.canciones = canciones;
+        this.usuarios = usuarios;
+        this.letras = letras;
+        this.permitirDescargas = permitirDescargas;
     }
 
     @GetMapping
-    public ResponseEntity<List<CancionDTO>> listarTodos() {
-        return ResponseEntity.ok(service.listarTodos());
+    public List<CancionDTO> todas() {
+        return biblioteca.todas();
     }
 
     @GetMapping("/buscar")
-    public ResponseEntity<List<CancionDTO>> buscar(@RequestParam String q) {
-        return ResponseEntity.ok(service.buscarProfesional(q));
-    }
-
-    @GetMapping("/artista/{artista}")
-    public ResponseEntity<List<CancionDTO>> getByArtista(@PathVariable String artista) {
-        return ResponseEntity.ok(service.getByArtista(artista));
-    }
-
-    @GetMapping("/album/{album}")
-    public ResponseEntity<List<CancionDTO>> getByAlbum(@PathVariable String album) {
-        return ResponseEntity.ok(service.getByAlbum(album));
-    }
-
-    @GetMapping("/albumes")
-    public ResponseEntity<List<Map<String, Object>>> getAlbumes() {
-        return ResponseEntity.ok(service.getAlbumesConInfo());
-    }
-
-    @GetMapping("/favoritos")
-    public ResponseEntity<List<CancionDTO>> getFavoritos() {
-        return ResponseEntity.ok(service.getFavoritos());
+    public List<CancionDTO> buscar(@RequestParam(defaultValue = "") String q,
+                                   @RequestParam(defaultValue = "50") int limite) {
+        return biblioteca.buscarCanciones(q, Math.min(Math.max(limite, 1), 200));
     }
 
     @GetMapping("/top")
-    public ResponseEntity<List<CancionDTO>> getTop() {
-        return ResponseEntity.ok(service.getTopReproducidas());
+    public List<CancionDTO> top(@RequestParam(defaultValue = "20") int limite) {
+        return biblioteca.top(Math.min(limite, 100));
     }
 
-    @PutMapping("/{id}/favorito")
-    public ResponseEntity<CancionDTO> toggleFavorito(@PathVariable Long id) {
-        return ResponseEntity.ok(service.toggleFavorito(id));
+    @GetMapping("/recientes")
+    public List<CancionDTO> recientes(@RequestParam(defaultValue = "20") int limite) {
+        return biblioteca.recienAgregadas(Math.min(limite, 100));
     }
 
-    @PostMapping("/{id}/reproducir")
-    public ResponseEntity<Void> incrementarReproduccion(@PathVariable Long id) {
-        service.incrementarReproduccion(id);
-        return ResponseEntity.ok().build();
+    /** Favoritos del usuario actual. */
+    @GetMapping("/favoritos")
+    public List<CancionDTO> favoritos() {
+        return usuarios.favoritos(CurrentUser.id());
+    }
+
+    @GetMapping("/artista/{artista}")
+    public List<CancionDTO> deArtista(@PathVariable String artista) {
+        return biblioteca.cancionesDeArtista(artista);
+    }
+
+    @GetMapping("/album/{album}")
+    public List<CancionDTO> deAlbum(@PathVariable String album) {
+        return biblioteca.album(album).map(AlbumDTO::canciones).orElse(List.of());
+    }
+
+    @GetMapping("/albumes")
+    public List<AlbumDTO> albumes() {
+        return biblioteca.albumes();
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<CancionDTO> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(service.getById(id));
+    public CancionDTO porId(@PathVariable Long id) {
+        return biblioteca.requerir(id);
     }
 
-    @GetMapping("/historial")
-    public List<String> historial() {
-        return service.obtenerHistorial();
+    @PutMapping("/{id}/favorito")
+    public Map<String, Object> favorito(@PathVariable Long id) {
+        return usuarios.toggleFavorito(CurrentUser.id(), id);
     }
 
-    // =============================================
-    // STREAMING DE AUDIO — MP3 y FLAC
-    // ResourceRegion hace streaming real sin cargar el archivo en memoria
-    // =============================================
-    @GetMapping("/{id}/audio")
-    public ResponseEntity<ResourceRegion> servirAudio(
-            @PathVariable Long id,
-            @RequestHeader HttpHeaders headers) {
-
-        try {
-            Cancion cancion = service.getCancionEntity(id);
-            File archivo = new File(rutaMusica, cancion.getRutaArchivo());
-
-            // Si no existe en la ruta directa, buscar recursivamente en subcarpetas
-            if (!archivo.exists()) {
-                String soloNombre = new File(cancion.getRutaArchivo()).getName();
-                File encontrado = buscarRecursivo(new File(rutaMusica), soloNombre);
-                if (encontrado != null) {
-                    archivo = encontrado;
-                } else {
-                    System.err.println("❌ No encontrado: " + cancion.getRutaArchivo());
-                    return ResponseEntity.notFound().build();
-                }
-            }
-
-            if (!archivo.canRead()) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-
-            Resource  resource   = new FileSystemResource(archivo);
-            long      fileLength = resource.contentLength();
-            MediaType mimeType   = MediaType.parseMediaType(
-                    detectarMimeType(cancion.getRutaArchivo()));
-
-            List<HttpRange> ranges = headers.getRange();
-
-            if (!ranges.isEmpty()) {
-                // Respuesta parcial 206 con el chunk pedido
-                HttpRange range        = ranges.get(0);
-                long      start        = range.getRangeStart(fileLength);
-                long      end          = range.getRangeEnd(fileLength);
-                long      regionLength = Math.min(CHUNK_SIZE, end - start + 1);
-
-                ResourceRegion region = new ResourceRegion(resource, start, regionLength);
-                return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
-                        .contentType(mimeType)
-                        .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                        .body(region);
-            }
-
-            // Sin Range: entregar primer chunk (206 con Content-Range)
-            long regionLength = Math.min(CHUNK_SIZE, fileLength);
-            ResourceRegion region = new ResourceRegion(resource, 0, regionLength);
-            return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
-                    .contentType(mimeType)
-                    .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                    .header(HttpHeaders.CONTENT_RANGE,
-                            "bytes 0-" + (regionLength - 1) + "/" + fileLength)
-                    .body(region);
-
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
-        }
+    @PostMapping("/{id}/reproducir")
+    public ResponseEntity<Void> reproducir(@PathVariable Long id,
+                                           @RequestParam(defaultValue = "otro") String contexto,
+                                           @RequestParam(required = false) Integer segundos) {
+        usuarios.registrarReproduccion(CurrentUser.id(), id, contexto, segundos);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{id}/letra")
-    public ResponseEntity<Map<String, Object>> getLetra(@PathVariable Long id) {
-        try {
-            Cancion cancion = service.getCancionEntity(id);
-            Map<String, Object> response = new HashMap<>();
-            response.put("letra",
-                    cancion.getLetra() != null ? cancion.getLetra() : "");
-            response.put("letraSincronizada",
-                    cancion.getLetraSincronizada() != null ? cancion.getLetraSincronizada() : "");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("letra", "");
-            response.put("letraSincronizada", "");
-            return ResponseEntity.ok(response);
-        }
+    public Map<String, Object> letra(@PathVariable Long id) {
+        return letras.obtener(id);
     }
 
-    private File buscarRecursivo(File dir, String nombre) {
-        if (!dir.isDirectory()) return null;
-        File[] archivos = dir.listFiles();
-        if (archivos == null) return null;
-        for (File f : archivos) {
-            if (f.isFile() && f.getName().equals(nombre)) return f;
-            if (f.isDirectory()) {
-                File found = buscarRecursivo(f, nombre);
-                if (found != null) return found;
-            }
-        }
-        return null;
+    // ═══════════════════ Audio ═══════════════════
+
+    /**
+     * Streaming de audio con soporte de rangos (206 Partial Content):
+     * Spring sirve solo el trozo pedido, así se puede adelantar la canción.
+     */
+    @GetMapping("/{id}/audio")
+    public ResponseEntity<Resource> audio(@PathVariable Long id) {
+        File f = canciones.archivo(id);
+        if (f == null || !f.canRead()) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(mime(f.getName())))
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                .cacheControl(CacheControl.maxAge(7, TimeUnit.DAYS).cachePrivate())
+                .lastModified(f.lastModified())
+                .body(new FileSystemResource(f));
     }
 
-    private String detectarMimeType(String filename) {
-        String lower = filename.toLowerCase();
-        if (lower.endsWith(".flac")) return "audio/flac";
-        if (lower.endsWith(".mp3"))  return "audio/mpeg";
-        if (lower.endsWith(".ogg"))  return "audio/ogg";
-        if (lower.endsWith(".wav"))  return "audio/wav";
-        if (lower.endsWith(".m4a"))  return "audio/mp4";
-        if (lower.endsWith(".aac"))  return "audio/aac";
-        return "audio/mpeg";
+    @GetMapping("/{id}/descargar")
+    public ResponseEntity<Resource> descargar(@PathVariable Long id) {
+        if (!permitirDescargas && !CurrentUser.esAdmin()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        CancionDTO c = biblioteca.requerir(id);
+        File f = canciones.archivo(id);
+        if (f == null || !f.canRead()) return ResponseEntity.notFound().build();
+        String nombre = (c.getArtista() + " - " + c.getNombre()).replaceAll("[\\\\/:*?\"<>|]", "_")
+                + "." + MetadataService.extension(f.getName());
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(mime(f.getName())))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(nombre, StandardCharsets.UTF_8).build().toString())
+                .contentLength(f.length())
+                .body(new FileSystemResource(f));
+    }
+
+    // ═══════════════════ Edición (colaboradores) ═══════════════════
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','COLABORADOR')")
+    public CancionDTO editar(@PathVariable Long id, @RequestBody Map<String, Object> datos) {
+        return canciones.editar(id, datos);
+    }
+
+    /** Alias de la versión anterior. */
+    @PutMapping("/{id}/editar")
+    @PreAuthorize("hasAnyRole('ADMIN','COLABORADOR')")
+    public CancionDTO editarAlias(@PathVariable Long id, @RequestBody Map<String, Object> datos) {
+        return canciones.editar(id, datos);
+    }
+
+    @PostMapping("/{id}/portada")
+    @PreAuthorize("hasAnyRole('ADMIN','COLABORADOR')")
+    public CancionDTO portada(@PathVariable Long id, @RequestParam("file") MultipartFile file) throws IOException {
+        return canciones.cambiarPortada(id, file);
+    }
+
+    @PostMapping("/subir")
+    @PreAuthorize("hasAnyRole('ADMIN','COLABORADOR')")
+    public List<Map<String, Object>> subir(@RequestParam("files") List<MultipartFile> files) {
+        if (files == null || files.isEmpty()) throw new IllegalArgumentException("No se recibió ningún archivo");
+        if (files.size() > 50) throw new IllegalArgumentException("Máximo 50 archivos a la vez");
+        return canciones.subir(files);
+    }
+
+    static String mime(String nombre) {
+        return switch (MetadataService.extension(nombre)) {
+            case "flac" -> "audio/flac";
+            case "m4a", "mp4", "aac" -> "audio/mp4";
+            case "ogg", "oga" -> "audio/ogg";
+            case "opus" -> "audio/ogg";
+            case "wav" -> "audio/wav";
+            default -> "audio/mpeg";
+        };
     }
 }

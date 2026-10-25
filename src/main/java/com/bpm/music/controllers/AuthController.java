@@ -1,147 +1,120 @@
 package com.bpm.music.controllers;
 
+import com.bpm.music.security.CurrentUser;
 import com.bpm.music.services.AuthService;
-import com.bpm.music.services.UsuarioService;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.bpm.music.services.ImagenService;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.net.URI;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "*")
 public class AuthController {
 
-    @Autowired private AuthService authService;
-    @Autowired private UsuarioService usuarioService;
+    private final AuthService auth;
+    private final ImagenService imagenes;
 
-    // ── Crear primer admin (solo funciona si no existe ningún admin) ──
+    public AuthController(AuthService auth, ImagenService imagenes) {
+        this.auth = auth;
+        this.imagenes = imagenes;
+    }
+
+    /** Indica si falta crear el primer administrador. */
+    @GetMapping("/estado")
+    public Map<String, Object> estado() {
+        return auth.estado();
+    }
+
     @PostMapping("/setup-admin")
-    public ResponseEntity<Map<String, Object>> setupAdmin(@RequestBody Map<String, String> body) {
-        var result = authService.crearPrimerAdmin(
-                body.get("email"),
-                body.get("username"),
-                body.get("password"),
-                body.get("nombreDisplay"),
-                body.get("setupKey")
-        );
-        if (result.containsKey("error")) return ResponseEntity.badRequest().body(result);
-        return ResponseEntity.ok(result);
+    public ResponseEntity<Map<String, Object>> setupAdmin(@RequestBody Map<String, String> b, HttpServletRequest req) {
+        String ip = req.getRemoteAddr();
+        boolean local = "127.0.0.1".equals(ip) || "0:0:0:0:0:0:0:1".equals(ip) || "::1".equals(ip);
+        return respuesta(auth.crearPrimerAdmin(b.get("email"), b.get("username"), b.get("password"),
+                b.get("nombreDisplay"), b.get("setupKey"), local));
     }
 
-    // ── Registro ──
     @PostMapping("/register")
-    public ResponseEntity<Map<String, Object>> register(@RequestBody Map<String, String> body) {
-        var result = authService.registrar(
-                body.get("email"),
-                body.get("username"),
-                body.get("password"),
-                body.get("nombreDisplay")
-        );
-        if (result.containsKey("error")) return ResponseEntity.badRequest().body(result);
-        return ResponseEntity.ok(result);
+    public ResponseEntity<Map<String, Object>> register(@RequestBody Map<String, String> b) {
+        return respuesta(auth.registrar(b.get("email"), b.get("username"), b.get("password"), b.get("nombreDisplay")));
     }
 
-    // ── Verificar email ──
     @GetMapping("/verify")
-    public ResponseEntity<?> verify(@RequestParam String token) {
-        var result = authService.verificarEmail(token);
-        if (result.containsKey("error")) {
-            return ResponseEntity.badRequest().body(result);
-        }
-        // Redirigir al login con mensaje de éxito
-        return ResponseEntity.status(302)
-                .header("Location", "/login.html?verified=true")
-                .build();
+    public ResponseEntity<Void> verify(@RequestParam(required = false) String token) {
+        var r = auth.verificarEmail(token);
+        return redirigir(r.containsKey("error") ? "/login.html?verified=false" : "/login.html?verified=true");
     }
 
-    // ── Login ──
-    @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> body) {
-        var result = authService.login(body.get("email"), body.get("password"));
-        if (result.containsKey("error")) return ResponseEntity.badRequest().body(result);
-        return ResponseEntity.ok(result);
-    }
-
-    // ── Solicitar reset de contraseña ──
-    @PostMapping("/forgot-password")
-    public ResponseEntity<Map<String, Object>> forgotPassword(@RequestBody Map<String, String> body) {
-        return ResponseEntity.ok(authService.solicitarReset(body.get("email")));
-    }
-
-    // ── Resetear contraseña ──
-    @PostMapping("/reset-password")
-    public ResponseEntity<Map<String, Object>> resetPassword(@RequestBody Map<String, String> body) {
-        var result = authService.resetPassword(body.get("token"), body.get("password"));
-        if (result.containsKey("error")) return ResponseEntity.badRequest().body(result);
-        return ResponseEntity.ok(result);
-    }
-
-    // ── Perfil del usuario logueado ──
-    @GetMapping("/me")
-    public ResponseEntity<Map<String, Object>> me(Authentication auth) {
-        Long userId = (Long) auth.getPrincipal();
-        return ResponseEntity.ok(authService.getPerfil(userId));
-    }
-
-    // ── Actualizar perfil (nombre y foto) ──
-    @PutMapping("/me")
-    public ResponseEntity<Map<String, Object>> updateProfile(
-            Authentication auth,
-            @RequestBody Map<String, String> body) {
-        Long userId = (Long) auth.getPrincipal();
-        return ResponseEntity.ok(
-                authService.actualizarPerfil(userId, body.get("nombreDisplay"), body.get("fotoPerfil"))
-        );
-    }
-
-    // ── Subir foto de perfil ──
-    @PostMapping("/me/foto")
-    public ResponseEntity<Map<String, Object>> uploadFoto(
-            Authentication auth,
-            @RequestParam("file") MultipartFile file) {
-        Long userId = (Long) auth.getPrincipal();
-        return ResponseEntity.ok(usuarioService.subirFotoPerfil(userId, file));
-    }
-
-    // ── Reenviar email de verificación ──
     @PostMapping("/resend-verification")
-    public ResponseEntity<Map<String, Object>> resendVerification(@RequestBody Map<String, String> body) {
-        return ResponseEntity.ok(usuarioService.reenviarVerificacion(body.get("email")));
+    public Map<String, Object> resend(@RequestBody Map<String, String> b) {
+        return auth.reenviarVerificacion(b.get("email"));
     }
 
-    // ── Confirmar cambio de email ──
+    @PostMapping("/login")
+    public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> b, HttpServletRequest req) {
+        String usuario = b.getOrDefault("usuario", b.get("email"));
+        return respuesta(auth.login(usuario, b.get("password"), req.getRemoteAddr()));
+    }
+
+    @PostMapping("/forgot-password")
+    public Map<String, Object> forgot(@RequestBody Map<String, String> b) {
+        return auth.solicitarReset(b.get("email"));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Map<String, Object>> reset(@RequestBody Map<String, String> b) {
+        return respuesta(auth.resetPassword(b.get("token"), b.get("password")));
+    }
+
     @GetMapping("/confirm-email")
-    public ResponseEntity<?> confirmEmail(@RequestParam String token) {
-        var result = authService.confirmarCambioEmail(token);
-        if (result.containsKey("error")) {
-            return ResponseEntity.badRequest().body(result);
-        }
-        return ResponseEntity.status(302)
-                .header("Location", "/index.html?emailChanged=true")
-                .build();
+    public ResponseEntity<Void> confirmEmail(@RequestParam(required = false) String token) {
+        var r = auth.confirmarCambioEmail(token);
+        return redirigir(r.containsKey("error") ? "/login.html?emailChanged=false" : "/login.html?emailChanged=true");
     }
 
-    // ── Servir avatar (alias de /api/usuario/avatar) ──
-    @GetMapping("/avatar/{filename}")
-    public ResponseEntity<byte[]> getAvatar(
-            @PathVariable String filename,
-            @org.springframework.beans.factory.annotation.Value("${music.playlist-images-path:./playlist-images}") String uploadsPath) {
-        try {
-            java.nio.file.Path ruta = java.nio.file.Paths.get(uploadsPath + "/avatars", filename);
-            if (!java.nio.file.Files.exists(ruta)) return ResponseEntity.notFound().build();
-            byte[] data = java.nio.file.Files.readAllBytes(ruta);
-            String type = java.nio.file.Files.probeContentType(ruta);
-            if (type == null) type = "image/jpeg";
-            return ResponseEntity.ok()
-                    .header("Content-Type", type)
-                    .header("Cache-Control", "max-age=86400")
-                    .body(data);
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
+    // ── Sesión actual ──
+
+    @GetMapping("/me")
+    public Map<String, Object> me() {
+        return auth.perfil(CurrentUser.id());
+    }
+
+    @PutMapping("/me")
+    public Map<String, Object> actualizar(@RequestBody Map<String, String> b) {
+        return auth.actualizarPerfil(CurrentUser.id(), b.get("nombreDisplay"));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<Map<String, Object>> refresh() {
+        var r = auth.refrescar(CurrentUser.id());
+        return r.containsKey("error") ? ResponseEntity.status(HttpStatus.FORBIDDEN).body(r) : ResponseEntity.ok(r);
+    }
+
+    @PostMapping("/me/foto")
+    public Map<String, Object> foto(@RequestParam("file") MultipartFile file) throws IOException {
+        Long id = CurrentUser.id();
+        String nombre = imagenes.guardar(file, "avatars", "avatar_" + id, 400);
+        String url = "/api/usuario/avatar/" + nombre;
+        auth.guardarFoto(id, url);
+        return Map.of("ok", true, "fotoPerfil", url);
+    }
+
+    /** Alias antiguo de /api/usuario/avatar/{archivo}. */
+    @GetMapping("/avatar/{archivo}")
+    public ResponseEntity<Void> avatar(@PathVariable String archivo) {
+        return redirigir("/api/usuario/avatar/" + archivo.replaceAll("[^A-Za-z0-9._-]", ""));
+    }
+
+    private static ResponseEntity<Map<String, Object>> respuesta(Map<String, Object> r) {
+        return r.containsKey("error") ? ResponseEntity.badRequest().body(r) : ResponseEntity.ok(r);
+    }
+
+    private static ResponseEntity<Void> redirigir(String url) {
+        return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(url)).build();
     }
 }

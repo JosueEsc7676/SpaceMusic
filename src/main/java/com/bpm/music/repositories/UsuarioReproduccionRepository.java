@@ -5,65 +5,39 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface UsuarioReproduccionRepository extends JpaRepository<UsuarioReproduccion, Long> {
 
     long countByUsuarioId(Long usuarioId);
 
-    // Top canciones del usuario
-    @Query(value = """
-        SELECT c.id, c.nombre, c.artista, c.album, COUNT(*) as veces
-        FROM usuario_reproduccion ur
-        JOIN cancion c ON ur.cancion_id = c.id
-        WHERE ur.usuario_id = :uid
-        GROUP BY c.id, c.nombre, c.artista, c.album
-        ORDER BY veces DESC
-        LIMIT :limite
-    """, nativeQuery = true)
-    List<Object[]> findTopCancionesUsuario(@Param("uid") Long uid, @Param("limite") int limite);
+    long countByFechaAfter(LocalDateTime fecha);
 
-    // Top artistas del usuario
-    @Query(value = """
-        SELECT c.artista, COUNT(*) as veces
-        FROM usuario_reproduccion ur
-        JOIN cancion c ON ur.cancion_id = c.id
-        WHERE ur.usuario_id = :uid
-        GROUP BY c.artista
-        ORDER BY veces DESC
-        LIMIT :limite
-    """, nativeQuery = true)
-    List<Object[]> findTopArtistasUsuario(@Param("uid") Long uid, @Param("limite") int limite);
+    @Query("SELECT COUNT(DISTINCT r.usuario.id) FROM UsuarioReproduccion r WHERE r.fecha > :desde")
+    long countUsuariosActivosDesde(@Param("desde") LocalDateTime desde);
 
-    // Top géneros del usuario
-    @Query(value = """
-        SELECT c.genero, COUNT(*) as veces
-        FROM usuario_reproduccion ur
-        JOIN cancion c ON ur.cancion_id = c.id
-        WHERE ur.usuario_id = :uid AND c.genero IS NOT NULL AND c.genero != ''
-        GROUP BY c.genero
-        ORDER BY veces DESC
-        LIMIT 8
-    """, nativeQuery = true)
-    List<Object[]> findTopGenerosUsuario(@Param("uid") Long uid);
+    /** Últimas reproducciones del usuario: [cancionId, fecha]. */
+    @Query("SELECT r.cancion.id, r.fecha FROM UsuarioReproduccion r WHERE r.usuario.id = :uid ORDER BY r.fecha DESC")
+    List<Object[]> findRecientes(@Param("uid") Long uid, org.springframework.data.domain.Pageable pageable);
 
-    // Reproducciones por mes
-    @Query(value = """
-        SELECT YEAR(ur.fecha) as anio, MONTH(ur.fecha) as mes, COUNT(*) as cantidad
-        FROM usuario_reproduccion ur
-        WHERE ur.usuario_id = :uid
-        GROUP BY YEAR(ur.fecha), MONTH(ur.fecha)
-        ORDER BY anio DESC, mes DESC
-        LIMIT 12
-    """, nativeQuery = true)
-    List<Object[]> findReproduccionesPorMes(@Param("uid") Long uid);
+    /** Conteo de reproducciones por canción del usuario: [cancionId, veces]. */
+    @Query("SELECT r.cancion.id, COUNT(r) FROM UsuarioReproduccion r WHERE r.usuario.id = :uid AND r.fecha >= :desde GROUP BY r.cancion.id ORDER BY COUNT(r) DESC")
+    List<Object[]> findConteoPorCancion(@Param("uid") Long uid, @Param("desde") LocalDateTime desde);
 
-    // Minutos escuchados total
-    @Query(value = """
-        SELECT COALESCE(SUM(c.duracion_segundos), 0)
-        FROM usuario_reproduccion ur
-        JOIN cancion c ON ur.cancion_id = c.id
-        WHERE ur.usuario_id = :uid
-    """, nativeQuery = true)
-    Long findTotalSegundosEscuchados(@Param("uid") Long uid);
+    /** Segundos escuchados (usa la duración si el registro es antiguo). */
+    @Query("SELECT COALESCE(SUM(COALESCE(r.segundos, r.cancion.duracionSegundos)), 0) FROM UsuarioReproduccion r WHERE r.usuario.id = :uid AND r.fecha >= :desde")
+    Long sumSegundos(@Param("uid") Long uid, @Param("desde") LocalDateTime desde);
+
+    /** Reproducciones por mes: [anio, mes, cantidad]. */
+    @Query("SELECT YEAR(r.fecha), MONTH(r.fecha), COUNT(r) FROM UsuarioReproduccion r WHERE r.usuario.id = :uid GROUP BY YEAR(r.fecha), MONTH(r.fecha) ORDER BY YEAR(r.fecha) DESC, MONTH(r.fecha) DESC")
+    List<Object[]> findPorMes(@Param("uid") Long uid);
+
+    /** Fechas de reproducción del usuario desde una fecha (para hora del día y racha). */
+    @Query("SELECT r.fecha FROM UsuarioReproduccion r WHERE r.usuario.id = :uid AND r.fecha >= :desde")
+    List<LocalDateTime> findFechas(@Param("uid") Long uid, @Param("desde") LocalDateTime desde);
+
+    /** Reproducciones globales recientes por canción: [cancionId, veces]. */
+    @Query("SELECT r.cancion.id, COUNT(r) FROM UsuarioReproduccion r WHERE r.fecha >= :desde GROUP BY r.cancion.id ORDER BY COUNT(r) DESC")
+    List<Object[]> findTendencias(@Param("desde") LocalDateTime desde, org.springframework.data.domain.Pageable pageable);
 }

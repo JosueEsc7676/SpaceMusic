@@ -24,7 +24,7 @@ public interface HistorialReproduccionRepository extends JpaRepository<Historial
         ORDER BY h.fecha_reproduccion DESC
         LIMIT :limite
     """, nativeQuery = true)
-    List<Long> findCancionIdsRecientes(@Param("sesionId") String sesionId,
+    List<Number> findCancionIdsRecientes(@Param("sesionId") String sesionId,
                                        @Param("limite") int limite);
 
     /**

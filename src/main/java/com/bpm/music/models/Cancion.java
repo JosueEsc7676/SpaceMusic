@@ -1,14 +1,21 @@
 package com.bpm.music.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
-import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Data
+@Table(name = "cancion", indexes = {
+        @Index(name = "idx_cancion_artista", columnList = "artista"),
+        @Index(name = "idx_cancion_album", columnList = "album"),
+        @Index(name = "idx_cancion_genero", columnList = "genero")
+})
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -26,14 +33,34 @@ public class Cancion {
 
     private String album;
     private String genero;
+
+    /** Ruta absoluta del archivo en el servidor. Nunca se envía al navegador. */
+    @Column(length = 1000)
+    @JsonIgnore
     private String rutaArchivo;
+
+    /** URL externa de portada (si no hay portada embebida). */
     private String portadaUrl;
+
     private int duracionSegundos;
 
-    // 🔥 PORTADA EN BASE DE DATOS
+    /** Número de pista dentro del álbum (de las etiquetas del archivo). */
+    private Integer numeroPista;
+
+    /** Año de lanzamiento (de las etiquetas del archivo). */
+    private Integer anio;
+
+    /** Extensión del archivo: mp3, flac, m4a, ogg, wav. */
+    @Column(length = 10)
+    private String formato;
+
+    /** Bitrate en kbps. */
+    private Integer bitrate;
+
     @Lob
     @Basic(fetch = FetchType.LAZY)
     @Column(columnDefinition = "LONGBLOB")
+    @JsonIgnore
     private byte[] portada;
 
     @Column(columnDefinition = "LONGTEXT")
@@ -42,6 +69,7 @@ public class Cancion {
     @Column(columnDefinition = "LONGTEXT")
     private String letraSincronizada;
 
+    /** Campo heredado (favoritos globales). Los favoritos ahora son por usuario. */
     @Builder.Default
     private boolean favorito = false;
 

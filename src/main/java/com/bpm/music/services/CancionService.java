@@ -3,320 +3,141 @@ package com.bpm.music.services;
 import com.bpm.music.dtos.CancionDTO;
 import com.bpm.music.models.Cancion;
 import com.bpm.music.repositories.CancionRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.PageRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.annotation.PostConstruct;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
-import java.util.concurrent.*;
-import java.util.stream.Collectors;
 
+/** Edición de canciones, portadas y subida de archivos nuevos. */
 @Service
 public class CancionService {
 
-    @Autowired
-    private CancionRepository repository;
+    private static final Logger log = LoggerFactory.getLogger(CancionService.class);
 
-    @Value("${music.base-url:http://localhost:8080}")
-    private String baseUrl;
+    private final CancionRepository repo;
+    private final BibliotecaService biblioteca;
+    private final EscanerService escaner;
+    private final ImagenService imagenes;
 
-    // =============================================
-    // CACHÉ EN MEMORIA — sobrevive entre requests
-    // =============================================
-    private volatile List<CancionDTO> cacheCompleto = null;
-    private volatile long cacheTimestamp = 0;
-    private static final long CACHE_TTL_MS = 120_000; // 2 minutos
+    public CancionService(CancionRepository repo, BibliotecaService biblioteca,
+                          EscanerService escaner, ImagenService imagenes) {
+        this.repo = repo;
+        this.biblioteca = biblioteca;
+        this.escaner = escaner;
+        this.imagenes = imagenes;
+    }
 
-    // Caché de búsquedas recientes (LRU simple)
-    private final Map<String, List<CancionDTO>> cacheBusquedas =
-            Collections.synchronizedMap(new LinkedHashMap<>(64, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<String, List<CancionDTO>> e) {
-                    return size() > 50; // máximo 50 búsquedas cacheadas
+    /** Archivo de audio de una canción, o null si no se encuentra en disco. */
+    public File archivo(Long id) {
+        String ruta = repo.findRutaById(id).orElseThrow(() -> new NoSuchElementException("Canción no encontrada"));
+        return escaner.resolverArchivo(ruta);
+    }
+
+    @Transactional
+    public CancionDTO editar(Long id, Map<String, Object> datos) {
+        Cancion c = repo.findById(id).orElseThrow(() -> new NoSuchElementException("Canción no encontrada"));
+        String nombre = texto(datos.get("nombre"), 250);
+        String artista = texto(datos.get("artista"), 250);
+        if (nombre != null) {
+            if (nombre.isBlank()) throw new IllegalArgumentException("El título no puede quedar vacío");
+            c.setNombre(nombre);
+        }
+        if (artista != null) c.setArtista(artista.isBlank() ? "Desconocido" : artista);
+        String album = texto(datos.get("album"), 250);
+        if (album != null) c.setAlbum(album.isBlank() ? "Single" : album);
+        String genero = texto(datos.get("genero"), 100);
+        if (genero != null) c.setGenero(genero.isBlank() ? "Desconocido" : genero);
+        if (datos.containsKey("anio")) c.setAnio(entero(datos.get("anio"), 1000, 2999));
+        if (datos.containsKey("numeroPista")) c.setNumeroPista(entero(datos.get("numeroPista"), 1, 999));
+        repo.save(c);
+        biblioteca.invalidar();
+        return biblioteca.requerir(id);
+    }
+
+    @Transactional
+    public CancionDTO cambiarPortada(Long id, MultipartFile file) throws IOException {
+        biblioteca.requerir(id);
+        if (file == null || file.isEmpty()) throw new IllegalArgumentException("No se recibió ninguna imagen");
+        if (file.getSize() > 10 * 1024 * 1024) throw new IllegalArgumentException("La imagen no puede pasar de 10 MB");
+        byte[] jpg = imagenes.redimensionar(file.getBytes(), 1200);
+        if (jpg == null) throw new IllegalArgumentException("No se pudo leer la imagen (usa JPG o PNG)");
+        repo.actualizarPortada(id, jpg);
+        imagenes.invalidarMiniaturas(id);
+        biblioteca.invalidar();
+        return biblioteca.requerir(id);
+    }
+
+    /**
+     * Guarda archivos de audio subidos en la carpeta "Subidas" de la
+     * biblioteca y los agrega de inmediato.
+     */
+    public List<Map<String, Object>> subir(List<MultipartFile> archivos) {
+        File raiz = escaner.raiz();
+        if (!raiz.isDirectory()) throw new IllegalArgumentException("La carpeta de música no está disponible en el servidor");
+        Path destino = raiz.toPath().resolve("Subidas");
+        try {
+            Files.createDirectories(destino);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("No se puede escribir en la carpeta de música");
+        }
+        List<Map<String, Object>> resultado = new ArrayList<>();
+        for (MultipartFile mf : archivos) {
+            Map<String, Object> r = new LinkedHashMap<>();
+            String original = Optional.ofNullable(mf.getOriginalFilename()).orElse("cancion");
+            r.put("archivo", original);
+            try {
+                String ext = MetadataService.extension(original);
+                if (!EscanerService.EXTENSIONES.contains(ext)) throw new IllegalArgumentException("Formato no soportado (." + ext + ")");
+                if (mf.getSize() < 32 * 1024) throw new IllegalArgumentException("El archivo es demasiado pequeño");
+                String nombre = nombreSeguro(MetadataService.sinExtension(original)) + "." + ext;
+                Path p = destino.resolve(nombre);
+                int n = 1;
+                while (Files.exists(p)) p = destino.resolve(nombreSeguro(MetadataService.sinExtension(original)) + " (" + (++n) + ")." + ext);
+                try (InputStream in = mf.getInputStream()) {
+                    Files.copy(in, p, StandardCopyOption.REPLACE_EXISTING);
                 }
-            });
-
-    // Historial de búsquedas del usuario
-    private final LinkedList<String> historial = new LinkedList<>();
-
-    // Flag para saber si FULLTEXT está disponible
-    private volatile boolean fulltextDisponible = true;
-
-    // =============================================
-    // WARMUP: pre-cargar caché al arrancar
-    // =============================================
-    @PostConstruct
-    public void warmup() {
-        CompletableFuture.runAsync(() -> {
-            try {
-                Thread.sleep(2000); // esperar que BD esté lista
-                listarTodos();
-                System.out.println("✅ Caché de canciones calentado");
+                Cancion c = escaner.importarArchivo(p.toFile());
+                r.put("ok", true);
+                r.put("cancion", biblioteca.porId(c.getId()).orElse(null));
             } catch (Exception e) {
-                System.err.println("⚠️ Warmup caché: " + e.getMessage());
+                r.put("ok", false);
+                r.put("error", e.getMessage());
+                log.warn("Error subiendo {}: {}", original, e.getMessage());
             }
-        });
-    }
-
-    // =============================================
-    // LISTAR — con caché en memoria
-    // =============================================
-    public List<CancionDTO> listarTodos() {
-        long now = System.currentTimeMillis();
-        if (cacheCompleto != null && (now - cacheTimestamp) < CACHE_TTL_MS) {
-            return cacheCompleto;
+            resultado.add(r);
         }
-        List<CancionDTO> lista = repository.findAll(PageRequest.of(0, 500)).getContent()
-                .stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-        cacheCompleto = lista;
-        cacheTimestamp = now;
-        return lista;
+        return resultado;
     }
 
-    // =============================================
-    // BÚSQUEDA ROBUSTA — fulltext con fallback a LIKE
-    // =============================================
-    public List<CancionDTO> buscarProfesional(String query) {
-        if (query == null || query.trim().isEmpty()) {
-            return listarTodos();
+    private static String nombreSeguro(String s) {
+        String r = s.replaceAll("[\\\\/:*?\"<>|\\x00-\\x1F]", "_").replaceAll("\\.{2,}", ".").trim();
+        if (r.isEmpty() || r.equals(".")) r = "cancion";
+        return r.length() > 150 ? r.substring(0, 150) : r;
+    }
+
+    private static String texto(Object o, int max) {
+        if (o == null) return null;
+        String s = o.toString().trim();
+        return s.length() > max ? s.substring(0, max) : s;
+    }
+
+    private static Integer entero(Object o, int min, int max) {
+        if (o == null || o.toString().isBlank()) return null;
+        try {
+            int n = Integer.parseInt(o.toString().trim());
+            if (n < min || n > max) throw new IllegalArgumentException("Valor fuera de rango: " + n);
+            return n;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Número inválido: " + o);
         }
-
-        String q = query.trim().toLowerCase();
-
-        // 1. Revisar caché de búsquedas
-        List<CancionDTO> cached = cacheBusquedas.get(q);
-        if (cached != null) {
-            guardarHistorial(q);
-            return cached;
-        }
-
-        List<CancionDTO> resultados;
-
-        // 2. Intentar fulltext si está disponible
-        if (fulltextDisponible) {
-            try {
-                // Construir query fulltext seguro:
-                // - Palabras de menos de 3 chars: usar LIKE
-                // - Palabras >=3 chars: añadir * para prefix match
-                String ftQuery = buildFulltextQuery(q);
-                resultados = repository.buscarFullText(ftQuery)
-                        .stream()
-                        .map(this::convertToDTO)
-                        .collect(Collectors.toList());
-            } catch (Exception e) {
-                // Si FULLTEXT falla (índice no existe, etc.) → marcar y usar LIKE
-                System.err.println("⚠️ FULLTEXT no disponible, usando LIKE: " + e.getMessage());
-                fulltextDisponible = false;
-                resultados = buscarConLike(q);
-            }
-        } else {
-            resultados = buscarConLike(q);
-        }
-
-        // 3. Si fulltext devuelve vacío, intentar LIKE como respaldo
-        if (resultados.isEmpty() && fulltextDisponible) {
-            resultados = buscarConLike(q);
-        }
-
-        // 4. Guardar en caché y historial
-        if (!resultados.isEmpty()) {
-            cacheBusquedas.put(q, resultados);
-        }
-        guardarHistorial(q);
-
-        return resultados;
     }
-
-    /**
-     * Construye un query safe para FULLTEXT BOOLEAN MODE.
-     * Evita errores con palabras muy cortas o caracteres especiales.
-     */
-    private String buildFulltextQuery(String input) {
-        String[] palabras = input.split("\\s+");
-        StringBuilder sb = new StringBuilder();
-        for (String p : palabras) {
-            // Limpiar caracteres especiales de FULLTEXT
-            String limpia = p.replaceAll("[+\\-><()~*\"@]+", "").trim();
-            if (limpia.isEmpty()) continue;
-            if (limpia.length() >= 3) {
-                sb.append("+").append(limpia).append("* ");
-            } else {
-                // Palabras cortas: búsqueda exacta sin wildcard
-                sb.append("\"").append(limpia).append("\" ");
-            }
-        }
-        String result = sb.toString().trim();
-        // Si quedó vacío (todo eran chars especiales), usar el input original
-        return result.isEmpty() ? input : result;
-    }
-
-    /**
-     * Fallback con LIKE — siempre funciona, sin índice especial.
-     */
-    private List<CancionDTO> buscarConLike(String q) {
-        return repository.buscarOptimizadoLike(q, PageRequest.of(0, 50))
-                .stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
-
-    // =============================================
-    // ARTISTA
-    // =============================================
-    public List<CancionDTO> getByArtista(String artista) {
-        return repository.findByArtistaContainingIgnoreCase(artista)
-                .stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
-
-    // =============================================
-    // ÁLBUM
-    // =============================================
-    public List<CancionDTO> getByAlbum(String album) {
-        return repository.findByAlbumContainingIgnoreCase(album)
-                .stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
-
-    // =============================================
-    // ÁLBUMES CON INFO
-    // =============================================
-    public List<Map<String, Object>> getAlbumesConInfo() {
-        List<Object[]> data = repository.findAlbumesConId();
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Object[] row : data) {
-            String album  = (String) row[0];
-            Number count  = (Number) row[1];
-            Number id     = (Number) row[2];
-            Map<String, Object> map = new HashMap<>();
-            map.put("nombre",     album);
-            map.put("conteo",     count.longValue());
-            map.put("portadaUrl", baseUrl + "/api/portada/id/" + id.longValue());
-            result.add(map);
-        }
-        return result;
-    }
-
-    // =============================================
-    // FAVORITOS
-    // =============================================
-    public List<CancionDTO> getFavoritos() {
-        return repository.findByFavoritoTrueOrderByFechaAgregadaDesc()
-                .stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
-
-    @Transactional
-    public CancionDTO toggleFavorito(Long id) {
-        Cancion c = repository.findById(id).orElseThrow();
-        c.setFavorito(!c.isFavorito());
-        invalidarCache();
-        return convertToDTO(repository.save(c));
-    }
-
-    // =============================================
-    // TOP
-    // =============================================
-    public List<CancionDTO> getTopReproducidas() {
-        return repository.findTop20ByOrderByReproduccionesDesc()
-                .stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
-
-    // =============================================
-    // REPRODUCCIÓN
-    // =============================================
-    @Transactional
-    public void incrementarReproduccion(Long id) {
-        repository.incrementarReproduccion(id);
-    }
-
-    // =============================================
-    // GET BY ID — con caché del listado completo
-    // =============================================
-    public CancionDTO getById(Long id) {
-        // Intentar desde caché primero
-        if (cacheCompleto != null) {
-            Optional<CancionDTO> cached = cacheCompleto.stream()
-                    .filter(c -> c.getId().equals(id))
-                    .findFirst();
-            if (cached.isPresent()) return cached.get();
-        }
-        return repository.findById(id)
-                .map(this::convertToDTO)
-                .orElseThrow();
-    }
-
-    public Cancion getCancionEntity(Long id) {
-        return repository.findById(id).orElseThrow();
-    }
-
-    // =============================================
-    // HISTORIAL
-    // =============================================
-    private void guardarHistorial(String q) {
-        if (q == null || q.length() < 2) return;
-        historial.remove(q);
-        historial.addFirst(q);
-        if (historial.size() > 10) historial.removeLast();
-    }
-
-    public List<String> obtenerHistorial() {
-        return new ArrayList<>(historial);
-    }
-
-    // =============================================
-    // INVALIDAR CACHÉ
-    // =============================================
-    public void invalidarCache() {
-        cacheCompleto = null;
-        cacheTimestamp = 0;
-        cacheBusquedas.clear();
-    }
-
-    // =============================================
-    // PORTADAS
-    // =============================================
-    private String getPortadaUrl(Cancion c) {
-        // ✅ Rutas relativas — funcionan desde localhost,
-        //    desde la IP de red y desde cualquier dispositivo
-        if (c.getPortada() != null && c.getPortada().length > 0) {
-            return "/api/portada/db/" + c.getId();
-        }
-        if (c.getPortadaUrl() != null && c.getPortadaUrl().startsWith("http")) {
-            // Portada externa (Deezer, etc.) — mantener URL absoluta
-            return c.getPortadaUrl();
-        }
-        return "/api/portada/id/" + c.getId();
-    }
-
-    // =============================================
-    // DTO
-    // =============================================
-    public CancionDTO convertToDTO(Cancion c) {
-        return new CancionDTO(
-                c.getId(),
-                c.getNombre(),
-                c.getArtista(),
-                (c.getAlbum() == null || c.getAlbum().isEmpty()) ? "Single" : c.getAlbum(),
-                getPortadaUrl(c),
-                c.isFavorito(),
-                c.getReproducciones(),
-                c.getDuracionSegundos(),
-                "/api/canciones/" + c.getId() + "/audio",   // ✅ relativa
-                c.getRutaArchivo(),
-                c.getLetra()             != null ? c.getLetra()             : "",
-                c.getLetraSincronizada() != null ? c.getLetraSincronizada() : ""
-        );
-    }
-
 }
