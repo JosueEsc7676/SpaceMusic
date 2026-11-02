@@ -4,7 +4,7 @@
 
 ### Pantalla de inicio
 - El logo oficial (cuadro negro con la nota blanca) se dibuja al abrir la web, la app Android y la TV, en unos 1,1 segundos.
-- **Sonido de inicio:** coloca el archivo en `src/main/resources/static/sonidos/inicio.mp3` y vuelve a publicar. Sonará junto al logo si el archivo existe.
+- **Sonido de inicio:** `src/main/resources/static/sonidos/inicio.mp3` (≈3 s). Para cambiarlo, reemplaza ese archivo y vuelve a publicar.
   - En la app Android y en la TV siempre suena.
   - En el navegador puede quedar en silencio, porque los navegadores bloquean el sonido antes del primer toque.
   - Se desactiva en *Perfil → Sonido de inicio*.
