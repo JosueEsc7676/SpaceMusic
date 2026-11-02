@@ -1,5 +1,6 @@
 // Páginas de álbum, artista, playlist, género, mezcla, Me gusta e historial
 import { api, session } from '../api.js';
+import { descargar } from '../offline.js';
 import { esc, $, cover, coverImg, mosaic, dominantColor, fmtLong, plural, norm, bus, copyText } from '../util.js';
 import { icon } from '../icons.js';
 import { lib } from '../state.js';
@@ -28,6 +29,7 @@ function actions({ playId = 'play', extra = '', filter = false, liked = null }) 
     <button class="play-fab" data-${playId} aria-label="Reproducir">${icon('play')}</button>
     <button class="icon-btn" data-shuffle-play aria-label="Reproducir en aleatorio" title="Aleatorio">${icon('shuffle')}</button>
     ${liked !== null ? `<button class="icon-btn ${liked ? 'liked' : ''}" data-like-all aria-label="Me gusta" title="${liked ? 'Quitar todas de Me gusta' : 'Agregar todas a Me gusta'}">${icon(liked ? 'heartFill' : 'heart')}</button>` : ''}
+    <button class="icon-btn" data-download-all aria-label="Descargar todo" title="Descargar para escuchar sin conexión">${icon('download')}</button>
     <button class="icon-btn" data-more aria-label="Más opciones" title="Más opciones">${icon('more')}</button>
     ${extra}
     <div class="spacer"></div>
@@ -48,6 +50,13 @@ function wire(el, getSongs, context, menuItems = () => []) {
     playAll(player.shuffle);
   });
   el.querySelector('[data-shuffle-play]')?.addEventListener('click', () => playAll(true));
+  el.querySelector('[data-download-all]')?.addEventListener('click', (e) => {
+    const songs = getSongs();
+    if (!songs.length) return toast('No hay canciones');
+    descargar(songs);
+    e.currentTarget.classList.add('liked');
+    toast(`Descargando ${plural(songs.length, 'canción', 'canciones')}…`);
+  });
   el.querySelector('[data-more]')?.addEventListener('click', (e) => {
     const songs = getSongs();
     showMenu(e.currentTarget, [

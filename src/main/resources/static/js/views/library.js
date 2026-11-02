@@ -4,11 +4,12 @@ import { esc, norm, store, plural, coverImg } from '../util.js';
 import { icon } from '../icons.js';
 import { lib } from '../state.js';
 import { setHero, setTitle } from '../router.js';
-import { cardPlaylist, cardArtist, cardAlbum, emptyState, editPlaylist, playlistArt } from '../ui.js';
+import { cardPlaylist, cardArtist, cardAlbum, emptyState, editPlaylist, playlistArt, trackList } from '../ui.js';
+import { descargadas } from '../offline.js';
 
 let cache = { artistas: null, albumes: null, publicas: null, t: 0 };
 
-const TABS = [['playlists', 'Playlists', 'library'], ['artistas', 'Artistas', 'user'], ['albumes', 'Álbumes', 'disc'], ['comunidad', 'Comunidad', 'globe']];
+const TABS = [['playlists', 'Playlists', 'library'], ['descargadas', 'Descargadas', 'download'], ['artistas', 'Artistas', 'user'], ['albumes', 'Álbumes', 'disc'], ['comunidad', 'Comunidad', 'globe']];
 
 /** Fila de la vista en lista. */
 function fila({ href, art, t, s, round = false }) {
@@ -24,7 +25,8 @@ export async function libraryView(el, _p, query, isStale) {
 
   if (Date.now() - cache.t > 60000) {
     const [artistas, albumes, publicas] = await Promise.all([
-      api('/api/artistas'), api('/api/albumes'), api('/api/playlists/publicas').catch(() => []),
+      // Sin conexión se muestran listas vacías (las descargas siguen disponibles)
+      api('/api/artistas').catch(() => []), api('/api/albumes').catch(() => []), api('/api/playlists/publicas').catch(() => []),
     ]);
     cache = { artistas, albumes, publicas, t: Date.now() };
   }
@@ -81,6 +83,11 @@ export async function libraryView(el, _p, query, isStale) {
       html = fijos + pinta(pls, cardPlaylist,
         (p) => fila({ href: '#/playlist/' + p.id, art: playlistArt(p, 160), t: p.nombre, s: 'Playlist · ' + plural(p.cancionesCount, 'canción', 'canciones') }),
         q ? emptyState('search', 'Ninguna playlist coincide') : emptyState('library', 'Crea tu primera playlist', 'Guarda tus canciones favoritas en listas para escucharlas cuando quieras.'));
+    } else if (tab === 'descargadas') {
+      const d = descargadas().filter((x) => !q || norm(x.nombre + ' ' + x.artista).includes(q));
+      html = d.length
+        ? `<p class="muted" style="margin-top:0">${plural(d.length, 'canción', 'canciones')} en este dispositivo · se escuchan sin conexión${window.SpaceMusicApp ? ' · los MP3 están en Música/SpaceMusic' : ''}</p>` + trackList(d, { context: { type: 'descargadas', label: 'Descargadas', route: '#/biblioteca?tab=descargadas' } })
+        : emptyState('download', q ? 'Ninguna descarga coincide' : 'Aún no descargas canciones', 'Usa “Descargar” en el menú de una canción o el botón de descarga de un álbum o playlist.');
     } else if (tab === 'artistas') {
       const a = by(cache.artistas, (x) => x.nombre, (x) => x.totalReproducciones);
       html = pinta(a, cardArtist,

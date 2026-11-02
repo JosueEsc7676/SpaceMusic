@@ -102,6 +102,10 @@ public class MainActivity extends Activity {
             }
         });
 
+        // Enlaces de descarga (botón "Descargar" de la web): se guardan en Música/SpaceMusic
+        web.setDownloadListener((url, agente, disposicion, tipo, largo) ->
+                Descargas.cancion(this, url, android.webkit.URLUtil.guessFileName(url, disposicion, tipo)));
+
         if (savedInstanceState != null) web.restoreState(savedInstanceState);
         else cargar();
         pedirPermisoNotificaciones();
@@ -238,7 +242,26 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String version() {
-            return "1.0";
+            try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { return "?"; }
+        }
+
+        /** Número de versión de la app instalada (para saber si hay una actualización). */
+        @JavascriptInterface
+        @SuppressWarnings("deprecation")
+        public int versionCode() {
+            try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode; } catch (Exception e) { return 0; }
+        }
+
+        /** Guarda una canción en la carpeta Música/SpaceMusic del teléfono. */
+        @JavascriptInterface
+        public void guardarArchivo(String url, String nombre) {
+            runOnUiThread(() -> Descargas.cancion(MainActivity.this, url, nombre));
+        }
+
+        /** Descarga e instala la versión nueva de la app. */
+        @JavascriptInterface
+        public void actualizar(String url) {
+            runOnUiThread(() -> Descargas.actualizar(MainActivity.this, url));
         }
     }
 

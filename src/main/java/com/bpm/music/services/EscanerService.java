@@ -52,7 +52,9 @@ public class EscanerService {
     private volatile LocalDateTime ultimoInicio;
     private volatile LocalDateTime ultimoFin;
     private volatile String fase = "En espera";
-    private volatile int archivosEncontrados, procesados, nuevas, reubicadas, errores;
+    private volatile int archivosEncontrados, procesados, nuevas, reubicadas, errores, duplicadas;
+    /** Archivos que son la misma canción que otra ya guardada: no se vuelven a analizar. */
+    private final Set<String> duplicadosConocidos = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private volatile String ultimoError;
 
     /** Índice nombre-de-archivo → archivo, del último escaneo (para encontrar archivos movidos). */
@@ -111,6 +113,7 @@ public class EscanerService {
         m.put("procesados", procesados);
         m.put("nuevas", nuevas);
         m.put("reubicadas", reubicadas);
+        m.put("duplicadas", duplicadas);
         m.put("errores", errores);
         m.put("ultimoError", ultimoError);
         m.put("totalCanciones", biblioteca.total());
@@ -122,7 +125,7 @@ public class EscanerService {
     void escanear() {
         if (!escaneando.compareAndSet(false, true)) return;
         ultimoInicio = LocalDateTime.now();
-        archivosEncontrados = procesados = nuevas = reubicadas = errores = 0;
+        archivosEncontrados = procesados = nuevas = reubicadas = errores = duplicadas = 0;
         ultimoError = null;
         try {
             File root = raiz();
@@ -142,7 +145,8 @@ public class EscanerService {
 
             fase = "Comparando con la base de datos";
             Set<String> enBd = new HashSet<>(repo.findAllRutas());
-            List<File> pendientes = archivos.stream().filter(f -> !enBd.contains(f.getAbsolutePath())).toList();
+            List<File> pendientes = archivos.stream()
+                    .filter(f -> !enBd.contains(f.getAbsolutePath()) && !duplicadosConocidos.contains(f.getAbsolutePath())).toList();
 
             if (!pendientes.isEmpty()) {
                 // Canciones de la BD cuyo archivo ya no está en su ruta → candidatas a reubicar
@@ -151,6 +155,11 @@ public class EscanerService {
 
                 fase = "Procesando " + pendientes.size() + " archivos nuevos";
                 List<Cancion> lote = new ArrayList<>();
+                // Huellas de lo que ya hay (título + artista principal + duración) para no repetir canciones
+                Map<String, List<Integer>> yaHay = new HashMap<>();
+                for (var d : biblioteca.todas()) {
+                    yaHay.computeIfAbsent(claveDuplicado(d.getNombre(), d.getArtista()), k -> new ArrayList<>()).add(d.getDuracionSegundos());
+                }
                 for (File f : pendientes) {
                     try {
                         String rel = relativa(raizAbs, f.getAbsolutePath());
@@ -162,7 +171,19 @@ public class EscanerService {
                                 reubicadas++;
                             });
                         } else {
-                            lote.add(crearCancion(f));
+                            Cancion nueva = crearCancion(f);
+                            String clave = claveDuplicado(nueva.getNombre(), nueva.getArtista());
+                            List<Integer> duraciones = yaHay.computeIfAbsent(clave, k -> new ArrayList<>());
+                            if (duraciones.stream().anyMatch(d -> Math.abs(d - nueva.getDuracionSegundos()) <= 4)) {
+                                // La misma canción ya está en la biblioteca (p. ej. descargada otra vez)
+                                duplicadosConocidos.add(f.getAbsolutePath());
+                                duplicadas++;
+                                log.info("Canción repetida, no se agrega: {}", f.getName());
+                                procesados++;
+                                continue;
+                            }
+                            duraciones.add(nueva.getDuracionSegundos());
+                            lote.add(nueva);
                             nuevas++;
                             if (lote.size() >= 25) {
                                 repo.saveAll(lote);
@@ -182,9 +203,9 @@ public class EscanerService {
             }
 
             fase = "Completado";
-            if (nuevas > 0 || reubicadas > 0) {
-                log.info("Escaneo: {} archivos, {} nuevas, {} reubicadas, {} errores",
-                        archivosEncontrados, nuevas, reubicadas, errores);
+            if (nuevas > 0 || reubicadas > 0 || duplicadas > 0) {
+                log.info("Escaneo: {} archivos, {} nuevas, {} reubicadas, {} repetidas omitidas, {} errores",
+                        archivosEncontrados, nuevas, reubicadas, duplicadas, errores);
             }
         } catch (Exception e) {
             fase = "Error";
@@ -259,6 +280,14 @@ public class EscanerService {
                 .letraSincronizada(md.letraSincronizada())
                 .fechaAgregada(LocalDateTime.now())
                 .build();
+    }
+
+    /** Título y artista principal normalizados, sin "(feat. …)", "- Remastered", etc. */
+    static String claveDuplicado(String titulo, String artista) {
+        String t = titulo == null ? "" : titulo.replaceAll("(?i)\\s*[\\(\\[](feat|ft|with|con)\\.?[^\\)\\]]*[\\)\\]]", "")
+                .replaceAll("(?i)\\s*-\\s*(remaster(ed)?|\\d{4} remaster(ed)?).*$", "");
+        String a = artista == null ? "" : MetadataService.primerArtista(artista).split("(?i)\\s*(,|&| feat\\.? | ft\\.? | x )\\s*")[0];
+        return BibliotecaService.normalizar(t) + "|" + BibliotecaService.normalizar(a);
     }
 
     private static boolean esCarpetaGenerica(String nombre) {

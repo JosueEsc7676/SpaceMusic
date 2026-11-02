@@ -1,5 +1,19 @@
 # Registro de cambios
 
+## Versión 2.2
+- **Descargador más estable** (`scripts/descargar`, instalado en el servidor como `descargar`, y `Descargar musica.bat`):
+  - no repite canciones: lleva un historial de lo ya descargado, salta lo que ya existe y la biblioteca ignora una canción repetida (mismo título, artista principal y duración);
+  - reintenta solo lo que falló, hasta 3 rondas con espera entre ellas;
+  - acepta varios enlaces a la vez y enlaces de YouTube, YouTube Music, SoundCloud y otros (además de Spotify);
+  - opción C del .bat: credenciales propias de Spotify, para que Spotify no bloquee las descargas (error 429).
+- **Recuperar contraseña por correo:** botón visible en el inicio de sesión (web y app Android).
+- **Descargas:**
+  - "Descargar" en el menú de una canción y "Descargar todo" en álbumes y playlists;
+  - las canciones quedan para escuchar sin conexión (no se borran solas);
+  - en Android también se guardan como MP3 en Música/SpaceMusic;
+  - pestaña *Biblioteca → Descargadas*.
+- **App Android 1.1:** avisa cuando hay una versión nueva y la instala con un toque (`/app/version.json`).
+
 ## Versión 2.1
 - **Cerrar app** (Android y TV): para la música, quita la notificación y cierra la app por completo, sin dejarla en segundo plano.
   - En el celular está en el menú del usuario y en *Perfil → Sesión*.

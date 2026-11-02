@@ -54,3 +54,4 @@ input::placeholder { color: #5c5c6c; }
 .who small { display: inline-block; margin-top: 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #cfc6ff; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 a.btn { text-decoration: none; }
+.btn.recover { margin-top: 12px; font-weight: 700; font-size: 14px; height: 46px; }

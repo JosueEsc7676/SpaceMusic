@@ -10,10 +10,11 @@ const SHELL = [__SHELL__];
 const API = 'sm-api';
 const PORTADAS = 'sm-portadas';
 const AUDIO = 'sm-audio';
+const DESCARGAS = 'sm-descargas'; // descargadas a mano: nunca se borran solas
 const MAX_CANCIONES = 150;   // canciones guardadas como máximo (se borran las más antiguas)
 const MAX_PORTADAS = 1500;
 const ESPERA_RED_MS = 4000;  // pasado este tiempo sin respuesta, se usa la copia guardada
-const PERMANENTES = [API, PORTADAS, AUDIO];
+const PERMANENTES = [API, PORTADAS, AUDIO, DESCARGAS];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))));
@@ -30,7 +31,9 @@ self.addEventListener('message', (e) => {
   const d = e.data;
   if (d === 'activar') { self.skipWaiting(); return; }
   if (d?.tipo === 'guardar-audio') e.waitUntil(guardarAudio(d.url, d.clave));
-  if (d?.tipo === 'limpiar-usuario') e.waitUntil(Promise.all([caches.delete(API), caches.delete(AUDIO)]));
+  if (d?.tipo === 'limpiar-usuario') e.waitUntil(Promise.all([caches.delete(API), caches.delete(AUDIO), caches.delete(DESCARGAS)]));
+  if (d?.tipo === 'descargar-audio') e.waitUntil(descargar(d.url, d.id).then((ok) => avisar({ tipo: 'descarga', id: d.id, ok })));
+  if (d?.tipo === 'quitar-descarga') e.waitUntil(caches.open(DESCARGAS).then((c) => c.delete(`/offline/audio/${d.id}`)));
   if (d?.tipo === 'estado-offline') e.waitUntil(contarAudio().then((n) => e.source?.postMessage({ tipo: 'estado-offline', canciones: n })));
 });
 
@@ -53,6 +56,28 @@ async function guardarAudio(url, clave) {
   } catch { /* sin conexión: se intentará otra vez */ }
 }
 
+async function avisar(m) {
+  for (const c of await self.clients.matchAll()) c.postMessage(m);
+}
+
+/** Descarga permanente: la canción completa queda en el dispositivo hasta que se quite. */
+async function descargar(url, id) {
+  const clave = `/offline/audio/${id}`;
+  const c = await caches.open(DESCARGAS);
+  if (await c.match(clave)) return true;
+  // Si ya estaba guardada automáticamente, se pasa a descargas sin volver a bajarla
+  const auto = await (await caches.open(AUDIO)).match(clave);
+  if (auto) { await c.put(clave, auto); return true; }
+  for (let intento = 1; intento <= 3; intento++) {
+    try {
+      const r = await fetch(url, { credentials: 'same-origin' });
+      if (r.ok && r.status === 200) { await c.put(clave, r); return true; }
+    } catch { /* se reintenta */ }
+    await new Promise((res) => setTimeout(res, intento * 2000));
+  }
+  return false;
+}
+
 async function recortar(c, max) {
   const ks = await c.keys();
   for (let i = 0; i < ks.length - max; i++) await c.delete(ks[i]);
@@ -64,7 +89,7 @@ async function contarAudio() {
 
 /** Respuesta parcial (206) a partir de la canción guardada, para poder adelantar sin conexión. */
 async function audioGuardado(req, clave) {
-  const r = await (await caches.open(AUDIO)).match(clave);
+  const r = (await (await caches.open(DESCARGAS)).match(clave)) || (await (await caches.open(AUDIO)).match(clave));
   if (!r) return null;
   const range = req.headers.get('range');
   if (!range) return r;

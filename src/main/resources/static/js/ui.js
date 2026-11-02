@@ -1,5 +1,6 @@
 // Componentes de interfaz: avisos, menús, diálogos, tarjetas y listas
 import { icon } from './icons.js';
+import { descargar, quitarDescarga, estaDescargada } from './offline.js';
 import { esc, $, $$, bus, fmtTime, fmtNum, plural, cover, coverImg, mosaic, isMobile, norm } from './util.js';
 import { api, session, downloadUrl, upload } from './api.js';
 import { lib } from './state.js';
@@ -316,7 +317,13 @@ export function songMenu(anchor, song, { playlistId } = {}) {
     { label: 'Ir al artista', icon: 'user', fn: () => { location.hash = '#/artista/' + encodeURIComponent(song.artista); } },
     song.album && song.album !== 'Single' ? { label: 'Ir al álbum', icon: 'disc', fn: () => { location.hash = '#/album/' + encodeURIComponent(song.album); } } : null,
     { label: 'Ver letra', icon: 'mic', fn: () => bus.emit('np:lyrics', song) },
-    { label: 'Descargar', icon: 'download', fn: () => { location.href = downloadUrl(song.id); } },
+    estaDescargada(song.id)
+      ? { label: 'Quitar descarga', icon: 'trash', fn: () => { quitarDescarga(song.id); toast('Descarga quitada'); } }
+      : { label: 'Descargar', icon: 'download', fn: () => {
+        // En la app: queda sin conexión y también como MP3 en el teléfono. En el navegador: sin conexión + archivo.
+        if (!descargar([song])) toast('Descargando…');
+        if (!window.SpaceMusicApp) { const a = document.createElement('a'); a.href = downloadUrl(song.id); a.download = ''; document.body.appendChild(a); a.click(); a.remove(); }
+      } },
     ...(session.canEdit ? [
       { sep: true },
       { label: 'Editar información', icon: 'edit', fn: () => editSong(song) },

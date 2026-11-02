@@ -37,6 +37,8 @@ export function iniciarNativo() {
   player.audio.addEventListener('play', enviar);
   player.audio.addEventListener('pause', enviar);
 
+  buscarActualizacion();
+
   // Órdenes desde la notificación, la pantalla de bloqueo o los auriculares
   window.smRemote = (accion, valor) => {
     if (accion === 'play') player.resume();
@@ -57,4 +59,19 @@ export function iniciarNativo() {
     if (location.hash && location.hash !== '#/' && history.length > 1) { history.back(); return true; }
     return false; // en el inicio: la app pasa a segundo plano (la música sigue)
   };
+}
+
+/** Si el servidor tiene una versión nueva de la app, ofrece instalarla. */
+async function buscarActualizacion() {
+  if (!app.versionCode || !app.actualizar) return;
+  try {
+    const v = await fetch('/app/version.json', { cache: 'no-store' }).then((r) => r.json());
+    const actual = app.versionCode();
+    if (!v?.movil || v.movil.code <= actual) return;
+    const { toast } = await import('./ui.js');
+    toast(`Hay una versión nueva de la app (${v.movil.nombre})`, {
+      ms: 20000,
+      action: { label: 'Actualizar', fn: () => app.actualizar(new URL(v.movil.url, location.origin).href) },
+    });
+  } catch { /* sin conexión */ }
 }
