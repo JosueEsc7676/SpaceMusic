@@ -1,5 +1,19 @@
 # Registro de cambios
 
+## Versión 2.1
+- **Cerrar app** (Android y TV): para la música, quita la notificación y cierra la app por completo, sin dejarla en segundo plano.
+  - En el celular está en el menú del usuario y en *Perfil → Sesión*.
+  - En la TV está en el menú lateral (icono de apagado).
+- **Volver al reproductor en la TV** después de minimizarlo, de tres maneras:
+  - con → al final de una fila, o con ↓ al final de la pantalla, se llega al mini reproductor (muestra "OK · abrir");
+  - con el elemento "Reproduciendo" del menú lateral;
+  - con la tecla Menú del control.
+- **Sonido de inicio en la web:**
+  - suena al pulsar "Entrar" en el inicio de sesión;
+  - si la app se abre con la sesión ya iniciada y el navegador bloquea el sonido, suena con el primer toque o tecla.
+- **TV:** portada y letra centradas con los controles ocultos, y se ocultan más créditos en las letras.
+- Las APK también se copian a la carpeta del Escritorio *SpaceMusic APK*.
+
 ## Versión 2.0 — Identidad "Noir", aprobación de cuentas, modo sin conexión y app Android
 
 ### Pantalla de inicio

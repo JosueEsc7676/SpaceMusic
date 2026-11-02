@@ -102,7 +102,8 @@ export async function profileView(el, _p, _q, isStale) {
 
       <div class="panel"><h3>${icon('logout')} Sesión</h3>
         <p class="muted" style="margin-top:0">Cierra la sesión en este dispositivo.</p>
-        <button class="btn danger sm" data-logout>${icon('logout', 'sm')} Cerrar sesión</button>
+        <div class="row wrap">${window.SpaceMusicApp?.cerrarApp ? `<button class="btn sm" data-cerrar-app>${icon('power', 'sm')} Cerrar app</button>` : ''}
+        <button class="btn danger sm" data-logout>${icon('logout', 'sm')} Cerrar sesión</button></div>
       </div>
     </div>`;
 
@@ -170,6 +171,7 @@ export async function profileView(el, _p, _q, isStale) {
     if (t && n) t.textContent = plural(n, 'canción guardada', 'canciones guardadas') + ' para escuchar sin conexión';
   });
   $('[data-logout]').onclick = () => logout();
+  $('[data-cerrar-app]')?.addEventListener('click', () => window.SpaceMusicApp.cerrarApp());
   $('[data-solicitar]')?.addEventListener('click', async () => {
     try {
       const r = await api('/api/usuario/solicitar-colaborador', { method: 'POST', body: { motivo: $('[data-motivo]').value } });

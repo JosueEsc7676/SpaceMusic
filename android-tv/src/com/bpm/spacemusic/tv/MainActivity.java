@@ -154,6 +154,14 @@ public class MainActivity extends Activity {
         else finish();
     }
 
+    private void cerrarDelTodo() {
+        if (web != null) { web.stopLoading(); web.loadUrl("about:blank"); }
+        finishAndRemoveTask();
+        // Termina el proceso para que la música no siga sonando
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                () -> android.os.Process.killProcess(android.os.Process.myPid()), 300);
+    }
+
     private void js(String codigo, android.webkit.ValueCallback<String> cb) {
         web.evaluateJavascript(codigo, cb);
     }
@@ -211,6 +219,12 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void openSettings() {
             runOnUiThread(MainActivity.this::dialogoServidor);
+        }
+
+        /** Cierra la app por completo (no queda en segundo plano). */
+        @JavascriptInterface
+        public void cerrarApp() {
+            runOnUiThread(MainActivity.this::cerrarDelTodo);
         }
 
         @JavascriptInterface

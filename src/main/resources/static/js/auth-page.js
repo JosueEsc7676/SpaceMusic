@@ -35,6 +35,30 @@ function busy(btn, on, label) {
   else btn.textContent = label || btn.dataset.label;
 }
 
+/**
+ * Pantalla de apertura al entrar. Los navegadores solo dejan sonar audio después de un clic,
+ * así que aquí (tras pulsar "Entrar") es donde el sonido de inicio siempre se escucha en la web.
+ */
+function entrarConIntro(destino) {
+  let sonido = true;
+  try { sonido = localStorage.getItem('sm_intro_sound') !== 'false'; sessionStorage.setItem('sm_splash', '1'); } catch { }
+  const sp = document.createElement('div');
+  sp.id = 'splash';
+  sp.innerHTML = `<div class="sp-logo"><svg viewBox="0 0 512 512">
+      <rect x="3" y="3" width="506" height="506" rx="112" fill="#000" stroke="#2e2e34" stroke-width="6"/>
+      <path class="sp-stem" d="M200 372V150l170-34v222"/>
+      <circle class="sp-head sp-h1" cx="156" cy="372" r="54"/><circle class="sp-head sp-h2" cx="326" cy="338" r="54"/>
+    </svg></div><div class="sp-name">SpaceMusic</div>`;
+  document.body.appendChild(sp);
+  let ido = false;
+  const ir = () => { if (!ido) { ido = true; location.replace(destino); } };
+  if (!sonido) { setTimeout(ir, 1300); return; }
+  const a = new Audio('/sonidos/inicio.mp3');
+  a.volume = 0.75;
+  a.addEventListener('ended', ir);
+  a.play().then(() => setTimeout(ir, 3500)).catch(() => setTimeout(ir, 1300));
+}
+
 function saveSession(d) {
   try {
     localStorage.setItem('sm_token', d.token);
@@ -106,7 +130,7 @@ if (page === 'login') {
     try {
       const d = await post('/api/auth/login', { usuario, password });
       saveSession(d);
-      location.replace('/' + (params.get('next') || ''));
+      entrarConIntro('/' + (params.get('next') || ''));
     } catch (err) {
       if (err.data?.needsVerification) {
         msg(err.message, 'error', { label: 'Reenviar correo', fn: async () => {

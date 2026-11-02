@@ -1,5 +1,6 @@
 // Íconos SVG propios (trazos de 24×24). Uso: icon('play', 'fill lg')
 const P = {
+  power: '<path d="M12 2v9"/><path d="M18.36 6.64a9 9 0 1 1-12.72 0"/>',
   home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
   homeFill: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" fill="currentColor"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>',

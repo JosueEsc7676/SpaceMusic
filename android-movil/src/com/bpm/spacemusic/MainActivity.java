@@ -230,10 +230,24 @@ public class MainActivity extends Activity {
             runOnUiThread(MainActivity.this::dialogoServidor);
         }
 
+        /** Cierra la app por completo: para la música, quita la notificación y termina el proceso. */
+        @JavascriptInterface
+        public void cerrarApp() {
+            runOnUiThread(MainActivity.this::cerrarDelTodo);
+        }
+
         @JavascriptInterface
         public String version() {
             return "1.0";
         }
+    }
+
+    void cerrarDelTodo() {
+        stopService(new Intent(this, ReproductorService.class));
+        if (web != null) { web.stopLoading(); web.loadUrl("about:blank"); }
+        finishAndRemoveTask();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                () -> android.os.Process.killProcess(android.os.Process.myPid()), 300);
     }
 
     // ═══════════════════ Ciclo de vida ═══════════════════

@@ -20,8 +20,19 @@ function sonarInicio() {
     if (localStorage.getItem('sm_intro_sound') === 'false') return;
     const a = new Audio(SONIDO);
     a.volume = 0.75;
-    // Los navegadores pueden bloquear el sonido si aún no hubo un toque: en ese caso no suena
-    a.play().catch(() => { });
+    // Los navegadores bloquean el sonido hasta el primer toque: si pasa, suena con el primer
+    // toque o tecla de los primeros segundos (después ya no tendría sentido)
+    a.play().catch(() => {
+      const desde = performance.now();
+      const eventos = ['pointerdown', 'keydown', 'touchstart'];
+      const quitar = () => eventos.forEach((e) => window.removeEventListener(e, alTocar, true));
+      function alTocar() {
+        quitar();
+        if (performance.now() - desde < 6000) a.play().catch(() => { });
+      }
+      eventos.forEach((e) => window.addEventListener(e, alTocar, true));
+      setTimeout(quitar, 6000);
+    });
   } catch { }
 }
 

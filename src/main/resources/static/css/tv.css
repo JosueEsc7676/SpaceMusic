@@ -223,3 +223,8 @@ h1.title { font-family: var(--display); font-size: 2.9rem; font-weight: 800; let
 .spot-s { color: rgba(255,255,255,.7); font-size: 1.1rem; margin: 0 0 1.6rem; max-width: 40rem; }
 .spot .actions { margin: 0; }
 .spot-art { width: 13rem; height: 13rem; border-radius: 1.2rem; overflow: hidden; flex-shrink: 0; transform: rotate(3deg); box-shadow: 0 1.6rem 3.6rem rgba(0,0,0,.6); }
+
+/* Mini reproductor: al enfocarlo con el control se resalta y muestra cómo abrirlo */
+.mini.focused { transform: scale(1.04); box-shadow: 0 0 0 .2rem #fff, 0 1rem 2.4rem rgba(0,0,0,.7); background: #1c1c22; }
+.mini-ok { display: none; margin-left: .4rem; padding: .25rem .6rem; border-radius: .5rem; background: #fff; color: #000; font-size: .8rem; font-weight: 800; white-space: nowrap; }
+.mini.focused .mini-ok { display: inline-block; }

@@ -135,6 +135,7 @@ $('[data-user-menu]').addEventListener('click', (e) => {
     session.isAdmin ? { label: 'Administración', icon: 'shield', fn: () => go('/admin') } : null,
     { label: 'Atajos de teclado', icon: 'keyboard', fn: showShortcuts },
     { sep: true },
+    window.SpaceMusicApp?.cerrarApp ? { label: 'Cerrar app', icon: 'power', fn: () => window.SpaceMusicApp.cerrarApp() } : null,
     { label: 'Cerrar sesión', icon: 'logout', danger: true, fn: () => logout() },
   ], `<div class="menu-head">${avatarHtml(u)}<div style="min-width:0"><div class="t ellipsis">${esc(u?.nombreDisplay || '')}</div><div class="s ellipsis">${esc(u?.email || '')}</div></div></div>`);
 });

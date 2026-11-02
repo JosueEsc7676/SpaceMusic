@@ -55,7 +55,8 @@ function capa() {
 }
 
 function visibles() {
-  return $$('.f', capa()).filter((e) => e.offsetParent !== null && !e.disabled);
+  // getClientRects en lugar de offsetParent: los elementos fijos (el mini reproductor) también cuentan
+  return $$('.f', capa()).filter((e) => e.getClientRects().length > 0 && !e.disabled);
 }
 
 // ── Desplazamiento suave propio ──
@@ -128,7 +129,10 @@ function vecino(dir) {
   }
   if ((dir === 'left' || dir === 'right') && focused.parentElement?.classList.contains('shelf')) {
     const n = dir === 'right' ? focused.nextElementSibling : focused.previousElementSibling;
-    return n?.classList.contains('f') ? n : null;
+    if (n?.classList.contains('f')) return n;
+    // Última tarjeta de la fila + → : al mini reproductor (si hay música)
+    if (dir === 'right' && !$('.np.open')) return $('#mini:not(.hidden)');
+    return null;
   }
   return null;
 }
@@ -148,6 +152,8 @@ function mover(dir) {
     // El menú lateral solo se alcanza con "izquierda" desde el borde (ver más abajo)
     if (eRail !== enRail && !(enRail && dir === 'right')) continue;
     const b = e.getBoundingClientRect();
+    // Tarjetas escondidas a los lados de una fila no cuentan (a esas se llega recorriendo la fila)
+    if (b.left >= innerWidth - 2 || b.right <= 2) continue;
     // Distancias entre bordes: así una fila ancha no "pierde" contra algo lejano pero centrado
     const gapX = Math.max(0, b.left - a.right, a.left - b.right);
     const gapY = Math.max(0, b.top - a.bottom, a.top - b.bottom);
@@ -162,6 +168,8 @@ function mover(dir) {
   }
   if (mejor) enfocar(mejor);
   else if (dir === 'left' && !focused.closest('.rail') && !$('.np.open')) enfocar($('.nav.active') || $('.nav'));
+  // Al final de una fila (→) o de la pantalla (↓) se llega al mini reproductor
+  else if ((dir === 'down' || dir === 'right') && !$('.np.open') && !focused.closest('.rail') && $('#mini:not(.hidden)')) enfocar($('#mini'));
 }
 
 function activar() {
@@ -246,8 +254,10 @@ function shell() {
       <nav class="rail">
         <div class="logo"><img src="/img/icon.svg" alt=""><span>SpaceMusic</span></div>
         ${SECCIONES.map(([k, ic, l]) => `<button class="nav f" data-go="${k}">${icon(ic)}<span>${l}</span></button>`).join('')}
+        <button class="nav f hidden" data-go="np" id="nav-np">${icon('wave')}<span>Reproduciendo</span></button>
         ${nativo?.openSettings ? `<button class="nav f user" data-go="servidor">${icon('sliders')}<span>Servidor</span></button>` : ''}
         <button class="nav f ${nativo?.openSettings ? '' : 'user'}" data-go="salir">${icon('logout')}<span>Cerrar sesión</span></button>
+        ${nativo?.cerrarApp ? `<button class="nav f" data-go="cerrar">${icon('power')}<span>Cerrar app</span></button>` : ''}
       </nav>
       <main class="main"><div class="screen" id="screen"></div></main>
     </div>
@@ -257,7 +267,9 @@ function shell() {
     const b = e.target.closest('[data-go]');
     if (!b) return;
     if (b.dataset.go === 'salir') { session.clear(); location.reload(); return; }
+    if (b.dataset.go === 'np') { abrirNP(); return; }
     if (b.dataset.go === 'servidor') { nativo.openSettings(); return; }
+    if (b.dataset.go === 'cerrar') { player.pause(); nativo.cerrarApp(); return; }
     navegar(b.dataset.go);
   });
   $('#mini').addEventListener('click', abrirNP);
@@ -499,10 +511,11 @@ function pintarMini() {
   const m = $('#mini');
   if (!m) return;
   m.classList.toggle('hidden', !s);
+  $('#nav-np')?.classList.toggle('hidden', !s);
   if (!s) return;
   m.classList.toggle('paused', !player.playing);
   m.innerHTML = `${img(s.portadaUrl, 160)}<span style="min-width:0;text-align:left"><div class="t ellipsis">${esc(s.nombre)}</div><div class="s ellipsis">${esc(s.artista)}</div></span>
-    <span class="eq"><i></i><i></i><i></i></span><span class="bar"><i></i></span>`;
+    <span class="eq"><i></i><i></i><i></i></span><span class="bar"><i></i></span><span class="mini-ok">OK · abrir</span>`;
 }
 // Adelantar/retroceder con la barra: cada pulsación seguida salta un poco más (10 s, 10 s, 20 s, 30 s…)
 let saltoT = 0, saltoN = 0;
