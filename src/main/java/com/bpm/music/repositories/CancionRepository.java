@@ -19,7 +19,7 @@ public interface CancionRepository extends JpaRepository<Cancion, Long> {
             c.id, c.nombre, c.artista, c.album, c.genero,
             c.duracionSegundos, c.reproducciones,
             CASE WHEN c.portada IS NOT NULL THEN true ELSE false END,
-            c.portadaUrl, c.formato, c.anio, c.numeroPista,
+            c.portadaHash, c.portadaUrl, c.formato, c.anio, c.numeroPista,
             CASE WHEN LENGTH(c.letraSincronizada) > 0 THEN true ELSE false END,
             CASE WHEN LENGTH(c.letra) > 0 THEN true ELSE false END,
             c.fechaAgregada)
@@ -35,6 +35,10 @@ public interface CancionRepository extends JpaRepository<Cancion, Long> {
 
     @Query("SELECT c.rutaArchivo FROM Cancion c WHERE c.id = :id")
     Optional<String> findRutaById(@Param("id") Long id);
+
+    /** [id, huella] de las canciones con portada (para preparar miniaturas). */
+    @Query("SELECT c.id, c.portadaHash FROM Cancion c WHERE c.portada IS NOT NULL")
+    List<Object[]> findIdsYHuellasConPortada();
 
     @Query("SELECT c.portada FROM Cancion c WHERE c.id = :id")
     Optional<byte[]> findPortadaById(@Param("id") Long id);
@@ -58,8 +62,8 @@ public interface CancionRepository extends JpaRepository<Cancion, Long> {
 
     @Transactional
     @Modifying
-    @Query("UPDATE Cancion c SET c.portada = :portada WHERE c.id = :id")
-    int actualizarPortada(@Param("id") Long id, @Param("portada") byte[] portada);
+    @Query("UPDATE Cancion c SET c.portada = :portada, c.portadaHash = :hash WHERE c.id = :id")
+    int actualizarPortada(@Param("id") Long id, @Param("portada") byte[] portada, @Param("hash") String hash);
 
     // ── Limpieza de relaciones antes de borrar canciones huérfanas ──
     @Transactional

@@ -56,7 +56,12 @@ export const norm = (s) => String(s ?? '').normalize('NFD').replace(/\p{M}+/gu, 
 /** URL de portada en el tamaño pedido (solo para portadas del servidor). */
 export function cover(url, size = 300) {
   if (!url) return '';
-  if (url.startsWith('/api/portada/db/')) return url.split('?')[0] + '?s=' + size;
+  if (url.startsWith('/api/portada/db/')) {
+    // Conserva la huella (?v=) para que el navegador no reutilice una portada vieja
+    const [base, qs = ''] = url.split('?');
+    const v = new URLSearchParams(qs).get('v');
+    return base + '?s=' + size + (v ? '&v=' + v : '');
+  }
   return url;
 }
 

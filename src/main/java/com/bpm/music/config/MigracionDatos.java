@@ -23,9 +23,14 @@ public class MigracionDatos {
 
     private static final Logger log = LoggerFactory.getLogger(MigracionDatos.class);
     private final JdbcTemplate jdbc;
+    private final com.bpm.music.services.ImagenService imagenes;
+    private final com.bpm.music.services.BibliotecaService biblioteca;
 
-    public MigracionDatos(JdbcTemplate jdbc) {
+    public MigracionDatos(JdbcTemplate jdbc, com.bpm.music.services.ImagenService imagenes,
+                          com.bpm.music.services.BibliotecaService biblioteca) {
         this.jdbc = jdbc;
+        this.imagenes = imagenes;
+        this.biblioteca = biblioteca;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -50,6 +55,20 @@ public class MigracionDatos {
                 jdbc.update("UPDATE cancion SET favorito = false WHERE favorito = true");
             }
             jdbc.update("UPDATE playlist SET publica = false WHERE publica IS NULL");
+
+            // Huella de las portadas existentes (las URLs pasan a incluirla)
+            List<Long> sinHuella = jdbc.queryForList(
+                    "SELECT id FROM cancion WHERE portada IS NOT NULL AND portada_hash IS NULL", Long.class);
+            for (Long id : sinHuella) {
+                byte[] datos = jdbc.queryForObject("SELECT portada FROM cancion WHERE id = ?", byte[].class, id);
+                jdbc.update("UPDATE cancion SET portada_hash = ? WHERE id = ?", com.bpm.music.services.ImagenService.huella(datos), id);
+            }
+            if (!sinHuella.isEmpty()) {
+                log.info("Migración: huella calculada para {} portadas", sinHuella.size());
+                biblioteca.invalidar();
+            }
+            int viejas = imagenes.limpiarMiniaturasAntiguas();
+            if (viejas > 0) log.info("Migración: {} miniaturas antiguas borradas", viejas);
             jdbc.update("UPDATE playlist SET portada_url = NULL WHERE portada_url LIKE '%singlecolorimage%'");
         } catch (Exception e) {
             log.warn("Migración de datos omitida: {}", e.getMessage());

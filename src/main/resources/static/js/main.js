@@ -513,7 +513,34 @@ async function boot() {
       if (r.solicitudesPendientes) { b.textContent = r.solicitudesPendientes; b.classList.remove('hidden'); }
     }).catch(() => { });
   }
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => { });
+  registrarServiceWorker();
+}
+
+/** Guarda la app en el dispositivo y avisa cuando hay una versión nueva. */
+function registrarServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  let recargando = false;
+  const habiaVersion = !!navigator.serviceWorker.controller; // la primera visita no recarga
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (recargando || !habiaVersion) return;
+    recargando = true;
+    location.reload();
+  });
+  const avisar = (worker) => toast('Hay una versión nueva de SpaceMusic', {
+    ms: 15000,
+    action: { label: 'Actualizar', fn: () => worker.postMessage('activar') },
+  });
+  navigator.serviceWorker.register('/sw.js').then((reg) => {
+    if (reg.waiting && navigator.serviceWorker.controller) avisar(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing;
+      w?.addEventListener('statechange', () => {
+        if (w.state === 'installed' && navigator.serviceWorker.controller) avisar(w);
+      });
+    });
+    // Buscar versiones nuevas cada 30 minutos mientras la app está abierta
+    setInterval(() => reg.update().catch(() => { }), 30 * 60 * 1000);
+  }).catch(() => { });
 }
 
 boot().catch((e) => { console.error(e); toast('No se pudo iniciar la app: ' + e.message, { error: true }); });

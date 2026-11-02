@@ -169,7 +169,14 @@ public class RecomendacionService {
     }
 
     /** Tarjetas de mezclas para la pantalla de inicio. */
+    private final CacheTemporal<Long, List<Map<String, Object>>> cacheMixes = new CacheTemporal<>(5 * 60_000, 500);
+
+    /** Tarjetas de mezclas (se recalculan cada 5 minutos como máximo por usuario). */
     public List<Map<String, Object>> mixesPara(Long userId) {
+        return cacheMixes.obtener(userId, () -> calcularMixes(userId));
+    }
+
+    private List<Map<String, Object>> calcularMixes(Long userId) {
         List<Map<String, Object>> mixes = new ArrayList<>();
         if (biblioteca.total() == 0) return mixes;
 

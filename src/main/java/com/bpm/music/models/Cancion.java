@@ -63,6 +63,16 @@ public class Cancion {
     @JsonIgnore
     private byte[] portada;
 
+    /** Huella del contenido de la portada: cambia si cambia la imagen (evita cachés viejas). */
+    @Column(length = 16)
+    private String portadaHash;
+
+    /** Cambia la portada y actualiza su huella. */
+    public void ponerPortada(byte[] datos) {
+        this.portada = datos;
+        this.portadaHash = com.bpm.music.services.ImagenService.huella(datos);
+    }
+
     @Column(columnDefinition = "LONGTEXT")
     private String letra;
 

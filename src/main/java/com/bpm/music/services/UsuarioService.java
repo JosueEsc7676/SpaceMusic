@@ -219,7 +219,14 @@ public class UsuarioService {
     }
 
     /** Géneros y artistas favoritos del usuario (para recomendaciones). */
+    private final CacheTemporal<Long, Map<String, Long>> cachePesos = new CacheTemporal<>(120_000, 500);
+    private final CacheTemporal<Long, Set<String>> cacheGeneros = new CacheTemporal<>(120_000, 500);
+
     public Map<String, Long> pesosArtistas(Long userId) {
+        return cachePesos.obtener(userId, () -> calcularPesosArtistas(userId));
+    }
+
+    private Map<String, Long> calcularPesosArtistas(Long userId) {
         Map<String, Long> pesos = new HashMap<>();
         for (Object[] r : reproRepo.findConteoPorCancion(userId, LocalDateTime.now().minusDays(90))) {
             biblioteca.porId(((Number) r[0]).longValue()).ifPresent(c ->
@@ -232,6 +239,10 @@ public class UsuarioService {
     }
 
     public Set<String> generosPreferidos(Long userId) {
+        return cacheGeneros.obtener(userId, () -> calcularGenerosPreferidos(userId));
+    }
+
+    private Set<String> calcularGenerosPreferidos(Long userId) {
         Map<String, Long> g = new HashMap<>();
         for (Object[] r : reproRepo.findConteoPorCancion(userId, LocalDateTime.now().minusDays(90))) {
             biblioteca.porId(((Number) r[0]).longValue()).ifPresent(c ->

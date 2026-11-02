@@ -70,7 +70,7 @@ public class CancionService {
         if (file.getSize() > 10 * 1024 * 1024) throw new IllegalArgumentException("La imagen no puede pasar de 10 MB");
         byte[] jpg = imagenes.redimensionar(file.getBytes(), 1200);
         if (jpg == null) throw new IllegalArgumentException("No se pudo leer la imagen (usa JPG o PNG)");
-        repo.actualizarPortada(id, jpg);
+        repo.actualizarPortada(id, jpg, ImagenService.huella(jpg));
         imagenes.invalidarMiniaturas(id);
         biblioteca.invalidar();
         return biblioteca.requerir(id);

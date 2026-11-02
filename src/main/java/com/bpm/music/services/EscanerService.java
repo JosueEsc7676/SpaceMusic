@@ -38,6 +38,7 @@ public class EscanerService {
     private final CancionRepository repo;
     private final MetadataService metadata;
     private final BibliotecaService biblioteca;
+    private final ImagenService imagenes;
     private final String rutaMusica;
 
     private final AtomicBoolean escaneando = new AtomicBoolean(false);
@@ -58,10 +59,12 @@ public class EscanerService {
     private volatile Map<String, File> indicePorNombre = Map.of();
 
     public EscanerService(CancionRepository repo, MetadataService metadata, BibliotecaService biblioteca,
+                          ImagenService imagenes,
                           @Value("${music.path}") String rutaMusica) {
         this.repo = repo;
         this.metadata = metadata;
         this.biblioteca = biblioteca;
+        this.imagenes = imagenes;
         this.rutaMusica = rutaMusica;
     }
 
@@ -191,6 +194,30 @@ public class EscanerService {
             ultimoFin = LocalDateTime.now();
             escaneando.set(false);
         }
+        prepararMiniaturas();
+    }
+
+    private static final int[] TAMANOS_MINIATURA = {64, 160, 300};
+
+    /** Genera de antemano las miniaturas que falten, para que las listas carguen rápido. */
+    void prepararMiniaturas() {
+        int hechas = 0;
+        try {
+            for (Object[] fila : repo.findIdsYHuellasConPortada()) {
+                Long id = ((Number) fila[0]).longValue();
+                String huella = (String) fila[1];
+                boolean faltan = huella == null;
+                for (int t : TAMANOS_MINIATURA) if (!faltan && !imagenes.existeMiniatura(id, huella, t)) faltan = true;
+                if (!faltan) continue;
+                byte[] datos = repo.findPortadaById(id).orElse(null);
+                if (datos == null) continue;
+                for (int t : TAMANOS_MINIATURA) imagenes.miniaturaPortada(id, datos, t);
+                hechas++;
+            }
+        } catch (Exception e) {
+            log.debug("Miniaturas: {}", e.getMessage());
+        }
+        if (hechas > 0) log.info("Miniaturas preparadas para {} portadas", hechas);
     }
 
     /** Agrega o actualiza un único archivo (usado al subir canciones). */
@@ -221,6 +248,7 @@ public class EscanerService {
                 .genero(md.genero())
                 .rutaArchivo(f.getAbsolutePath())
                 .portada(md.portada())
+                .portadaHash(ImagenService.huella(md.portada()))
                 .portadaUrl("")
                 .duracionSegundos(md.duracionSegundos())
                 .numeroPista(md.numeroPista())
@@ -316,12 +344,20 @@ public class EscanerService {
      * letras) leyendo otra vez las etiquetas. No cambia títulos ni artistas.
      */
     public boolean refrescarMetadatosEnSegundoPlano() {
+        return refrescarMetadatosEnSegundoPlano(false);
+    }
+
+    /**
+     * @param forzarPortadas si es true, reemplaza la portada guardada por la que trae
+     *                       el archivo cuando son distintas (corrige portadas equivocadas).
+     */
+    public boolean refrescarMetadatosEnSegundoPlano(boolean forzarPortadas) {
         if (escaneando.get()) return false;
         ejecutor.submit(() -> {
             if (!escaneando.compareAndSet(false, true)) return;
             ultimoInicio = LocalDateTime.now();
             procesados = errores = 0;
-            fase = "Actualizando metadatos";
+            fase = forzarPortadas ? "Corrigiendo portadas" : "Actualizando metadatos";
             try {
                 List<Long> ids = repo.findAllIdsYRutas().stream().map(r -> ((Number) r[0]).longValue()).toList();
                 archivosEncontrados = ids.size();
@@ -337,7 +373,7 @@ public class EscanerService {
                             if (c.getFormato() == null) { c.setFormato(md.formato()); cambio = true; }
                             if (c.getBitrate() == null && md.bitrate() != null) { c.setBitrate(md.bitrate()); cambio = true; }
                             if (c.getDuracionSegundos() <= 0 && md.duracionSegundos() > 0) { c.setDuracionSegundos(md.duracionSegundos()); cambio = true; }
-                            if (c.getPortada() == null && md.portada() != null) { c.setPortada(md.portada()); cambio = true; }
+                            if (md.portada() != null && (c.getPortada() == null || (forzarPortadas && !ImagenService.huella(md.portada()).equals(c.getPortadaHash())))) { c.ponerPortada(md.portada()); imagenes.invalidarMiniaturas(c.getId()); cambio = true; }
                             if (vacio(c.getLetraSincronizada()) && !vacio(md.letraSincronizada())) { c.setLetraSincronizada(md.letraSincronizada()); cambio = true; }
                             if (vacio(c.getLetra()) && !vacio(md.letra())) { c.setLetra(md.letra()); cambio = true; }
                             if (cambio) repo.save(c);

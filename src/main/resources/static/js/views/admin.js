@@ -62,9 +62,11 @@ async function bibliotecaTab(el) {
         <div class="row wrap">
           <button class="btn primary sm" data-scan ${s.escaneando ? 'disabled' : ''}>${icon('refresh', 'sm')} Buscar canciones nuevas</button>
           <button class="btn sm" data-meta ${s.escaneando ? 'disabled' : ''}>${icon('info', 'sm')} Completar datos</button>
+          <button class="btn sm" data-covers ${s.escaneando ? 'disabled' : ''}>${icon('disc', 'sm')} Corregir portadas</button>
           <button class="btn danger sm" data-clean ${s.escaneando ? 'disabled' : ''}>${icon('trash', 'sm')} Quitar canciones borradas</button>
         </div>
         <p class="hint" style="font-size:12px;color:var(--text-3)">“Completar datos” vuelve a leer las etiquetas para llenar número de pista, año, portadas y letras que falten (no cambia títulos).<br>
+        “Corregir portadas” vuelve a tomar la portada de cada archivo y reemplaza las que estén mal.<br>
         “Quitar canciones borradas” elimina de la base de datos las canciones cuyo archivo ya no existe.</p>
       </div>
       <div class="panel"><h3>${icon('clock')} Último proceso</h3>
@@ -81,6 +83,7 @@ async function bibliotecaTab(el) {
     };
     el.querySelector('[data-scan]').onclick = () => act('/api/admin/biblioteca/escanear', 'Buscando canciones nuevas…');
     el.querySelector('[data-meta]').onclick = () => act('/api/admin/biblioteca/metadatos', 'Actualizando datos…');
+    el.querySelector('[data-covers]').onclick = () => act('/api/admin/biblioteca/metadatos?portadas=true', 'Corrigiendo portadas…');
     el.querySelector('[data-clean]').onclick = async () => {
       if (!(await confirmDialog('Se quitarán de la biblioteca (y de playlists y favoritos) las canciones cuyo archivo ya no existe en el disco. Los archivos no se tocan.', { title: 'Quitar canciones borradas', ok: 'Quitar', danger: true }))) return;
       try {

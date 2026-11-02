@@ -99,9 +99,25 @@ public class ImagenService {
 
     // ═══════════════════ Miniaturas de portadas ═══════════════════
 
-    /** Miniatura JPEG cacheada en disco de la portada de una canción. */
+    /** Huella corta del contenido (12 caracteres hex). Distinta imagen → distinta huella. */
+    public static String huella(byte[] datos) {
+        if (datos == null || datos.length == 0) return null;
+        try {
+            byte[] h = java.security.MessageDigest.getInstance("SHA-1").digest(datos);
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 6; i++) sb.append(String.format("%02x", h[i]));
+            return sb.toString();
+        } catch (Exception e) {
+            return Integer.toHexString(java.util.Arrays.hashCode(datos));
+        }
+    }
+
+    /**
+     * Miniatura JPEG cacheada en disco. El nombre incluye la huella de la imagen
+     * original: si la portada cambia, nunca se reutiliza una miniatura vieja.
+     */
     public byte[] miniaturaPortada(Long id, byte[] original, int lado) {
-        Path cache = carpeta("cache/portadas").resolve(id + "_" + lado + ".jpg");
+        Path cache = carpeta("cache/portadas").resolve(id + "_" + huella(original) + "_" + lado + ".jpg");
         try {
             if (Files.isRegularFile(cache)) return Files.readAllBytes(cache);
             byte[] mini = redimensionar(original, lado);
@@ -113,12 +129,30 @@ public class ImagenService {
         }
     }
 
+    public boolean existeMiniatura(Long id, String huella, int lado) {
+        return Files.isRegularFile(carpeta("cache/portadas").resolve(id + "_" + huella + "_" + lado + ".jpg"));
+    }
+
+    /** Borra todas las miniaturas de una canción (de cualquier versión de su portada). */
     public void invalidarMiniaturas(Long id) {
-        for (int lado : new int[]{64, 160, 300, 640}) {
-            try {
-                Files.deleteIfExists(carpeta("cache/portadas").resolve(id + "_" + lado + ".jpg"));
-            } catch (IOException ignored) { }
-        }
+        try (var files = Files.list(carpeta("cache/portadas"))) {
+            files.filter(p -> p.getFileName().toString().startsWith(id + "_")).forEach(p -> {
+                try { Files.deleteIfExists(p); } catch (IOException ignored) { }
+            });
+        } catch (IOException ignored) { }
+    }
+
+    /** Borra miniaturas antiguas (formato sin huella) que podían mostrar portadas equivocadas. */
+    public int limpiarMiniaturasAntiguas() {
+        int n = 0;
+        try (var files = Files.list(carpeta("cache/portadas"))) {
+            for (Path p : files.toList()) {
+                if (p.getFileName().toString().matches("\\d+_\\d+\\.jpg")) {
+                    try { Files.deleteIfExists(p); n++; } catch (IOException ignored) { }
+                }
+            }
+        } catch (IOException ignored) { }
+        return n;
     }
 
     /** Redimensiona y recomprime a JPEG. Devuelve null si no es una imagen legible. */

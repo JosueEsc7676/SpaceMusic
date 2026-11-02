@@ -40,7 +40,7 @@ public class CancionDTO {
     /** Constructor usado por la consulta de proyección del repositorio. */
     public CancionDTO(Long id, String nombre, String artista, String album, String genero,
                       Integer duracionSegundos, Integer reproducciones,
-                      Boolean tienePortada, String portadaExterna,
+                      Boolean tienePortada, String portadaHash, String portadaExterna,
                       String formato, Integer anio, Integer numeroPista,
                       Boolean tieneLrc, Boolean tieneTexto, LocalDateTime fechaAgregada) {
         this.id = id;
@@ -51,7 +51,7 @@ public class CancionDTO {
         this.duracionSegundos = duracionSegundos != null ? duracionSegundos : 0;
         this.reproducciones = reproducciones != null ? reproducciones : 0;
         this.tienePortada = Boolean.TRUE.equals(tienePortada);
-        this.portadaUrl = construirPortadaUrl(id, Boolean.TRUE.equals(tienePortada), portadaExterna);
+        this.portadaUrl = construirPortadaUrl(id, Boolean.TRUE.equals(tienePortada), portadaHash, portadaExterna);
         this.audioUrl = "/api/canciones/" + id + "/audio";
         this.formato = formato;
         this.anio = anio;
@@ -61,11 +61,12 @@ public class CancionDTO {
         this.fechaAgregada = fechaAgregada;
     }
 
-    public static String construirPortadaUrl(Long id, boolean tienePortada, String portadaExterna) {
+    public static String construirPortadaUrl(Long id, boolean tienePortada, String portadaHash, String portadaExterna) {
         if (!tienePortada && portadaExterna != null && portadaExterna.startsWith("http")) {
             return portadaExterna;
         }
         // El endpoint devuelve la portada embebida o una imagen generada
-        return "/api/portada/db/" + id;
+        // La huella en la URL hace que el navegador nunca muestre una portada vieja
+        return "/api/portada/db/" + id + (tienePortada && portadaHash != null ? "?v=" + portadaHash : "");
     }
 }

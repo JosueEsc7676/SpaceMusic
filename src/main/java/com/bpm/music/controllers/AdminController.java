@@ -140,8 +140,8 @@ public class AdminController {
     }
 
     @PostMapping("/biblioteca/metadatos")
-    public Map<String, Object> metadatos() {
-        boolean iniciado = escaner.refrescarMetadatosEnSegundoPlano();
+    public Map<String, Object> metadatos(@RequestParam(defaultValue = "false") boolean portadas) {
+        boolean iniciado = escaner.refrescarMetadatosEnSegundoPlano(portadas);
         Map<String, Object> r = new LinkedHashMap<>(escaner.estado());
         r.put("iniciado", iniciado);
         return r;

@@ -213,10 +213,19 @@ public class MetadataService {
         }
     }
 
+    /** Carpetas donde se mezclan canciones de varios álbumes: su cover.jpg no es de cada canción. */
+    private static final java.util.Set<String> CARPETAS_MEZCLADAS = java.util.Set.of(
+            "musica", "música", "music", "descargas", "downloads", "subidas", "uploads", "varios",
+            "singles", "single", "mp3", "flac", "nueva carpeta", "new folder", "canciones", "songs");
+
     private static byte[] leerPortadaCarpeta(File dir) {
         if (dir == null || !dir.isDirectory()) return null;
+        if (CARPETAS_MEZCLADAS.contains(dir.getName().trim().toLowerCase(java.util.Locale.ROOT))) return null;
         File[] archivos = dir.listFiles();
         if (archivos == null) return null;
+        // Muchas canciones sueltas en la misma carpeta: probablemente no son un solo álbum
+        long audios = java.util.Arrays.stream(archivos).filter(f -> EscanerService.EXTENSIONES.contains(extension(f.getName()))).count();
+        if (audios > 40) return null;
         for (String nombre : PORTADAS_CARPETA) {
             for (File f : archivos) {
                 if (f.isFile() && f.getName().equalsIgnoreCase(nombre) && f.length() < 10 * 1024 * 1024) {
