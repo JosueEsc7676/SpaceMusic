@@ -7,6 +7,7 @@
   <title>SpaceMusic TV</title>
   <link rel="icon" href="/img/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="/css/splash.css">
   <link rel="stylesheet" href="/css/tv.css">
   <link rel="modulepreload" href="/js/api.js">
   <link rel="modulepreload" href="/js/util.js">
@@ -16,6 +17,15 @@
   <script type="module" src="/js/tv.js"></script>
 </head>
 <body>
+  <div id="splash" class="tv-splash" aria-hidden="true">
+    <div class="sp-logo"><svg viewBox="0 0 512 512">
+      <rect x="3" y="3" width="506" height="506" rx="112" fill="#000" stroke="#2e2e34" stroke-width="6"/>
+      <path class="sp-stem" d="M200 372V150l170-34v222"/>
+      <circle class="sp-head sp-h1" cx="156" cy="372" r="54"/>
+      <circle class="sp-head sp-h2" cx="326" cy="338" r="54"/>
+    </svg></div>
+    <div class="sp-name">SpaceMusic</div>
+  </div>
   <noscript>SpaceMusic TV necesita JavaScript.</noscript>
 </body>
 </html>

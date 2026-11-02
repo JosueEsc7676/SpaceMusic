@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0b0f">
+  <meta name="theme-color" content="#000000">
   <meta name="description" content="SpaceMusic — tu servidor de música personal">
   <title>SpaceMusic</title>
   <link rel="icon" href="/img/icon.svg" type="image/svg+xml">
@@ -12,6 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+  <link rel="stylesheet" href="/css/splash.css">
   <link rel="stylesheet" href="/css/app.css">
   <link rel="modulepreload" href="/js/api.js">
   <link rel="modulepreload" href="/js/util.js">
@@ -30,6 +31,15 @@
   <script type="module" src="/js/main.js"></script>
 </head>
 <body>
+  <div id="splash" aria-hidden="true">
+    <div class="sp-logo"><svg viewBox="0 0 512 512">
+      <rect x="3" y="3" width="506" height="506" rx="112" fill="#000" stroke="#2e2e34" stroke-width="6"/>
+      <path class="sp-stem" d="M200 372V150l170-34v222"/>
+      <circle class="sp-head sp-h1" cx="156" cy="372" r="54"/>
+      <circle class="sp-head sp-h2" cx="326" cy="338" r="54"/>
+    </svg></div>
+    <div class="sp-name">SpaceMusic</div>
+  </div>
   <noscript>SpaceMusic necesita JavaScript para funcionar.</noscript>
 </body>
 </html>

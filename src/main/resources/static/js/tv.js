@@ -6,6 +6,7 @@ import { esc, cover, fmtTime, fmtLong, plural, dominantColor, bus, store } from 
 import { icon } from './icons.js';
 import { player, prefs } from './player.js';
 import { parseLrc } from './lrc.js';
+import { pintarCuerpo, ocultarSplash } from './splash.js';
 
 const nativo = window.SpaceMusicTV || null; // puente con la APK (si existe)
 const $ = (s, r = document) => r.querySelector(s);
@@ -59,6 +60,8 @@ function visibles() {
 
 function enfocar(el, { scroll = true } = {}) {
   if (!el) return;
+  const npAbierto = $('.np.open');
+  if (npAbierto && !npAbierto.contains(el)) return;
   focused?.classList.remove('focused');
   focused = el;
   el.classList.add('focused');
@@ -186,7 +189,7 @@ const SECCIONES = [
 ];
 
 function shell() {
-  document.body.innerHTML = `
+  pintarCuerpo(`
     <div class="tv">
       <nav class="rail">
         <div class="logo"><img src="/img/icon.svg" alt=""><span>SpaceMusic</span></div>
@@ -197,7 +200,7 @@ function shell() {
       <main class="main"><div class="screen" id="screen"></div></main>
     </div>
     <button class="mini f hidden" id="mini"></button>
-    <div class="np" id="np"></div>`;
+    <div class="np" id="np"></div>`);
   $('.rail').addEventListener('click', (e) => {
     const b = e.target.closest('[data-go]');
     if (!b) return;
@@ -441,7 +444,8 @@ function pintarBarra() {
   if ($('.np.open')) {
     $('#np .rail2 i').style.width = p + '%';
     $('#np [data-cur]').textContent = fmtTime(a.currentTime);
-    $('#np [data-dur]').textContent = fmtTime(a.duration || player.current?.duracionSegundos);
+    const dur = a.duration || player.current?.duracionSegundos || 0;
+    $('#np [data-dur]').textContent = '-' + fmtTime(Math.max(0, dur - a.currentTime));
   }
 }
 
@@ -480,37 +484,47 @@ function pintarNP(cambio) {
   const s = player.current;
   if (!s || !np) return;
   if (cambio || !np.innerHTML) {
-    np.innerHTML = `<div class="np-bg" style="background-image:url('${esc(cover(s.portadaUrl, 300))}')"></div>
+    const antes = focused && np.contains(focused) ? focused.dataset.c : null;
+    np.innerHTML = `<div class="np-bg" style="background-image:url('${esc(cover(s.portadaUrl, 300))}')"></div><div class="np-tint"></div>
       <div class="np-left">
         <div class="np-art">${img(s.portadaUrl, 640)}</div>
-        <div><div class="np-name">${esc(s.nombre)}</div><div class="np-artist">${esc(s.artista)}${s.album && s.album !== 'Single' ? ' · ' + esc(s.album) : ''}</div></div>
+        <div class="np-head">
+          <div class="tt"><div class="np-name">${esc(s.nombre)}</div><div class="np-artist">${esc(s.artista)}${s.album && s.album !== 'Single' ? ' — ' + esc(s.album) : ''}</div></div>
+        </div>
         <div class="np-prog"><div class="rail2"><i></i></div><div class="times"><span data-cur>0:00</span><span data-dur>0:00</span></div></div>
         <div class="np-ctrls">
-          <button class="cb f" data-c="shuffle">${icon('shuffle')}</button>
-          <button class="cb f" data-c="prev">${icon('prev')}</button>
+          <button class="cb sm f" data-c="shuffle">${icon('shuffle')}</button>
+          <button class="cb f" data-c="prev">${icon('rew')}</button>
           <button class="cb big f" data-c="play">${icon(player.playing ? 'pause' : 'play')}</button>
-          <button class="cb f" data-c="next">${icon('next')}</button>
-          <button class="cb f" data-c="fav">${icon('heart')}</button>
+          <button class="cb f" data-c="next">${icon('fwd')}</button>
+          <button class="cb sm f" data-c="repeat">${icon('repeat')}</button>
+        </div>
+        <div class="np-bottom">
+          <button class="cb sm f" data-c="fav">${icon('heart')}</button>
+          <div class="np-up" id="up"></div>
         </div>
       </div>
-      <div class="np-lyrics" id="lyr"><div class="none">Cargando letra…</div></div>
-      <div class="np-up" id="up"></div>`;
-    np.querySelector('.np-ctrls').addEventListener('click', (e) => {
+      <div class="np-lyrics" id="lyr"><div class="none">Cargando letra…</div></div>`;
+    np.querySelector('.np-left').addEventListener('click', (e) => {
       const c = e.target.closest('[data-c]')?.dataset.c;
       if (c === 'play') player.toggle();
       else if (c === 'prev') player.prev();
       else if (c === 'next') player.next();
       else if (c === 'shuffle') { player.toggleShuffle(); toast(player.shuffle ? 'Aleatorio activado' : 'Aleatorio desactivado'); }
+      else if (c === 'repeat') { player.cycleRepeat(); toast(player.repeat === 'off' ? 'Repetición desactivada' : player.repeat === 'one' ? 'Repetir esta canción' : 'Repetir todo'); }
       else if (c === 'fav') alternarFav();
     });
     dominantColor(s.portadaUrl).then((c) => np.style.setProperty('--np', c.join(',')));
     cargarLetra(s);
     estadoFav();
+    if (np.classList.contains('open')) enfocar($(`[data-c="${antes || 'play'}"]`, np), { scroll: false });
   }
   np.classList.toggle('paused', !player.playing);
   const pb = np.querySelector('[data-c="play"]');
   if (pb) pb.innerHTML = icon(player.playing ? 'pause' : 'play');
   np.querySelector('[data-c="shuffle"]')?.classList.toggle('on', player.shuffle);
+  const rp = np.querySelector('[data-c="repeat"]');
+  if (rp) { rp.classList.toggle('on', player.repeat !== 'off'); rp.innerHTML = icon('repeat') + (player.repeat === 'one' ? '<span class="rep1">1</span>' : ''); }
   const sig = player.items[player.index + 1];
   const up = $('#up');
   if (up) up.textContent = sig ? `A continuación: ${sig.nombre} · ${sig.artista}` : '';
@@ -576,7 +590,7 @@ function actualizarLetra(force) {
       }
     });
     const a = inner.querySelector(`[data-i="${Math.max(0, i)}"]`);
-    if (a) inner.style.transform = `translateY(${-a.offsetTop + inner.parentElement.clientHeight * 0.3 - inner.parentElement.clientHeight * 0.36}px)`;
+    if (a) inner.style.transform = `translateY(${inner.parentElement.clientHeight * 0.4 - (a.offsetTop + a.offsetHeight / 2)}px)`;
   }
   const l = lineas[i];
   if (l?.words) {
@@ -610,13 +624,14 @@ bus.on('player:queue', () => $('.np.open') && pintarNP(false));
 // ═══════════════════ Inicio de sesión ═══════════════════
 
 function login(msg = '') {
-  document.body.innerHTML = `<div class="login"><form id="lf">
+  pintarCuerpo(`<div class="login"><form id="lf">
     <h1><img src="/img/icon.svg" alt="">SpaceMusic</h1><p>Inicia sesión con tu cuenta</p>
     <label>Usuario o correo</label><input class="f" id="lu" autocomplete="username">
     <label>Contraseña</label><input class="f" id="lp" type="password" autocomplete="current-password">
     <div class="err" id="le">${esc(msg)}</div>
-    <button class="btn primary f" type="submit">Entrar</button></form></div>`;
+    <button class="btn primary f" type="submit">Entrar</button></form></div>`);
   enfocar($('#lu'), { scroll: false });
+  ocultarSplash();
   $('#lf').addEventListener('submit', async (e) => {
     e.preventDefault();
     $('#le').textContent = '';
@@ -644,7 +659,8 @@ async function iniciar() {
   player.restore();
   pintarMini();
   navegar('inicio');
+  ocultarSplash();
   api('/api/auth/refresh', { method: 'POST' }).then((r) => r?.token && session.save(r.token, r.usuario)).catch(() => { });
 }
 
-iniciar().catch((e) => { document.body.innerHTML = `<div class="loading">No se pudo iniciar: ${esc(e.message)}</div>`; });
+iniciar().catch((e) => { pintarCuerpo(`<div class="loading">No se pudo iniciar: ${esc(e.message)}</div>`); ocultarSplash(); });

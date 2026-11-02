@@ -15,6 +15,7 @@ import { libraryView, invalidateLibraryCache } from './views/library.js';
 import { albumView, artistView, playlistView, likedView, genreView, mixView, historyView } from './views/collection.js';
 import { profileView, statsView, applyAccent, avatarHtml, openEqualizer } from './views/account.js';
 import { adminView, uploadView } from './views/admin.js';
+import { pintarCuerpo, ocultarSplash } from './splash.js';
 
 if (!session.valid()) {
   logout(session.token ? 'expirada' : '');
@@ -24,7 +25,7 @@ applyAccent();
 
 // ═══════════════════ Estructura de la página ═══════════════════
 
-document.body.innerHTML = `
+pintarCuerpo(`
 <div class="app">
   <nav class="sidebar" aria-label="Navegación principal">
     <div class="side-block">
@@ -90,7 +91,7 @@ document.body.innerHTML = `
   <a href="#/biblioteca" data-nav="/biblioteca">${icon('library')}Biblioteca</a>
   <a href="#/perfil" data-nav="/perfil">${icon('user')}Perfil</a>
 </nav>
-<div class="toasts" id="toasts"></div>`;
+<div class="toasts" id="toasts"></div>`);
 
 // ═══════════════════ Rutas ═══════════════════
 
@@ -342,7 +343,7 @@ function paintTime() {
   if (nps && np.isOpen && dragging !== 'np') {
     setSeek(nps, dur ? a.currentTime / dur : 0);
     $('[data-np-cur]').textContent = fmtTime(a.currentTime);
-    $('[data-np-dur]').textContent = fmtTime(dur);
+    $('[data-np-dur]').textContent = '-' + fmtTime(Math.max(0, dur - a.currentTime));
   }
 }
 
@@ -355,7 +356,7 @@ function paintBuffer() {
 
 function paintVolume() {
   const v = player.muted ? 0 : player.volume;
-  setSeek($('[data-seek="vol"]'), v);
+  $$('[data-seek="vol"]').forEach((el) => setSeek(el, v));
   $('[data-c="mute"]').innerHTML = icon(v === 0 ? 'mute' : v < 0.5 ? 'volumeLow' : 'volume');
 }
 
@@ -452,7 +453,7 @@ bus.on('player:buffer', paintBuffer);
 bus.on('player:volume', paintVolume);
 bus.on('favs', paintFav);
 bus.on('drawer', (open) => $('[data-c="queue"]').classList.toggle('active', open));
-bus.on('np:open', () => { $('[data-c="np"]').classList.add('active'); $('[data-c="lyrics"]').classList.toggle('active', np.tab === 'letra'); paintTime(); });
+bus.on('np:open', () => { paintVolume(); $('[data-c="np"]').classList.add('active'); $('[data-c="lyrics"]').classList.toggle('active', np.tab === 'letra'); paintTime(); });
 bus.on('np:close', () => { $('[data-c="np"]').classList.remove('active'); $('[data-c="lyrics"]').classList.remove('active'); });
 bus.on('library:changed', () => invalidateLibraryCache());
 bus.on('song:updated', () => { invalidateLibraryCache(); render(); });
@@ -506,6 +507,7 @@ async function boot() {
   paintMode();
   paintState();
   startRouter();
+  ocultarSplash();
 
   if (session.isAdmin) {
     api('/api/admin/resumen').then((r) => {

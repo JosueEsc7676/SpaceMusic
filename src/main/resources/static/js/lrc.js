@@ -5,6 +5,10 @@
  * Soporta varias marcas por línea, [offset:], tiempos por palabra
  * (<mm:ss.xx>, formato "LRC mejorado") y detecta partes instrumentales.
  */
+/** Líneas de créditos que algunos sitios ponen al inicio de la letra. */
+const CREDITO = /^\s*(作词|作曲|编曲|制作人|作詞|編曲|製作人|词|曲|监制|混音|母带|和声|吉他|贝斯|鼓|录音|出品|发行|OP|SP|lyrics?( by)?|written by|writer|composed by|composer|music by|producers?|produced by|arranged by|arranger|mixed by|mastered by|letra|m[uú]sica|compositor(es)?|productor(es)?|arreglos?)\s*[:：]/i;
+const esCredito = (t) => CREDITO.test(t);
+
 export function parseLrc(lrc) {
   const T = (m, s, f) => parseInt(m, 10) * 60 + parseInt(s, 10) + (f ? parseInt(f, 10) / Math.pow(10, f.length) : 0);
   let offset = 0;
@@ -21,6 +25,8 @@ export function parseLrc(lrc) {
       ? marcas.map((m) => ({ t: T(m[1], m[2], m[3]) - offset, w: m[4] })).filter((x) => x.w.length)
       : null;
     const text = cuerpo.replace(/<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>/g, '').replace(/\s+/g, ' ').trim();
+    if (esCredito(text)) continue; // "作词 : …", "Composed by: …", "Letra: …"
+
     for (const m of tags) raw.push({ t: T(m[1], m[2], m[3]) - offset, text, words });
   }
   raw.sort((a, b) => a.t - b.t);

@@ -114,44 +114,40 @@ export const np = {
     const el = document.createElement('div');
     el.className = 'np' + (esSafari ? ' safari' : '');
     el.setAttribute('aria-hidden', 'true');
-    el.innerHTML = `<div class="np-bg"></div>
-      <div class="np-top"><button class="round-btn" data-np-close aria-label="Cerrar">${icon('down')}</button>
-        <div class="ctx"><div class="k">Reproduciendo desde</div><div class="v ellipsis" data-np-ctx></div></div>
-        <button class="round-btn" data-np-more aria-label="Más opciones">${icon('more')}</button></div>
+    el.innerHTML = `<div class="np-bg"></div><div class="np-tint"></div>
+      <button class="np-grab" data-np-close aria-label="Cerrar"><span></span></button>
       <div class="np-body">
-        <div class="np-left">
-          <div class="np-art" data-np-art></div>
-          <div class="np-meta"><div class="tt"><div class="name ellipsis" data-np-name></div><div class="artist ellipsis" data-np-artist></div></div>
-            <button class="icon-btn" data-np-fav aria-label="Me gusta">${icon('heart')}</button></div>
+        <div class="np-art" data-np-art></div>
+        <div class="np-head">
+          <div class="np-thumb" data-np-thumb></div>
+          <div class="tt"><div class="name ellipsis" data-np-name></div><div class="artist ellipsis" data-np-artist></div></div>
+          <button class="np-more" data-np-more aria-label="Más opciones">${icon('more')}</button>
+        </div>
+        <div class="np-controls">
           <div class="np-progress"><div class="seek" data-seek="np"><div class="rail"><div class="buf"></div><div class="fill"></div></div><div class="knob"></div><div class="tip"></div></div>
-            <div class="times"><span data-np-cur>0:00</span><span data-np-dur>0:00</span></div></div>
+            <div class="times"><span data-np-cur>0:00</span><span data-np-dur>-0:00</span></div></div>
           <div class="np-ctrls">
-            <button class="icon-btn" data-c="shuffle" aria-label="Aleatorio">${icon('shuffle')}</button>
-            <button class="icon-btn" data-c="prev" aria-label="Anterior">${icon('prev')}</button>
-            <button class="big" data-c="play" aria-label="Reproducir">${icon('play')}</button>
-            <button class="icon-btn" data-c="next" aria-label="Siguiente">${icon('next')}</button>
-            <button class="icon-btn" data-c="repeat" aria-label="Repetir">${icon('repeat')}</button>
+            <button class="np-cb sm" data-c="shuffle" aria-label="Aleatorio">${icon('shuffle')}</button>
+            <button class="np-cb" data-c="prev" aria-label="Anterior">${icon('rew')}</button>
+            <button class="np-cb big" data-c="play" aria-label="Reproducir">${icon('play')}</button>
+            <button class="np-cb" data-c="next" aria-label="Siguiente">${icon('fwd')}</button>
+            <button class="np-cb sm" data-c="repeat" aria-label="Repetir">${icon('repeat')}</button>
           </div>
-          <div class="row np-only-mobile" style="justify-content:center;gap:10px">
-            <button class="btn sm" data-mtab="letra" style="background:rgba(255,255,255,.14)">${icon('mic', 'sm')} Letra</button>
-            <button class="btn sm" data-mtab="cola" style="background:rgba(255,255,255,.14)">${icon('queue', 'sm')} Cola</button>
+          <div class="np-vol">${icon('volMin', 'sm')}<div class="seek" data-seek="vol"><div class="rail"><div class="fill"></div></div><div class="knob"></div></div>${icon('volMax', 'sm')}</div>
+          <div class="np-bottom">
+            <button class="np-tb" data-np-fav aria-label="Me gusta">${icon('heart')}</button>
+            <span class="grow"></span>
+            <button class="np-tb" data-panel="letra" aria-label="Letra" title="Letra">${icon('quote')}</button>
+            <button class="np-tb" data-panel="cola" aria-label="A continuación" title="A continuación">${icon('list')}</button>
           </div>
-          <canvas class="np-visual" data-np-vis width="880" height="92"></canvas>
         </div>
-        <div class="np-panel">
-          <div class="np-tabs">
-            <button data-tab="letra">Letra</button><button data-tab="cola">A continuación</button><button data-tab="info">Información</button>
-            <span style="flex:1"></span><button class="np-only-mobile" data-mback aria-label="Volver">${icon('close', 'sm')}</button>
-          </div>
-          <div class="lyr-bar hidden" data-lyr-bar></div>
-          <div class="np-tab" data-np-tab></div>
-        </div>
+        <div class="np-panel"><div class="np-tab" data-np-tab></div></div>
       </div>`;
     document.body.appendChild(el);
     this.el = el;
 
     el.querySelector('[data-np-close]').onclick = () => this.close();
-    el.querySelector('[data-np-more]').onclick = (e) => player.current && songMenu(e.currentTarget, player.current);
+    el.querySelector('[data-np-more]').onclick = (e) => this.menu(e.currentTarget);
     el.querySelector('[data-np-fav]').onclick = () => player.current && lib.toggleFav(player.current.id).catch(errorToast);
     el.querySelector('.np-ctrls').addEventListener('click', (e) => {
       const c = e.target.closest('[data-c]')?.dataset.c;
@@ -161,9 +157,10 @@ export const np = {
       else if (c === 'shuffle') player.toggleShuffle();
       else if (c === 'repeat') player.cycleRepeat();
     });
-    el.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => this.setTab(b.dataset.tab)));
-    el.querySelectorAll('[data-mtab]').forEach((b) => b.addEventListener('click', () => { this.setTab(b.dataset.mtab); el.querySelector('.np-body').classList.add('show-panel'); }));
-    el.querySelector('[data-mback]').onclick = () => el.querySelector('.np-body').classList.remove('show-panel');
+    // Letra y cola: el mismo botón la muestra u oculta (como Apple Music)
+    el.querySelectorAll('[data-panel]').forEach((b) => b.addEventListener('click', () => {
+      this.setTab(this.tab === b.dataset.panel ? null : b.dataset.panel);
+    }));
     el.querySelector('[data-np-artist]').addEventListener('click', (e) => { if (e.target.closest('a')) this.close(); });
 
     const tabBox = el.querySelector('[data-np-tab]');
@@ -183,10 +180,10 @@ export const np = {
       }
     });
 
-    // Gesto: deslizar hacia abajo para cerrar (móvil)
+    // Gesto: deslizar hacia abajo desde arriba para cerrar (móvil)
     let y0 = null;
-    el.querySelector('.np-top').addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; }, { passive: true });
-    el.querySelector('.np-top').addEventListener('touchend', (e) => { if (y0 !== null && e.changedTouches[0].clientY - y0 > 80) this.close(); y0 = null; });
+    el.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY < 120 ? e.touches[0].clientY : null; }, { passive: true });
+    el.addEventListener('touchend', (e) => { if (y0 !== null && e.changedTouches[0].clientY - y0 > 90) this.close(); y0 = null; });
 
     bus.on('player:song', () => this.isOpen && this.sync(true));
     bus.on('player:state', () => this.isOpen && this.syncState());
@@ -198,13 +195,12 @@ export const np = {
   open(tab) {
     if (!player.current) return toast('Reproduce una canción primero');
     if (!this.el) this.build();
-    if (tab) this.tab = tab;
+    if (tab !== undefined) this.tab = tab;
+    else if (isMobile()) this.tab = null; // en el celular se abre mostrando la portada
     this.isOpen = true;
     this.el.classList.add('open');
     this.el.setAttribute('aria-hidden', 'false');
-    if (tab && isMobile()) this.el.querySelector('.np-body').classList.add('show-panel');
     this.sync(true);
-    if (prefs.visualizer) { fx.ensure(); fx.resume(); }
     this.loop();
     bus.emit('np:open');
   },
@@ -214,7 +210,6 @@ export const np = {
     this.isOpen = false;
     this.el.classList.remove('open');
     this.el.setAttribute('aria-hidden', 'true');
-    this.el.querySelector('.np-body').classList.remove('show-panel');
     cancelAnimationFrame(this.raf);
     bus.emit('np:close');
   },
@@ -223,8 +218,53 @@ export const np = {
 
   setTab(t) {
     this.tab = t;
-    store.set('sm_np_tab', t);
+    if (t) store.set('sm_np_tab', t);
     this.renderTab();
+  },
+
+  /** Menú "…": canción y opciones de la letra. */
+  menu(anchor) {
+    const s = player.current;
+    if (!s) return;
+    const fav = lib.isFav(s.id);
+    const conSync = this.synced && this.lines.length;
+    showMenu(anchor, [
+      { label: fav ? 'Quitar de Me gusta' : 'Agregar a Me gusta', icon: fav ? 'heartFill' : 'heart', fn: () => lib.toggleFav(s.id).catch(errorToast) },
+      { label: 'Agregar a playlist', icon: 'plusCircle', fn: () => import('./ui.js').then((u) => u.pickPlaylist([s])) },
+      { label: 'Ir al artista', icon: 'user', fn: () => { this.close(); location.hash = '#/artista/' + encodeURIComponent(s.artista); } },
+      s.album && s.album !== 'Single' ? { label: 'Ir al álbum', icon: 'disc', fn: () => { this.close(); location.hash = '#/album/' + encodeURIComponent(s.album); } } : null,
+      { sep: true },
+      conSync ? { label: `Ajustar sincronía (${fmtOffCorto(getOffset(s.id))})`, icon: 'clock', fn: () => this.menuSync(anchor) } : null,
+      session.canEdit ? { label: 'Editar letra', icon: 'edit', fn: () => editLyrics(s) } : null,
+      !isMobile() ? { label: this.lyrFocus ? 'Letra normal' : 'Letra grande', icon: 'expand', fn: () => this.toggleFocus() } : null,
+      { sep: true },
+      { label: 'Más opciones de la canción', icon: 'more', fn: () => songMenu(anchor, s) },
+    ].filter(Boolean));
+  },
+
+  menuSync(anchor) {
+    const s = player.current;
+    const cambiar = (d) => {
+      setOffset(s.id, d === 0 ? 0 : getOffset(s.id) + d);
+      toast(`Sincronía: ${fmtOffCorto(getOffset(s.id))}`, { ms: 1200 });
+      this.updateLyrics(true);
+    };
+    showMenu(anchor, [
+      { title: 'Si la letra va adelantada o atrasada' },
+      { label: 'Letra antes (−0.5 s)', icon: 'left', keepOpen: true, fn: () => cambiar(-0.5) },
+      { label: 'Letra antes (−0.1 s)', icon: 'left', keepOpen: true, fn: () => cambiar(-0.1) },
+      { label: 'Letra después (+0.1 s)', icon: 'right', keepOpen: true, fn: () => cambiar(0.1) },
+      { label: 'Letra después (+0.5 s)', icon: 'right', keepOpen: true, fn: () => cambiar(0.5) },
+      { sep: true },
+      { label: 'Restablecer', icon: 'refresh', fn: () => cambiar(0) },
+    ]);
+  },
+
+  toggleFocus() {
+    this.lyrFocus = !this.lyrFocus;
+    store.set('sm_lyr_focus', this.lyrFocus);
+    this.el.classList.toggle('lyr-focus', this.lyrFocus);
+    setTimeout(() => this.updateLyrics(true), 400);
   },
 
   async sync(songChanged) {
@@ -233,11 +273,10 @@ export const np = {
     const el = this.el;
     if (songChanged) {
       el.querySelector('[data-np-art]').innerHTML = coverImg(s.portadaUrl, 640, s.nombre);
+      el.querySelector('[data-np-thumb]').innerHTML = coverImg(s.portadaUrl, 160, '');
       el.querySelector('.np-bg').style.backgroundImage = `url("${cover(s.portadaUrl, 300)}")`;
       el.querySelector('[data-np-name]').textContent = s.nombre;
       el.querySelector('[data-np-artist]').innerHTML = `<a href="#/artista/${encodeURIComponent(s.artista)}">${esc(s.artista)}</a>`;
-      const c = player.context;
-      el.querySelector('[data-np-ctx]').textContent = c?.label ? c.label + (c.radio ? ' · Radio' : '') : 'Tu música';
       dominantColor(s.portadaUrl).then((rgb) => el.style.setProperty('--np', rgb.join(',')));
       this.renderTab();
     }
@@ -253,33 +292,31 @@ export const np = {
     el.querySelector('[data-c="shuffle"]').classList.toggle('active', player.shuffle);
     const rep = el.querySelector('[data-c="repeat"]');
     rep.classList.toggle('active', player.repeat !== 'off');
-    rep.innerHTML = icon('repeat') + (player.repeat === 'one' ? '<span class="repeat-one" style="position:absolute;font-size:9px;font-weight:900;top:9px;right:8px">1</span>' : '');
+    rep.innerHTML = icon('repeat') + (player.repeat === 'one' ? '<span class="rep1">1</span>' : '');
     const fav = lib.isFav(s.id);
     const fb = el.querySelector('[data-np-fav]');
-    fb.classList.toggle('liked', fav);
+    fb.classList.toggle('on', fav);
     fb.innerHTML = icon(fav ? 'heartFill' : 'heart');
-    el.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === this.tab));
+    el.querySelectorAll('[data-panel]').forEach((b) => b.classList.toggle('on', b.dataset.panel === this.tab));
+    el.classList.toggle('no-panel', !this.tab);
   },
 
   async renderTab() {
     const box = this.el?.querySelector('[data-np-tab]');
     if (!box) return;
-    this.el.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === this.tab));
+    this.syncState();
     const s = player.current;
     if (!s) return;
+    const panel = this.el.querySelector('.np-panel');
     if (this.tab !== 'letra') {
-      this.el.querySelector('[data-lyr-bar]').classList.add('hidden');
-      this.el.querySelector('.np-panel').classList.remove('is-lyrics');
+      panel.classList.remove('is-lyrics');
       this.lines = [];
-      if (this.tab === 'cola') renderQueue(box); else box.innerHTML = info(s);
+      this.synced = false;
+      if (this.tab === 'cola') renderQueue(box); else box.innerHTML = '';
       return;
     }
-
-    const bar = this.el.querySelector('[data-lyr-bar]');
-    const panel = this.el.querySelector('.np-panel');
     panel.classList.add('is-lyrics');
     box.innerHTML = '<div class="lyrics-empty"><span class="spinner"></span></div>';
-    bar.classList.add('hidden');
     this.lines = [];
     this.wordLine = null;
     this.karaoke = false;
@@ -321,49 +358,7 @@ export const np = {
         else { toast(r?.message || 'No se encontró', { error: true }); e.currentTarget.disabled = false; }
       });
     }
-    this.renderBar(s, tieneSync, tieneTexto);
-  },
-
-  /** Barra superior de la letra: tipo, sincronía, edición y modo letra. Nunca tapa el texto. */
-  renderBar(s, tieneSync, tieneTexto) {
-    const bar = this.el.querySelector('[data-lyr-bar]');
-    if (!tieneTexto) { bar.classList.add('hidden'); return; }
-    bar.classList.remove('hidden');
-    const off = getOffset(s.id);
-    bar.innerHTML = `
-      <span class="lyr-kind">${tieneSync ? `${icon('wave', 'sm')} ${this.karaoke ? 'Palabra por palabra' : 'Sincronizada'}` : `${icon('text', 'sm')} Solo texto`}</span>
-      <span class="lyr-tools">
-        ${tieneSync ? `<button class="lyr-pill ${off ? 'on' : ''}" data-sync title="Ajustar sincronía">${icon('clock', 'sm')}<span data-offv>${fmtOffCorto(off)}</span></button>` : ''}
-        ${session.canEdit ? `<button class="lyr-pill" data-edit-lyr title="Editar letra">${icon('edit', 'sm')}<span>Editar</span></button>` : ''}
-        <button class="lyr-pill np-only-desktop ${this.lyrFocus ? 'on' : ''}" data-focus title="Modo letra">${icon('expand', 'sm')}</button>
-      </span>`;
-    bar.querySelector('[data-edit-lyr]')?.addEventListener('click', () => editLyrics(s));
-    bar.querySelector('[data-focus]')?.addEventListener('click', (e) => {
-      this.lyrFocus = !this.lyrFocus;
-      store.set('sm_lyr_focus', this.lyrFocus);
-      this.el.classList.toggle('lyr-focus', this.lyrFocus);
-      e.currentTarget.classList.toggle('on', this.lyrFocus);
-      setTimeout(() => this.updateLyrics(true), 400);
-    });
-    bar.querySelector('[data-sync]')?.addEventListener('click', (e) => {
-      const btn = e.currentTarget;
-      const cambiar = (d) => {
-        setOffset(s.id, d === 0 ? 0 : getOffset(s.id) + d);
-        const v = getOffset(s.id);
-        btn.querySelector('[data-offv]').textContent = fmtOffCorto(v);
-        btn.classList.toggle('on', !!v);
-        this.updateLyrics(true);
-      };
-      showMenu(btn, [
-        { title: 'Si la letra va adelantada o atrasada' },
-        { label: 'Letra antes (−0.5 s)', icon: 'left', keepOpen: true, fn: () => cambiar(-0.5) },
-        { label: 'Letra antes (−0.1 s)', icon: 'left', keepOpen: true, fn: () => cambiar(-0.1) },
-        { label: 'Letra después (+0.1 s)', icon: 'right', keepOpen: true, fn: () => cambiar(0.1) },
-        { label: 'Letra después (+0.5 s)', icon: 'right', keepOpen: true, fn: () => cambiar(0.5) },
-        { sep: true },
-        { label: 'Restablecer', icon: 'refresh', fn: () => cambiar(0) },
-      ]);
-    });
+    void tieneTexto;
   },
 
   updateLyrics(force) {
@@ -392,7 +387,7 @@ export const np = {
       if (Date.now() > this.userScrollUntil) {
         const a = box.querySelector(`.lyrics [data-i="${Math.max(0, i)}"]`);
         if (a) {
-          const destino = a.offsetTop - box.clientHeight * 0.3;
+          const destino = a.offsetTop - box.clientHeight * 0.32;
           if (force) { cancelAnimationFrame(box._anim); box.scrollTop = destino; } else scrollSuave(box, destino);
         }
       }
@@ -419,30 +414,9 @@ export const np = {
 
   loop() {
     cancelAnimationFrame(this.raf);
-    const vis = this.el.querySelector('[data-np-vis]');
-    const ctx2d = vis.getContext('2d');
-    let data = null;
     const frame = () => {
       if (!this.isOpen) return;
       this.updateLyrics(false);
-      if (prefs.visualizer && fx.analyser && player.playing) {
-        vis.style.display = '';
-        data = data || new Uint8Array(fx.analyser.frequencyBinCount);
-        fx.analyser.getByteFrequencyData(data);
-        const w = vis.width, h = vis.height, n = 48, bw = w / n;
-        ctx2d.clearRect(0, 0, w, h);
-        ctx2d.fillStyle = 'rgba(255,255,255,.75)';
-        for (let k = 0; k < n; k++) {
-          const v = data[Math.floor(Math.pow(k / n, 1.6) * (data.length * 0.75))] / 255;
-          const bh = Math.max(3, v * h);
-          const x = k * bw + bw * 0.2;
-          ctx2d.beginPath();
-          if (ctx2d.roundRect) ctx2d.roundRect(x, h - bh, bw * 0.6, bh, 3); else ctx2d.rect(x, h - bh, bw * 0.6, bh);
-          ctx2d.fill();
-        }
-      } else if (!prefs.visualizer) {
-        vis.style.display = 'none';
-      }
       this.raf = requestAnimationFrame(frame);
     };
     frame();
@@ -451,21 +425,6 @@ export const np = {
 
 const fmtOffCorto = (v) => (v === 0 ? 'Sincronía' : `${v > 0 ? '+' : ''}${v.toFixed(1)} s`);
 
-function info(s) {
-  const row = (k, v) => (v || v === 0 ? `<dt>${k}</dt><dd>${v}</dd>` : '');
-  return `<div class="np-info"><h3 style="margin:4px 0 6px">${esc(s.nombre)}</h3><dl>
-    ${row('Artista', `<a href="#/artista/${encodeURIComponent(s.artista)}">${esc(s.artista)}</a>`)}
-    ${row('Álbum', s.album && s.album !== 'Single' ? `<a href="#/album/${encodeURIComponent(s.album)}">${esc(s.album)}</a>` : 'Sencillo')}
-    ${row('Género', s.genero && s.genero !== 'Desconocido' ? `<a href="#/genero/${encodeURIComponent(s.genero)}">${esc(s.genero)}</a>` : '')}
-    ${row('Año', s.anio)}
-    ${row('Pista', s.numeroPista)}
-    ${row('Duración', fmtTime(s.duracionSegundos))}
-    ${row('Formato', s.formato ? s.formato.toUpperCase() : '')}
-    ${row('Reproducciones', s.reproducciones)}
-    ${row('Agregada', fmtDate(s.fechaAgregada))}
-    ${row('Letra', s.letraSincronizada ? 'Sincronizada' : s.tieneLetra ? 'Texto' : 'No')}
-  </dl></div>`;
-}
 
 // ═══════════════════ Panel lateral de la cola ═══════════════════
 
