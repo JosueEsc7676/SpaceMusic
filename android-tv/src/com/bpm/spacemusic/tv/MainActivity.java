@@ -57,7 +57,15 @@ public class MainActivity extends Activity {
         s.setUserAgentString(s.getUserAgentString() + " SpaceMusicTV/1.0");
 
         web.addJavascriptInterface(new Puente(), "SpaceMusicTV");
-        web.setWebChromeClient(new WebChromeClient());
+        // Depuración por ADB (chrome://inspect) y mensajes de la página en logcat
+        WebView.setWebContentsDebuggingEnabled(true);
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage m) {
+                android.util.Log.i("SpaceMusicTV", m.messageLevel() + ": " + m.message() + " (" + m.sourceId() + ":" + m.lineNumber() + ")");
+                return true;
+            }
+        });
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
@@ -77,6 +85,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                android.util.Log.i("SpaceMusicTV", "Página cargada: " + url);
                 web.requestFocus();
             }
         });
