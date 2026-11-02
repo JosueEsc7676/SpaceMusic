@@ -33,7 +33,8 @@ export function logout(reason) {
   if (reason) p.set('motivo', reason);
   if (reason && location.hash.length > 2) p.set('next', location.hash);
   const q = p.toString();
-  location.href = '/login.html' + (q ? '?' + q : '');
+  // La app de TV tiene su propio inicio de sesión
+  location.href = (window.SM_TV ? '/tv.html' : '/login.html') + (q ? '?' + q : '');
 }
 
 export class ApiError extends Error {

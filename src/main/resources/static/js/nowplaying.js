@@ -5,30 +5,31 @@ import { icon } from './icons.js';
 import { player, prefs, fx } from './player.js';
 import { lib } from './state.js';
 import { toast, errorToast, sortable, songMenu, editLyrics, showMenu } from './ui.js';
+import { parseLrc } from './lrc.js';
 
 // ═══════════════════ Letras ═══════════════════
 
 const lyricsCache = new Map();
 const buscadas = new Set();
 
-/** Convierte LRC en [{t, text}]. Soporta varias marcas por línea y [offset:]. */
-export function parseLrc(lrc) {
-  const out = [];
-  let offset = 0;
-  const off = lrc.match(/\[offset:\s*([+-]?\d+)\s*]/i);
-  if (off) offset = parseInt(off[1], 10) / 1000;
-  for (const raw of lrc.split(/\r?\n/)) {
-    const tags = [...raw.matchAll(/\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?]/g)];
-    if (!tags.length) continue;
-    const text = raw.replace(/\[[^\]]*]/g, '').replace(/<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>/g, '').trim();
-    for (const m of tags) {
-      const frac = m[3] ? parseInt(m[3], 10) / Math.pow(10, m[3].length) : 0;
-      out.push({ t: parseInt(m[1], 10) * 60 + parseInt(m[2], 10) + frac - offset, text });
-    }
-  }
-  out.sort((a, b) => a.t - b.t);
-  // Quitar líneas vacías repetidas
-  return out.filter((l, i) => l.text || (i > 0 && out[i - 1].text));
+export { parseLrc };
+
+const esSafari = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+  (/Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Edg|OPR|Android/.test(navigator.userAgent));
+
+/** Desplazamiento suave con desaceleración (como Apple Music). */
+function scrollSuave(box, destino, ms = 650) {
+  cancelAnimationFrame(box._anim);
+  const ini = box.scrollTop, delta = destino - ini;
+  if (Math.abs(delta) < 2) return;
+  const t0 = performance.now();
+  const ease = (x) => 1 - Math.pow(1 - x, 4);
+  const paso = (now) => {
+    const k = Math.min(1, (now - t0) / ms);
+    box.scrollTop = ini + delta * ease(k);
+    if (k < 1) box._anim = requestAnimationFrame(paso);
+  };
+  box._anim = requestAnimationFrame(paso);
 }
 
 async function getLyrics(song, { autoSearch = true } = {}) {
@@ -111,7 +112,7 @@ export const np = {
 
   build() {
     const el = document.createElement('div');
-    el.className = 'np';
+    el.className = 'np' + (esSafari ? ' safari' : '');
     el.setAttribute('aria-hidden', 'true');
     el.innerHTML = `<div class="np-bg"></div>
       <div class="np-top"><button class="round-btn" data-np-close aria-label="Cerrar">${icon('down')}</button>
@@ -142,6 +143,7 @@ export const np = {
             <button data-tab="letra">Letra</button><button data-tab="cola">A continuación</button><button data-tab="info">Información</button>
             <span style="flex:1"></span><button class="np-only-mobile" data-mback aria-label="Volver">${icon('close', 'sm')}</button>
           </div>
+          <div class="lyr-bar hidden" data-lyr-bar></div>
           <div class="np-tab" data-np-tab></div>
         </div>
       </div>`;
@@ -166,11 +168,19 @@ export const np = {
 
     const tabBox = el.querySelector('[data-np-tab]');
     bindQueue(tabBox);
-    tabBox.addEventListener('wheel', () => { this.userScrollUntil = Date.now() + 3500; }, { passive: true });
-    tabBox.addEventListener('touchmove', () => { this.userScrollUntil = Date.now() + 3500; }, { passive: true });
+    const manual = () => { cancelAnimationFrame(tabBox._anim); this.userScrollUntil = Date.now() + 3500; };
+    tabBox.addEventListener('wheel', manual, { passive: true });
+    tabBox.addEventListener('touchmove', manual, { passive: true });
+    this.lyrFocus = store.get('sm_lyr_focus', false);
+    el.classList.toggle('lyr-focus', this.lyrFocus);
     tabBox.addEventListener('click', (e) => {
       const line = e.target.closest('.line[data-t]');
-      if (line && this.synced) { player.seek(+line.dataset.t - getOffset(player.current.id)); this.userScrollUntil = 0; if (!player.playing) player.resume(); }
+      if (line && this.synced) {
+        cancelAnimationFrame(tabBox._anim);
+        player.seek(+line.dataset.t - getOffset(player.current.id) + 0.05);
+        this.userScrollUntil = 0;
+        if (!player.playing) player.resume();
+      }
     });
 
     // Gesto: deslizar hacia abajo para cerrar (móvil)
@@ -257,69 +267,153 @@ export const np = {
     this.el.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === this.tab));
     const s = player.current;
     if (!s) return;
-    if (this.tab === 'cola') { this.lines = []; renderQueue(box); return; }
-    if (this.tab === 'info') { this.lines = []; box.innerHTML = info(s); return; }
+    if (this.tab !== 'letra') {
+      this.el.querySelector('[data-lyr-bar]').classList.add('hidden');
+      this.el.querySelector('.np-panel').classList.remove('is-lyrics');
+      this.lines = [];
+      if (this.tab === 'cola') renderQueue(box); else box.innerHTML = info(s);
+      return;
+    }
 
+    const bar = this.el.querySelector('[data-lyr-bar]');
+    const panel = this.el.querySelector('.np-panel');
+    panel.classList.add('is-lyrics');
     box.innerHTML = '<div class="lyrics-empty"><span class="spinner"></span></div>';
+    bar.classList.add('hidden');
     this.lines = [];
+    this.wordLine = null;
+    this.karaoke = false;
     const d = await getLyrics(s);
     if (player.current?.id !== s.id || this.tab !== 'letra') return;
-    const tools = (synced) => `<div class="lyrics-tools">
-      ${synced ? `<button class="btn sm" data-off="-0.5" title="Las letras van adelantadas">−0.5 s</button><span class="offset" data-offv>${fmtOff(getOffset(s.id))}</span><button class="btn sm" data-off="0.5" title="Las letras van atrasadas">+0.5 s</button>` : ''}
-      ${session.canEdit ? `<button class="btn sm" data-edit-lyr>${icon('edit', 'sm')} Editar</button>` : ''}</div>`;
-    if (d.letraSincronizada) {
+
+    const tieneSync = !!d.letraSincronizada;
+    const tieneTexto = !!d.letra || tieneSync;
+
+    if (tieneSync) {
       this.lines = parseLrc(d.letraSincronizada);
       this.synced = true;
-      box.innerHTML = tools(true) + `<div class="lyrics synced">${this.lines.map((l, i) =>
-        l.text ? `<p class="line" data-i="${i}" data-t="${l.t}">${esc(l.text)}</p>` : `<div class="gap" data-i="${i}"></div>`).join('')}</div>`;
-      this.active = -1;
+      this.karaoke = this.lines.some((l) => l.words);
+      box.innerHTML = `<div class="lyrics synced ${this.karaoke ? 'karaoke' : ''}">${this.lines.map((l, i) => {
+        if (l.interlude) return `<div class="interlude" data-i="${i}" aria-hidden="true"><i></i><i></i><i></i></div>`;
+        const contenido = l.words
+          ? l.words.map((w, k) => `<span class="w" data-w="${k}">${esc(w.w)}</span>`).join('')
+          : esc(l.text);
+        return `<p class="line" data-i="${i}" data-t="${l.t}">${contenido}</p>`;
+      }).join('')}</div>`;
+      this.active = -2;
       this.updateLyrics(true);
     } else if (d.letra) {
       this.synced = false;
-      box.innerHTML = tools(false) + `<div class="lyrics plain">${d.letra.split(/\n/).map((l) => (l.trim() ? `<p class="line">${esc(l)}</p>` : '<div class="gap"></div>')).join('')}</div>`;
+      box.innerHTML = `<div class="lyrics plain">${d.letra.split(/\n/).map((l) => (l.trim() ? `<p class="line">${esc(l)}</p>` : '<div class="gap"></div>')).join('')}</div>`;
+      box.scrollTop = 0;
     } else {
       this.synced = false;
       box.innerHTML = `<div class="lyrics-empty">${icon('mic')}<h3>No hay letra para esta canción</h3>
         <p style="opacity:.8">La buscamos en internet y no apareció.</p>
         <div class="row" style="justify-content:center"><button class="btn sm" data-retry-lyr>${icon('refresh', 'sm')} Buscar otra vez</button>
         ${session.canEdit ? `<button class="btn sm" data-edit-lyr>${icon('edit', 'sm')} Agregar letra</button>` : ''}</div></div>`;
+      box.querySelector('[data-edit-lyr]')?.addEventListener('click', () => editLyrics(s));
+      box.querySelector('[data-retry-lyr]')?.addEventListener('click', async (e) => {
+        e.currentTarget.disabled = true;
+        const r = await api(`/api/letras/${s.id}/buscar?forzar=true`, { method: 'POST' }).catch(() => null);
+        lyricsCache.delete(s.id);
+        if (r?.encontrada) { toast('¡Letra encontrada!'); this.renderTab(); }
+        else { toast(r?.message || 'No se encontró', { error: true }); e.currentTarget.disabled = false; }
+      });
     }
-    box.querySelectorAll('[data-off]').forEach((b) => b.onclick = () => {
-      setOffset(s.id, getOffset(s.id) + parseFloat(b.dataset.off));
-      box.querySelector('[data-offv]').textContent = fmtOff(getOffset(s.id));
-      this.updateLyrics(true);
+    this.renderBar(s, tieneSync, tieneTexto);
+  },
+
+  /** Barra superior de la letra: tipo, sincronía, edición y modo letra. Nunca tapa el texto. */
+  renderBar(s, tieneSync, tieneTexto) {
+    const bar = this.el.querySelector('[data-lyr-bar]');
+    if (!tieneTexto) { bar.classList.add('hidden'); return; }
+    bar.classList.remove('hidden');
+    const off = getOffset(s.id);
+    bar.innerHTML = `
+      <span class="lyr-kind">${tieneSync ? `${icon('wave', 'sm')} ${this.karaoke ? 'Palabra por palabra' : 'Sincronizada'}` : `${icon('text', 'sm')} Solo texto`}</span>
+      <span class="lyr-tools">
+        ${tieneSync ? `<button class="lyr-pill ${off ? 'on' : ''}" data-sync title="Ajustar sincronía">${icon('clock', 'sm')}<span data-offv>${fmtOffCorto(off)}</span></button>` : ''}
+        ${session.canEdit ? `<button class="lyr-pill" data-edit-lyr title="Editar letra">${icon('edit', 'sm')}<span>Editar</span></button>` : ''}
+        <button class="lyr-pill np-only-desktop ${this.lyrFocus ? 'on' : ''}" data-focus title="Modo letra">${icon('expand', 'sm')}</button>
+      </span>`;
+    bar.querySelector('[data-edit-lyr]')?.addEventListener('click', () => editLyrics(s));
+    bar.querySelector('[data-focus]')?.addEventListener('click', (e) => {
+      this.lyrFocus = !this.lyrFocus;
+      store.set('sm_lyr_focus', this.lyrFocus);
+      this.el.classList.toggle('lyr-focus', this.lyrFocus);
+      e.currentTarget.classList.toggle('on', this.lyrFocus);
+      setTimeout(() => this.updateLyrics(true), 400);
     });
-    box.querySelector('[data-edit-lyr]')?.addEventListener('click', () => editLyrics(s));
-    box.querySelector('[data-retry-lyr]')?.addEventListener('click', async (e) => {
-      e.currentTarget.disabled = true;
-      const r = await api(`/api/letras/${s.id}/buscar?forzar=true`, { method: 'POST' }).catch(() => null);
-      lyricsCache.delete(s.id);
-      if (r?.encontrada) { toast('¡Letra encontrada!'); this.renderTab(); }
-      else { toast(r?.message || 'No se encontró', { error: true }); e.currentTarget.disabled = false; }
+    bar.querySelector('[data-sync]')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      const cambiar = (d) => {
+        setOffset(s.id, d === 0 ? 0 : getOffset(s.id) + d);
+        const v = getOffset(s.id);
+        btn.querySelector('[data-offv]').textContent = fmtOffCorto(v);
+        btn.classList.toggle('on', !!v);
+        this.updateLyrics(true);
+      };
+      showMenu(btn, [
+        { title: 'Si la letra va adelantada o atrasada' },
+        { label: 'Letra antes (−0.5 s)', icon: 'left', keepOpen: true, fn: () => cambiar(-0.5) },
+        { label: 'Letra antes (−0.1 s)', icon: 'left', keepOpen: true, fn: () => cambiar(-0.1) },
+        { label: 'Letra después (+0.1 s)', icon: 'right', keepOpen: true, fn: () => cambiar(0.1) },
+        { label: 'Letra después (+0.5 s)', icon: 'right', keepOpen: true, fn: () => cambiar(0.5) },
+        { sep: true },
+        { label: 'Restablecer', icon: 'refresh', fn: () => cambiar(0) },
+      ]);
     });
   },
 
   updateLyrics(force) {
     if (!this.synced || !this.lines.length || this.tab !== 'letra') return;
-    const t = player.audio.currentTime + getOffset(player.current?.id) + 0.15;
+    const t = player.audio.currentTime + getOffset(player.current?.id) + 0.12;
     let i = -1;
-    // Búsqueda binaria de la línea actual
     let lo = 0, hi = this.lines.length - 1;
     while (lo <= hi) { const m = (lo + hi) >> 1; if (this.lines[m].t <= t) { i = m; lo = m + 1; } else hi = m - 1; }
-    if (i === this.active && !force) return;
-    this.active = i;
     const box = this.el.querySelector('[data-np-tab]');
-    box.querySelectorAll('.lyrics [data-i]').forEach((n) => {
-      const k = +n.dataset.i;
-      n.classList.toggle('active', k === i);
-      n.classList.toggle('past', k < i);
-    });
-    if (Date.now() > this.userScrollUntil) {
-      const a = box.querySelector(`.lyrics [data-i="${Math.max(0, i)}"]`);
-      if (a) {
-        const top = a.offsetTop - box.clientHeight * 0.38;
-        box.scrollTo({ top, behavior: force ? 'auto' : 'smooth' });
+
+    if (i !== this.active || force) {
+      this.active = i;
+      box.querySelectorAll('.lyrics [data-i]').forEach((n) => {
+        const k = +n.dataset.i;
+        const dist = Math.abs(k - i);
+        n.classList.toggle('active', k === i);
+        n.classList.toggle('past', k < i);
+        if (!n.classList.contains('interlude')) {
+          // Más tenue y desenfocada cuanto más lejos de la línea actual
+          n.style.setProperty('--o', k === i ? 1 : Math.max(0.16, 0.42 - Math.min(dist, 6) * 0.04).toFixed(2));
+          n.style.setProperty('--b', k === i ? '0px' : (Math.min(dist, 5) * 0.55).toFixed(2) + 'px');
+        }
+        if (k !== i) n.querySelectorAll('.w').forEach((w) => w.style.removeProperty('--p'));
+      });
+      this.wordLine = this.lines[i]?.words ? box.querySelector(`.line[data-i="${i}"]`) : null;
+      if (Date.now() > this.userScrollUntil) {
+        const a = box.querySelector(`.lyrics [data-i="${Math.max(0, i)}"]`);
+        if (a) {
+          const destino = a.offsetTop - box.clientHeight * 0.3;
+          if (force) { cancelAnimationFrame(box._anim); box.scrollTop = destino; } else scrollSuave(box, destino);
+        }
       }
+    }
+
+    // Palabra por palabra: avance de cada palabra de la línea actual
+    if (this.wordLine) {
+      const l = this.lines[i];
+      const spans = this.wordLine.querySelectorAll('.w');
+      l.words.forEach((w, k) => {
+        const fin = l.words[k + 1]?.t ?? Math.min(l.end, w.t + 1.2);
+        const p = t <= w.t ? 0 : t >= fin ? 100 : ((t - w.t) / (fin - w.t)) * 100;
+        spans[k]?.style.setProperty('--p', p.toFixed(1) + '%');
+      });
+    }
+    // Interludio: los puntos se encienden según avanza la pausa
+    const cur = this.lines[i];
+    if (cur?.interlude) {
+      const el = box.querySelector(`.interlude[data-i="${i}"]`);
+      const p = Math.max(0, Math.min(1, (t - cur.t) / Math.max(1, cur.end - cur.t)));
+      el?.style.setProperty('--p', p.toFixed(3));
     }
   },
 
@@ -355,7 +449,7 @@ export const np = {
   },
 };
 
-const fmtOff = (v) => (v === 0 ? 'Sincronía 0 s' : `Sincronía ${v > 0 ? '+' : ''}${v.toFixed(1)} s`);
+const fmtOffCorto = (v) => (v === 0 ? 'Sincronía' : `${v > 0 ? '+' : ''}${v.toFixed(1)} s`);
 
 function info(s) {
   const row = (k, v) => (v || v === 0 ? `<dt>${k}</dt><dd>${v}</dd>` : '');

@@ -572,23 +572,58 @@ input[type="range"].range::-moz-range-thumb { width: 12px; height: 12px; border:
 .np-tabs button.active { opacity: 1; background: rgba(255,255,255,.16); }
 .np-tab { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 18px 24px; position: relative; }
 
-.lyrics { padding: 30vh 6px 40vh; }
-.lyrics.plain { padding-top: 24px; padding-bottom: 60px; }
-.lyrics .line {
-  font-size: clamp(22px, 2.6vw, 34px); font-weight: 800; line-height: 1.3; letter-spacing: -.4px;
-  color: rgba(255,255,255,.38); margin: 0 0 18px; cursor: pointer;
-  transition: color .3s;
-  -webkit-tap-highlight-color: transparent;
+/* ── Letras estilo Apple Music ── */
+.np-panel.is-lyrics { background: transparent; }
+.lyr-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 18px 4px; flex-shrink: 0; }
+.lyr-kind { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .3px; opacity: .6; text-transform: uppercase; }
+.lyr-kind .icon { width: 14px; height: 14px; }
+.lyr-tools { display: flex; gap: 6px; }
+.lyr-pill { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px;
+  background: rgba(255,255,255,.12); color: #fff; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; transition: background .15s; }
+.lyr-pill:hover { background: rgba(255,255,255,.22); }
+.lyr-pill.on { background: #fff; color: #000; }
+.lyr-pill .icon { width: 14px; height: 14px; }
+.np-panel.is-lyrics .np-tab {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 78%, transparent 100%);
+  scrollbar-width: none;
 }
-.lyrics .line:hover { color: rgba(255,255,255,.7); }
-.lyrics .line.past { color: rgba(255,255,255,.55); }
-.lyrics .line.active { color: #fff; }
-.lyrics.plain .line { font-size: clamp(18px, 2vw, 24px); cursor: default; color: rgba(255,255,255,.85); margin-bottom: 8px; }
-.lyrics .gap { height: 20px; }
-.lyrics-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 4px 0 0; position: sticky; top: 0; z-index: 2; }
-.lyrics-tools .btn { background: rgba(255,255,255,.12); color: #fff; }
-.lyrics-tools .btn:hover { background: rgba(255,255,255,.22); }
-.lyrics-tools .offset { font-size: 12px; opacity: .8; font-variant-numeric: tabular-nums; }
+.np-panel.is-lyrics .np-tab::-webkit-scrollbar { display: none; }
+
+.lyrics { padding: 26vh 8px 50vh; }
+.lyrics.plain { padding: 28px 8px 80px; }
+.lyrics .line {
+  font-size: clamp(26px, 2.7vw, 42px); font-weight: 800; line-height: 1.16; letter-spacing: -.02em;
+  color: #fff; opacity: var(--o, .3); margin: 0 0 .62em; cursor: pointer;
+  filter: blur(var(--b, 0px)); transform: scale(var(--s, .965)); transform-origin: left center;
+  transition: opacity .55s ease, transform .7s cubic-bezier(.2,.8,.2,1), filter .55s ease;
+  overflow-wrap: anywhere;
+}
+.lyrics .line.active { --s: 1; }
+.lyrics .line:hover { opacity: max(var(--o, .3), .75); filter: none; }
+.lyrics.plain .line { font-size: clamp(20px, 2vw, 28px); cursor: default; opacity: .88; filter: none; transform: none; margin-bottom: .4em; }
+.lyrics .gap { height: 22px; }
+/* Palabra por palabra: cada palabra se llena de blanco al cantarse */
+.lyrics.karaoke .line .w { color: transparent; -webkit-background-clip: text; background-clip: text;
+  background-image: linear-gradient(90deg, #fff var(--p, 0%), rgba(255,255,255,.38) var(--p, 0%)); }
+.lyrics.karaoke .line:not(.active) .w { background-image: none; color: #fff; }
+/* Interludio: tres puntos que respiran */
+.interlude { display: flex; gap: 10px; height: 0; overflow: hidden; opacity: 0; margin: 0; padding-left: 4px;
+  transition: height .5s cubic-bezier(.2,.8,.2,1), opacity .4s, margin .5s; }
+.interlude.active { height: 30px; opacity: 1; margin: 6px 0 .9em; }
+.interlude i { width: 12px; height: 12px; border-radius: 50%; background: #fff; opacity: .3; animation: respira 1.6s ease-in-out infinite; }
+.interlude i:nth-child(1) { opacity: calc(.3 + .7 * min(1, var(--p, 0) * 3)); }
+.interlude i:nth-child(2) { opacity: calc(.3 + .7 * clamp(0, var(--p, 0) * 3 - 1, 1)); animation-delay: .2s; }
+.interlude i:nth-child(3) { opacity: calc(.3 + .7 * clamp(0, var(--p, 0) * 3 - 2, 1)); animation-delay: .4s; }
+@keyframes respira { 0%, 100% { transform: scale(.85); } 50% { transform: scale(1.1); } }
+/* Safari (iPhone/Mac): sin desenfoque ni escala, que allí pintan líneas de color */
+.np.safari .lyrics .line { filter: none; transform: none; transition: opacity .55s ease; }
+/* Modo letra (computadora): la letra ocupa más espacio */
+.np.lyr-focus .np-body { grid-template-columns: minmax(0, .62fr) minmax(0, 1.5fr); }
+.np.lyr-focus .np-art { width: min(320px, 32vh, 100%); }
+.np.lyr-focus .lyrics .line { font-size: clamp(30px, 3.4vw, 54px); }
+.np-bg { animation: fondoVivo 40s ease-in-out infinite alternate; }
+@keyframes fondoVivo { from { transform: scale(1.15) rotate(0deg); } to { transform: scale(1.35) rotate(8deg); } }
 .lyrics-empty { text-align: center; padding: 60px 20px; opacity: .85; }
 .lyrics-empty .icon { width: 48px; height: 48px; margin: 0 auto 12px; stroke-width: 1.5; }
 
@@ -822,8 +857,11 @@ kbd { display: inline-block; min-width: 26px; padding: 3px 7px; border-radius: 6
   .np-panel { display: none; margin-top: 24px; min-height: 60vh; }
   .np-body.show-panel .np-panel { display: flex; }
   .np-body.show-panel .np-left { display: none; }
-  .lyrics { padding: 30px 4px 30vh; }
-  .lyrics .line { font-size: 24px; }
+  .lyrics { padding: 18vh 4px 45vh; }
+  .lyrics .line { font-size: 27px; }
+  .lyr-bar { padding: 8px 6px 2px; }
+  .np-only-desktop { display: none !important; }
+  .np-bg { animation: none; }
 
   .pl-editor { grid-template-columns: minmax(0, 1fr); justify-items: center; }
   .pl-editor > div:last-child { width: 100%; }

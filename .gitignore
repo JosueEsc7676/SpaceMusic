@@ -47,3 +47,8 @@ config/application.properties
 
 ### Datos locales de desarrollo ###
 /data/
+
+### App Android TV ###
+android-tv/build/
+android-tv/firma/
+android-tv/*.apk

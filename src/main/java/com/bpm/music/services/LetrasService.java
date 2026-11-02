@@ -165,7 +165,9 @@ public class LetrasService {
     private static String textoPlanoDeLrc(String lrc) {
         StringBuilder sb = new StringBuilder();
         for (String linea : lrc.split("\n")) {
-            String l = linea.replaceAll("\\[[^\\]]*]", "").trim();
+            String l = linea.replaceAll("\\[[^\\]]*]", "")
+                    .replaceAll("<\\d{1,3}:\\d{2}(?:[.:]\\d{1,3})?>", "") // tiempos por palabra
+                    .replaceAll("\\s+", " ").trim();
             if (!l.isEmpty()) sb.append(l).append('\n');
         }
         return sb.toString().trim();
