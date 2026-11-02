@@ -187,7 +187,12 @@ h1.title { font-family: var(--display); font-size: 2.9rem; font-weight: 800; let
 .np-lyrics .plain p { font-size: 2rem; font-weight: 800; margin: 0 0 .6rem; opacity: .85; }
 .np-lyrics .none { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; color: rgba(255,255,255,.62); font-size: 1.5rem; }
 .np-lyrics .none .icon { width: 3rem; height: 3rem; margin: 0 auto; }
-.np.idle .np-ctrls, .np.idle .np-bottom, .np.idle .np-prog { opacity: 0; transition: opacity 1s; }
+.np-prog, .np-ctrls, .np-bottom { max-height: 12rem;
+  transition: opacity .6s, max-height .8s cubic-bezier(.4,0,.2,1), margin .8s cubic-bezier(.4,0,.2,1), padding .8s cubic-bezier(.4,0,.2,1), background-color .16s, box-shadow .16s; }
+/* Sin tocar el control: los controles se pliegan y la portada con el título quedan centrados */
+.np.idle .np-ctrls, .np.idle .np-bottom, .np.idle .np-prog { opacity: 0; max-height: 0; margin-top: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; pointer-events: none; }
+.np-up { transition: opacity .6s; }
+.np.idle .np-up { opacity: 0; }
 
 /* ── Inicio de sesión ── */
 .login { height: 100vh; display: grid; place-items: center; background: radial-gradient(60rem 36rem at 20% 10%, rgba(180,165,255,.16), transparent 70%), radial-gradient(50rem 30rem at 85% 90%, rgba(124,200,255,.1), transparent 70%), var(--bg); }

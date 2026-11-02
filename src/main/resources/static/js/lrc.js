@@ -6,7 +6,7 @@
  * (<mm:ss.xx>, formato "LRC mejorado") y detecta partes instrumentales.
  */
 /** Líneas de créditos que algunos sitios ponen al inicio de la letra. */
-const CREDITO = /^\s*(作词|作曲|编曲|制作人|作詞|編曲|製作人|词|曲|监制|混音|母带|和声|吉他|贝斯|鼓|录音|出品|发行|OP|SP|lyrics?( by)?|written by|writer|composed by|composer|music by|producers?|produced by|arranged by|arranger|mixed by|mastered by|letra|m[uú]sica|compositor(es)?|productor(es)?|arreglos?)\s*[:：]/i;
+const CREDITO = /^\s*(作词|作曲|编曲|制作人|作詞|編曲|製作人|词|曲|监制|混音|母带|和声|吉他|贝斯|鼓|录音|出品|发行|OP|SP|lyrics?( by)?|written by|writer|composed by|composer|music by|producers?|produced by|arranged by|arranger|mixed by|mastered by|letra|m[uú]sica|compositor(es)?|productor(es)?|arreglos?|(mixing |mastering |recording )?engineer|remix(ed by)?|remezcla)[一-鿿]{0,4}\s*[:：]/i;
 const esCredito = (t) => CREDITO.test(t);
 
 export function parseLrc(lrc) {

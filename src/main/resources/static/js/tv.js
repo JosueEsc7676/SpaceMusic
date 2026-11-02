@@ -676,7 +676,7 @@ function actualizarLetra(force) {
       }
     });
     const a = inner.querySelector(`[data-i="${Math.max(0, i)}"]`);
-    if (a) inner.style.transform = `translateY(${inner.parentElement.clientHeight * 0.4 - (a.offsetTop + a.offsetHeight / 2)}px)`;
+    if (a) inner.style.transform = `translateY(${inner.parentElement.clientHeight * 0.5 - (a.offsetTop + a.offsetHeight / 2)}px)`; // línea actual en el centro, a la altura de la portada
   }
   const l = lineas[i];
   if (l?.words) {
