@@ -1,6 +1,6 @@
-// Pantalla de inicio
+// Pantalla de inicio (identidad "Noir")
 import { api, session } from '../api.js';
-import { esc, cover, coverImg, mosaic } from '../util.js';
+import { esc, cover, coverImg, mosaic, fmtTime } from '../util.js';
 import { icon } from '../icons.js';
 import { lib } from '../state.js';
 import { setHero } from '../router.js';
@@ -11,6 +11,11 @@ function saludo() {
   return h < 6 ? 'Buenas noches' : h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
 }
 
+function fechaHoy() {
+  const t = new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' });
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 const shelf = (html) => (html ? `<div class="shelf">${html}</div>` : '');
 
 function songShelf(songs, ctx) {
@@ -19,13 +24,47 @@ function songShelf(songs, ctx) {
   return shelf(songs.map((s, i) => cardSong(s, id, i)).join(''));
 }
 
+/** Gran tarjeta destacada: la primera mezcla del día. */
+function spotlight(m) {
+  if (!m) return '';
+  const fondo = m.portadas?.[0] ? cover(m.portadas[0], 300) : '';
+  return `<section class="spotlight">
+    ${fondo ? `<div class="spot-bg" style="background-image:url('${esc(fondo)}')"></div>` : ''}
+    <div class="spot-body">
+      <div class="eyebrow">${icon('sparkles', 'sm')} Hecho para ti</div>
+      <h2 class="spot-title">${esc(m.titulo)}</h2>
+      <p class="spot-sub ellipsis2">${esc(m.artistas?.join(', ') || m.subtitulo || '')}</p>
+      <div class="spot-actions">
+        <button class="btn primary lg" data-act="play-mix" data-id="${esc(m.id)}">${icon('play', 'sm')} Reproducir</button>
+        <a class="btn glass lg" href="#/mix/${encodeURIComponent(m.id)}">Ver mezcla</a>
+      </div>
+    </div>
+    <a class="spot-art" href="#/mix/${encodeURIComponent(m.id)}" aria-label="${esc(m.titulo)}">${mosaic(m.portadas, 300)}</a>
+  </section>`;
+}
+
+/** Lista numerada de dos columnas (tendencias). */
+function ranking(songs, ctx) {
+  if (!songs?.length) return '';
+  const id = registerList(songs, ctx);
+  return `<ol class="ranking">${songs.slice(0, 8).map((s, i) => `<li class="rank-row" data-act="play-list" data-list="${id}" data-i="${i}" data-song="${s.id}">
+      <span class="rank-n">${i + 1}</span>
+      <span class="rank-art">${coverImg(s.portadaUrl, 64, s.nombre)}</span>
+      <span class="rank-tt"><b class="ellipsis">${esc(s.nombre)}</b><small class="ellipsis">${esc(s.artista)}</small></span>
+      <span class="rank-d">${fmtTime(s.duracionSegundos)}</span>
+    </li>`).join('')}</ol>`;
+}
+
 export async function homeView(el, _p, _q, isStale) {
   const d = await api('/api/inicio');
   if (isStale()) return;
-  setHero([40, 70, 60]);
+  setHero(null);
+
+  const nombre = session.user?.nombreDisplay ? ', ' + esc(session.user.nombreDisplay.split(' ')[0]) : '';
+  const head = `<header class="home-head"><div class="eyebrow">${esc(fechaHoy())}</div><h1 class="greeting">${saludo()}${nombre}</h1></header>`;
 
   if (!d.totalCanciones) {
-    el.innerHTML = `<h1 class="greeting">${saludo()}</h1>` + emptyState('folder', 'Tu biblioteca está vacía',
+    el.innerHTML = head + emptyState('folder', 'Tu biblioteca está vacía',
       session.isAdmin
         ? 'Copia música en la carpeta configurada en el servidor (music.path) y se agregará sola en unos minutos, o súbela desde aquí.'
         : 'Todavía no hay canciones en el servidor. Pídele al administrador que agregue música.',
@@ -33,28 +72,32 @@ export async function homeView(el, _p, _q, isStale) {
     return;
   }
 
-  // Accesos rápidos: Me gusta + playlists + mezclas
-  const quick = [];
-  if (lib.favs.size) quick.push(`<a class="quick" href="#/favoritos"><div class="thumb" style="background:linear-gradient(135deg,#4a1fb8,#8fa7d8);display:grid;place-items:center">${icon('heartFill', 'lg')}</div><div class="t ellipsis">Me gusta</div><button class="play-fab" data-act="play-liked" aria-label="Reproducir">${icon('play')}</button></a>`);
+  // Accesos directos: Me gusta, tus playlists y mezclas
+  const pins = [];
+  if (lib.favs.size) pins.push(`<a class="pin" href="#/favoritos"><span class="pin-art art-liked">${icon('heartFill')}</span><span class="pin-t ellipsis">Me gusta</span><button class="pin-play" data-act="play-liked" aria-label="Reproducir">${icon('play', 'sm')}</button></a>`);
   for (const p of lib.playlists.slice(0, 5)) {
-    quick.push(`<a class="quick" href="#/playlist/${p.id}"><div class="thumb">${playlistArt(p, 160)}</div><div class="t ellipsis">${esc(p.nombre)}</div>${p.cancionesCount ? `<button class="play-fab" data-act="play-playlist" data-id="${p.id}" aria-label="Reproducir">${icon('play')}</button>` : ''}</a>`);
+    pins.push(`<a class="pin" href="#/playlist/${p.id}"><span class="pin-art">${playlistArt(p, 160)}</span><span class="pin-t ellipsis">${esc(p.nombre)}</span>${p.cancionesCount ? `<button class="pin-play" data-act="play-playlist" data-id="${p.id}" aria-label="Reproducir">${icon('play', 'sm')}</button>` : ''}</a>`);
   }
-  for (const m of (d.mixes || []).slice(0, Math.max(0, 6 - quick.length))) {
-    quick.push(`<a class="quick" href="#/mix/${encodeURIComponent(m.id)}"><div class="thumb">${mosaic(m.portadas, 160)}</div><div class="t ellipsis">${esc(m.titulo)}</div><button class="play-fab" data-act="play-mix" data-id="${esc(m.id)}" aria-label="Reproducir">${icon('play')}</button></a>`);
+  const mixes = d.mixes || [];
+  for (const m of mixes.slice(1, 1 + Math.max(0, 8 - pins.length))) {
+    pins.push(`<a class="pin" href="#/mix/${encodeURIComponent(m.id)}"><span class="pin-art">${mosaic(m.portadas, 160)}</span><span class="pin-t ellipsis">${esc(m.titulo)}</span><button class="pin-play" data-act="play-mix" data-id="${esc(m.id)}" aria-label="Reproducir">${icon('play', 'sm')}</button></a>`);
   }
 
   el.innerHTML = `
-    <h1 class="greeting">${saludo()}${session.user?.nombreDisplay ? ', ' + esc(session.user.nombreDisplay.split(' ')[0]) : ''}</h1>
-    ${quick.length ? `<div class="quick-grid">${quick.join('')}</div>` : ''}
-    ${section('Hecho para ti', shelf((d.mixes || []).map(cardMix).join('')), { sub: 'Mezclas que se actualizan con lo que escuchas' })}
-    ${section('Escuchado recientemente', songShelf(d.recientes, { type: 'historial', label: 'Escuchado recientemente' }), { more: '#/historial' })}
-    ${section('Lo que más escuchas', songShelf(d.tusFavoritas, { type: 'top', label: 'Lo que más escuchas' }), { sub: 'Últimos 30 días', more: '#/estadisticas' })}
-    ${section('Tendencias de la semana', songShelf(d.tendencias, { type: 'tendencias', label: 'Tendencias' }), { sub: 'Lo más escuchado por todos' })}
-    ${section('Recién agregadas', songShelf(d.recienAgregadas, { type: 'nuevas', label: 'Recién agregadas' }))}
+    ${head}
+    <div class="home-top">
+      ${spotlight(mixes[0])}
+      ${pins.length ? `<div class="pins">${pins.join('')}</div>` : ''}
+    </div>
+    ${section('Continúa escuchando', songShelf(d.recientes, { type: 'historial', label: 'Escuchado recientemente' }), { more: '#/historial', eyebrow: 'Tu historial' })}
+    ${section('Tus mezclas', shelf(mixes.map(cardMix).join('')), { eyebrow: 'Se actualizan con lo que escuchas' })}
+    ${d.tendencias?.length ? section('Tendencias de la semana', ranking(d.tendencias, { type: 'tendencias', label: 'Tendencias' }), { eyebrow: 'Lo más escuchado por todos' }) : ''}
+    ${section('Lo que más escuchas', songShelf(d.tusFavoritas, { type: 'top', label: 'Lo que más escuchas' }), { eyebrow: 'Últimos 30 días', more: '#/estadisticas' })}
+    ${section('Recién llegadas', songShelf(d.recienAgregadas, { type: 'nuevas', label: 'Recién agregadas' }), { eyebrow: 'Nuevo en el servidor' })}
     ${section('Álbumes', shelf((d.albumesRecientes || []).map(cardAlbum).join('')), { more: '#/biblioteca?tab=albumes' })}
     ${section('Artistas', shelf((d.artistas || []).map(cardArtist).join('')), { more: '#/biblioteca?tab=artistas' })}
-    ${section('Playlists de la comunidad', shelf((d.playlistsPublicas || []).map(cardPlaylist).join('')))}
-    ${d.generos?.length ? section('Explorar géneros', `<div class="genre-grid">${d.generos.slice(0, 8).map(cardGenre).join('')}</div>`, { more: '#/buscar' }) : ''}
+    ${section('De la comunidad', shelf((d.playlistsPublicas || []).map(cardPlaylist).join('')), { eyebrow: 'Playlists públicas' })}
+    ${d.generos?.length ? section('Explora por género', `<div class="genre-grid">${d.generos.slice(0, 8).map(cardGenre).join('')}</div>`, { more: '#/buscar' }) : ''}
     ${!d.recientes?.length && d.top?.length ? section('Más reproducidas', songShelf(d.top, { type: 'top', label: 'Más reproducidas' })) : ''}
   `;
 }

@@ -74,6 +74,20 @@ public class Usuario {
     @Column(length = 200)
     private String respuestaAdmin;
 
+    // ── Aprobación de la cuenta por un administrador ──
+    /** null = cuenta anterior a este sistema (se considera aprobada). */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 12)
+    private EstadoCuenta estadoCuenta;
+
+    /** Enlace de un solo uso que reciben los administradores para aprobar. */
+    @Column(length = 64)
+    private String aprobacionToken;
+
+    public EstadoCuenta getEstadoCuenta() {
+        return estadoCuenta != null ? estadoCuenta : EstadoCuenta.APROBADA;
+    }
+
     public String getNombreVisible() {
         return (nombreDisplay != null && !nombreDisplay.isBlank()) ? nombreDisplay : username;
     }
@@ -86,6 +100,10 @@ public class Usuario {
         USER,           // usuario normal
         COLABORADOR,    // puede subir letras y canciones y editar datos
         ADMIN           // acceso total
+    }
+
+    public enum EstadoCuenta {
+        PENDIENTE, APROBADA, RECHAZADA
     }
 
     public enum EstadoSolicitud {

@@ -221,23 +221,24 @@ export function cardMix(m) {
   </a>`;
 }
 
-const GENRE_COLORS = ['#e13300', '#1e3264', '#8400e7', '#e8115b', '#148a08', '#bc5900', '#509bf5', '#dc148c', '#477d95', '#a56752', '#27856a', '#8d67ab', '#e91429', '#0d73ec', '#af2896', '#503750'];
+// Paleta propia de géneros: tonos profundos que se funden con el negro de la marca
+const GENRE_COLORS = ['#6c5ce7', '#3a7bd5', '#c2547a', '#d07a4a', '#3c9d9b', '#8e5bd1', '#b8863b', '#4d6fd8', '#a34fa0', '#5c8a6a', '#c96a5b', '#4b9ec9', '#7d6bb8', '#b0596f', '#5e7fa8', '#9a7a52'];
 export function genreColor(name) {
   let h = 0;
   for (const c of norm(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return GENRE_COLORS[h % GENRE_COLORS.length];
 }
 export function cardGenre(g) {
-  return `<a class="genre" href="#/genero/${encodeURIComponent(g.nombre)}" style="background:${genreColor(g.nombre)}">
+  return `<a class="genre" href="#/genero/${encodeURIComponent(g.nombre)}" style="--g:${genreColor(g.nombre)}">
     <div class="n">${esc(g.nombre)}</div><div class="c">${plural(g.totalCanciones, 'canción', 'canciones')}</div>
     ${g.portadaUrl ? `<img src="${esc(cover(g.portadaUrl, 160))}" alt="" loading="lazy" data-fallback>` : ''}
   </a>`;
 }
 
-export function section(title, content, { more, sub, id } = {}) {
+export function section(title, content, { more, sub, id, eyebrow } = {}) {
   if (!content) return '';
   return `<section class="section" ${id ? `id="${id}"` : ''}>
-    <div class="section-head"><div><h2>${esc(title)}</h2>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>
+    <div class="section-head"><div>${eyebrow ? `<div class="eyebrow">${esc(eyebrow)}</div>` : ''}<h2>${esc(title)}</h2>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>
     ${more ? `<a class="more" href="${more}">Mostrar todo</a>` : ''}</div>
     ${content}</section>`;
 }

@@ -20,4 +20,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     long countByRol(Usuario.Rol rol);
 
     List<Usuario> findBySolicitudColaborador(Usuario.EstadoSolicitud estado);
+    List<Usuario> findByEstadoCuentaOrderByFechaRegistroDesc(Usuario.EstadoCuenta estado);
+    List<Usuario> findByRolAndActivoTrue(Usuario.Rol rol);
+    Optional<Usuario> findByAprobacionToken(String token);
 }

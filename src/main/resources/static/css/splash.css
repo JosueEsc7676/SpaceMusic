@@ -1,29 +1,34 @@
-/* Pantalla de apertura: logo negro con la nota blanca que se dibuja */
+/* Pantalla de apertura: logo negro con la nota blanca que se dibuja (≈1,1 s) */
 #splash { position: fixed; inset: 0; z-index: 9999; background: #000; display: grid; place-content: center; justify-items: center; gap: 22px;
-  animation: spAuto .4s 7s forwards; }
-#splash.out { animation: spOut .55s cubic-bezier(.4,0,.2,1) forwards; }
-#splash .sp-logo { position: relative; width: 132px; height: 132px; animation: spIn .7s cubic-bezier(.2,1.4,.4,1) both; }
+  animation: spAuto .3s 6s forwards; }
+#splash::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(40% 35% at 50% 46%, rgba(180,165,255,.10), transparent 70%); opacity: 0; animation: spFade 1s .2s ease-out forwards; }
+#splash.out { animation: spOut .45s cubic-bezier(.4,0,.2,1) forwards; }
+#splash.quick { animation: none; }
+#splash.quick * , #splash.quick::before { animation-duration: .01s !important; animation-delay: 0s !important; }
+#splash .sp-logo { position: relative; width: 128px; height: 128px; will-change: transform, opacity; animation: spIn .55s cubic-bezier(.2,1.35,.4,1) both; }
 #splash .sp-logo::before { content: ""; position: absolute; inset: -40%; border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255,255,255,.16), transparent); opacity: 0; animation: spGlow 1.6s .9s ease-out both; }
+  background: radial-gradient(closest-side, rgba(255,255,255,.18), transparent); opacity: 0; animation: spGlow 1.2s .7s ease-out both; }
 #splash svg { position: relative; width: 100%; height: 100%; display: block; overflow: visible; }
 #splash .sp-stem { fill: none; stroke: #fff; stroke-width: 34; stroke-linecap: round; stroke-linejoin: round;
-  stroke-dasharray: 640; stroke-dashoffset: 640; animation: spDraw .75s .35s cubic-bezier(.6,0,.3,1) forwards; }
-#splash .sp-head { fill: #fff; transform-box: fill-box; transform-origin: center; transform: scale(0); animation: spPop .5s cubic-bezier(.2,1.6,.4,1) forwards; }
-#splash .sp-h1 { animation-delay: .95s; }
-#splash .sp-h2 { animation-delay: 1.07s; }
-#splash .sp-name { font: 800 22px/1 Inter, system-ui, sans-serif; letter-spacing: .02em; color: #fff; opacity: 0;
-  animation: spName .6s 1.15s ease-out forwards; }
+  stroke-dasharray: 640; stroke-dashoffset: 640; animation: spDraw .55s .2s cubic-bezier(.6,0,.3,1) forwards; }
+#splash .sp-head { fill: #fff; transform-box: fill-box; transform-origin: center; transform: scale(0); animation: spPop .42s cubic-bezier(.2,1.6,.4,1) forwards; }
+#splash .sp-h1 { animation-delay: .62s; }
+#splash .sp-h2 { animation-delay: .72s; }
+#splash .sp-name { font: 800 22px/1 Manrope, Inter, system-ui, sans-serif; letter-spacing: .01em; color: #fff; opacity: 0;
+  animation: spName .45s .78s ease-out forwards; }
 .tv-splash#splash .sp-logo { width: 9rem; height: 9rem; }
 .tv-splash#splash .sp-name { font-size: 1.8rem; }
 
-@keyframes spIn { from { opacity: 0; transform: scale(.55); } to { opacity: 1; transform: none; } }
+@keyframes spIn { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
 @keyframes spDraw { to { stroke-dashoffset: 0; } }
 @keyframes spPop { to { transform: scale(1); } }
 @keyframes spGlow { 0% { opacity: 0; transform: scale(.6); } 40% { opacity: 1; } 100% { opacity: 0; transform: scale(1.5); } }
-@keyframes spName { from { opacity: 0; transform: translateY(8px); } to { opacity: .92; transform: none; } }
-@keyframes spOut { to { opacity: 0; visibility: hidden; transform: scale(1.06); } }
+@keyframes spName { from { opacity: 0; transform: translateY(6px); } to { opacity: .94; transform: none; } }
+@keyframes spFade { to { opacity: 1; } }
+@keyframes spOut { to { opacity: 0; visibility: hidden; transform: scale(1.04); } }
 @keyframes spAuto { to { opacity: 0; visibility: hidden; } }
 
 @media (prefers-reduced-motion: reduce) {
-  #splash *, #splash *::before { animation-duration: .01s !important; animation-delay: 0s !important; }
+  #splash *, #splash *::before, #splash::before { animation-duration: .01s !important; animation-delay: 0s !important; }
 }

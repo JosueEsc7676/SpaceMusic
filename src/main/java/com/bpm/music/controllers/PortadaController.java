@@ -34,8 +34,21 @@ public class PortadaController {
     }
 
     @GetMapping("/db/{id}")
-    public ResponseEntity<byte[]> portada(@PathVariable Long id, @RequestParam(required = false) Integer s) {
+    public ResponseEntity<byte[]> portada(@PathVariable Long id, @RequestParam(required = false) Integer s,
+                                          @RequestParam(required = false) String v) {
         Optional<CancionDTO> c = biblioteca.porId(id);
+        // La URL lleva la huella de la imagen (?v=): si la miniatura ya está en disco
+        // se sirve directamente, sin leer la imagen original de la base de datos.
+        if (v != null && s != null && TAMANOS.contains(s) && v.matches("[0-9a-f]{6,16}")) {
+            byte[] mini = imagenes.leerMiniatura(id, v, s);
+            if (mini != null) {
+                return ResponseEntity.ok()
+                        .contentType(MediaType.IMAGE_JPEG)
+                        .eTag("\"" + id + "-" + v + "-" + s + "\"")
+                        .cacheControl(CacheControl.maxAge(365, TimeUnit.DAYS).cachePublic().immutable())
+                        .body(mini);
+            }
+        }
         byte[] datos = repo.findPortadaById(id).orElse(null);
 
         if (datos == null || datos.length == 0) {
@@ -63,13 +76,15 @@ public class PortadaController {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(tipo))
                 .eTag(etag)
-                .cacheControl(CacheControl.maxAge(30, TimeUnit.DAYS).cachePublic())
+                .cacheControl(v != null
+                        ? CacheControl.maxAge(365, TimeUnit.DAYS).cachePublic().immutable()
+                        : CacheControl.maxAge(30, TimeUnit.DAYS).cachePublic())
                 .body(datos);
     }
 
     /** Ruta antigua. */
     @GetMapping("/id/{id}")
     public ResponseEntity<byte[]> alias(@PathVariable Long id, @RequestParam(required = false) Integer s) {
-        return portada(id, s);
+        return portada(id, s, null);
     }
 }

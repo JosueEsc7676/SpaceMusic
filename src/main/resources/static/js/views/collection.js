@@ -313,7 +313,7 @@ export async function likedView(el, _p, _q, isStale) {
   const draw = () => {
     el.innerHTML = head({
       kind: 'Playlist', title: 'Me gusta',
-      art: `<div style="width:100%;height:100%;background:linear-gradient(135deg,#4a1fb8,#8fa7d8);display:grid;place-items:center">${icon('heartFill', 'xl')}</div>`,
+      art: `<div class="art-liked" style="width:100%;height:100%">${icon('heartFill', 'xl')}</div>`,
       meta: `<strong>${esc(session.user?.nombreDisplay || '')}</strong>${sep}${plural(songs.length, 'canción', 'canciones')}`,
     })
       + actions({ filter: songs.length > 8 })

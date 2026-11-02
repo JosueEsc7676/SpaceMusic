@@ -64,26 +64,58 @@ public class AuthService {
         if (repo.existsByEmailIgnoreCase(email)) return Map.of("error", "El correo ya está registrado");
         if (repo.existsByUsernameIgnoreCase(username)) return Map.of("error", "Ese nombre de usuario ya está en uso");
 
-        boolean verificar = requiereVerificacion && mail.configurado();
-        String token = verificar ? token() : null;
-
+        // El usuario no confirma su correo: queda registrado al instante y
+        // los administradores reciben un correo para aprobar la cuenta.
+        String token = token();
         Usuario u = Usuario.builder()
                 .email(email)
                 .username(username)
                 .password(encoder.encode(password))
                 .nombreDisplay(recortar(nombreDisplay, 100, username))
                 .rol(Usuario.Rol.USER)
-                .emailVerificado(!verificar)
-                .verificationToken(token)
+                .emailVerificado(true)
+                .estadoCuenta(Usuario.EstadoCuenta.PENDIENTE)
+                .aprobacionToken(token)
                 .build();
         repo.save(u);
 
-        if (verificar) {
-            mail.verificacion(email, u.getNombreVisible(), token);
-            return Map.of("ok", true, "verificar", true,
-                    "message", "Cuenta creada. Te enviamos un correo a " + email + " para confirmarla.");
+        for (Usuario admin : repo.findByRolAndActivoTrue(Usuario.Rol.ADMIN)) {
+            mail.nuevaCuentaPendiente(admin.getEmail(), admin.getNombreVisible(),
+                    u.getNombreVisible(), u.getUsername(), u.getEmail(), token);
         }
-        return Map.of("ok", true, "verificar", false, "message", "Cuenta creada. Ya puedes iniciar sesión.");
+        return Map.of("ok", true, "pendiente", true,
+                "message", "¡Cuenta creada! Un administrador la revisará en breve y te avisaremos por correo cuando puedas entrar.");
+    }
+
+    // ═══════════════════════ Aprobación de cuentas ═══════════════════════
+
+    /** Datos de la cuenta que se va a aprobar desde el enlace del correo. */
+    public Map<String, Object> cuentaPorToken(String token) {
+        if (token == null || token.isBlank()) return Map.of("error", "Enlace inválido");
+        return repo.findByAprobacionToken(token)
+                .<Map<String, Object>>map(u -> Map.of("ok", true, "usuario", Map.of(
+                        "username", u.getUsername(), "email", u.getEmail(),
+                        "nombre", u.getNombreVisible(), "estado", u.getEstadoCuenta().name(),
+                        "fechaRegistro", String.valueOf(u.getFechaRegistro()))))
+                .orElse(Map.of("error", "Este enlace ya se usó o no es válido. Revisa el panel de administración."));
+    }
+
+    @Transactional
+    public Map<String, Object> resolverPorToken(String token, boolean aprobar) {
+        if (token == null || token.isBlank()) return Map.of("error", "Enlace inválido");
+        Optional<Usuario> opt = repo.findByAprobacionToken(token);
+        if (opt.isEmpty()) return Map.of("error", "Este enlace ya se usó o no es válido.");
+        return resolverCuenta(opt.get(), aprobar);
+    }
+
+    @Transactional
+    public Map<String, Object> resolverCuenta(Usuario u, boolean aprobar) {
+        u.setEstadoCuenta(aprobar ? Usuario.EstadoCuenta.APROBADA : Usuario.EstadoCuenta.RECHAZADA);
+        u.setAprobacionToken(null);
+        repo.save(u);
+        mail.cuentaResuelta(u.getEmail(), u.getNombreVisible(), aprobar);
+        return Map.of("ok", true, "estado", u.getEstadoCuenta().name(),
+                "message", aprobar ? "Cuenta de " + u.getUsername() + " aprobada" : "Cuenta de " + u.getUsername() + " rechazada");
     }
 
     @Transactional
@@ -131,8 +163,11 @@ public class AuthService {
         }
         Usuario u = opt.get();
         if (!u.isActivo()) return Map.of("error", "Tu cuenta está desactivada. Contacta al administrador.");
-        if (!u.isEmailVerificado() && requiereVerificacion && mail.configurado()) {
-            return Map.of("error", "Confirma tu correo antes de entrar. Revisa tu bandeja de entrada.", "needsVerification", true);
+        if (u.getEstadoCuenta() == Usuario.EstadoCuenta.PENDIENTE) {
+            return Map.of("error", "Tu cuenta está esperando la aprobación de un administrador. Te avisaremos por correo.", "pendiente", true);
+        }
+        if (u.getEstadoCuenta() == Usuario.EstadoCuenta.RECHAZADA) {
+            return Map.of("error", "Tu solicitud de cuenta no fue aprobada. Contacta al administrador.");
         }
 
         limiter.registrarExito(ip, usuarioOEmail);
@@ -145,6 +180,7 @@ public class AuthService {
     public Map<String, Object> refrescar(Long userId) {
         Usuario u = repo.findById(userId).orElseThrow(() -> new NoSuchElementException("Usuario no encontrado"));
         if (!u.isActivo()) return Map.of("error", "Tu cuenta está desactivada");
+        if (u.getEstadoCuenta() != Usuario.EstadoCuenta.APROBADA) return Map.of("error", "Tu cuenta no está aprobada");
         return sesion(u);
     }
 

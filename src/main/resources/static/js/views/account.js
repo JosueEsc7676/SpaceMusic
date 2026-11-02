@@ -6,18 +6,19 @@ import { prefs, fx, EQ_BANDS, EQ_PRESETS } from '../player.js';
 import { setHero, setTitle } from '../router.js';
 import { toast, errorToast, modal, registerList, trackList, emptyState } from '../ui.js';
 import { bus } from '../util.js';
+import { cancionesGuardadas } from '../offline.js';
 
 export const ACCENTS = {
-  Verde: ['#1ed760', '#04140a'],
-  Azul: ['#4ea8ff', '#001226'],
-  Morado: ['#b388ff', '#160033'],
-  Rosa: ['#ff6fae', '#2a0014'],
-  Naranja: ['#ffa53d', '#2a1400'],
-  Turquesa: ['#2ee6c8', '#00201b'],
+  Perla: ['#f5f5f7', '#000000'],
+  Iris: ['#b4a5ff', '#120a33'],
+  Cielo: ['#7cc8ff', '#001a2e'],
+  Rosa: ['#ffa3c8', '#2e0716'],
+  Coral: ['#ff8f78', '#2e0b04'],
+  Ámbar: ['#f4c46a', '#2a1a00'],
 };
 
-export function applyAccent(name = store.get('sm_accent', 'Verde')) {
-  const [c, ink] = ACCENTS[name] || ACCENTS.Verde;
+export function applyAccent(name = store.get('sm_accent', 'Perla')) {
+  const [c, ink] = ACCENTS[name] || ACCENTS.Perla; // los acentos antiguos (p. ej. Verde) pasan a Perla
   document.documentElement.style.setProperty('--accent', c);
   document.documentElement.style.setProperty('--accent-ink', ink);
 }
@@ -41,7 +42,7 @@ export async function profileView(el, _p, _q, isStale) {
   setHero([70, 70, 90]);
   const [rolNombre, rolCls] = ROLES[u.rol] || ROLES.USER;
   const sol = u.solicitudColaborador;
-  const accent = store.get('sm_accent', 'Verde');
+  const accent = ACCENTS[store.get('sm_accent', 'Perla')] ? store.get('sm_accent', 'Perla') : 'Perla';
 
   el.innerHTML = `
     <div class="profile-head">
@@ -76,6 +77,10 @@ export async function profileView(el, _p, _q, isStale) {
           <button class="btn sm" data-eq>${icon('sliders', 'sm')} Ajustar</button></div>
         <div class="setting-row"><div><div class="t">Color de la app</div></div>
           <div class="swatches">${Object.entries(ACCENTS).map(([n, [c]]) => `<button class="swatch ${n === accent ? 'active' : ''}" data-accent="${n}" title="${n}" style="background:${c}"></button>`).join('')}</div></div>
+        <div class="setting-row"><div><div class="t">Sonido de inicio</div><div class="s">Suena al abrir la app junto al logo</div></div>
+          <label class="switch"><input type="checkbox" data-intro ${store.get('sm_intro_sound', true) !== false ? 'checked' : ''}><span></span></label></div>
+        <div class="setting-row"><div><div class="t">Sin conexión</div><div class="s" data-offline>Las canciones que escuchas se guardan solas en este dispositivo</div></div>
+          ${icon('download', 'sm')}</div>
         <div class="setting-row"><div><div class="t">Atajos de teclado</div><div class="s">Pulsa <kbd>?</kbd> en cualquier momento</div></div>
           <button class="btn sm" data-keys>${icon('keyboard', 'sm')} Ver</button></div>
       </div>
@@ -87,6 +92,13 @@ export async function profileView(el, _p, _q, isStale) {
           <div class="field"><label>¿Por qué quieres serlo?</label><textarea data-motivo maxlength="500" placeholder="Cuéntale brevemente al administrador"></textarea></div>
           <button class="btn primary sm" data-solicitar>${icon('send', 'sm')} Enviar solicitud</button>`}
       </div>` : ''}
+
+      ${window.SpaceMusicApp ? '' : `<div class="panel"><h3>${icon('download')} Apps</h3>
+        <p class="muted" style="margin-top:0">Escucha con la pantalla bloqueada y controles en la notificación.</p>
+        <div class="row wrap"><a class="btn primary sm" href="/app/SpaceMusic.apk" download>${icon('download', 'sm')} Android</a>
+          <a class="btn sm" href="/app/SpaceMusic-TV.apk" download>${icon('download', 'sm')} Android TV</a></div>
+        <p class="muted" style="font-size:12px;margin-bottom:0">En iPhone: abre esta página en Safari → Compartir → “Agregar a inicio”.</p>
+      </div>`}
 
       <div class="panel"><h3>${icon('logout')} Sesión</h3>
         <p class="muted" style="margin-top:0">Cierra la sesión en este dispositivo.</p>
@@ -152,6 +164,11 @@ export async function profileView(el, _p, _q, isStale) {
   }));
   $('[data-eq]').onclick = () => openEqualizer().then(() => profileView(el, {}, {}, () => false));
   $('[data-keys]').onclick = () => bus.emit('shortcuts');
+  $('[data-intro]').onchange = (e) => store.set('sm_intro_sound', e.target.checked);
+  cancionesGuardadas().then((n) => {
+    const t = $('[data-offline]');
+    if (t && n) t.textContent = plural(n, 'canción guardada', 'canciones guardadas') + ' para escuchar sin conexión';
+  });
   $('[data-logout]').onclick = () => logout();
   $('[data-solicitar]')?.addEventListener('click', async () => {
     try {

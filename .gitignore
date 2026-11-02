@@ -52,3 +52,7 @@ config/application.properties
 android-tv/build/
 android-tv/firma/
 android-tv/*.apk
+
+android-movil/build/
+android-movil/*.apk
+android-movil/*.idsig

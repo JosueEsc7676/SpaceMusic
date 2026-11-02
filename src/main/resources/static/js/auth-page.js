@@ -60,7 +60,7 @@ if (pwNew) {
     if (v.length >= 12) s++;
     if (/[a-z]/i.test(v) && /\d/.test(v)) s++;
     if (/[^a-z0-9]/i.test(v)) s++;
-    const colors = ['#ff5a5f', '#ff5a5f', '#f5a524', '#9ad75f', '#1ed760'];
+    const colors = ['#ff6b6b', '#ff6b6b', '#f4c46a', '#b9e6a1', '#f5f5f7'];
     bar.style.width = (v ? Math.max(15, s * 25) : 0) + '%';
     bar.style.background = colors[s];
   });
@@ -135,7 +135,7 @@ if (page === 'register') {
     busy(b, true);
     try {
       const d = await post('/api/auth/register', { email, username, nombreDisplay: nombreDisplay || username, password });
-      if (d.verificar) {
+      if (d.verificar || d.pendiente) {
         $('#form').innerHTML = `<p class="sub" style="font-size:15px;color:#f1f1f5">${d.message}</p><a class="btn" href="/login.html">Ir a iniciar sesión</a>`;
       } else {
         // Sin verificación por correo: entrar directamente
@@ -208,4 +208,32 @@ if (page === 'setup') {
       location.replace('/#/admin');
     } catch (err) { msg(err.message); busy(b, false); }
   });
+}
+
+// Aprobación de una cuenta nueva desde el enlace del correo (administradores)
+if (page === 'aprobar') {
+  const token = params.get('token') || '';
+  const box = $('#form');
+  const pintar = (html) => { box.innerHTML = html; };
+  fetch('/api/auth/aprobacion?token=' + encodeURIComponent(token)).then((r) => r.json()).then((d) => {
+    if (d.error) { pintar(`<p class="sub" style="color:#f1f1f5"></p><a class="btn" href="/#/admin">Abrir administración</a>`); box.querySelector('p').textContent = d.error; return; }
+    const u = d.usuario;
+    pintar(`<div class="who"><div class="av"></div><div><b></b><span></span><small></small></div></div>
+      <div class="row2"><button class="btn" id="ok" type="button">Aprobar cuenta</button><button class="btn ghost" id="no" type="button">Rechazar</button></div>`);
+    box.querySelector('.av').textContent = (u.nombre || u.username).slice(0, 1).toUpperCase();
+    box.querySelector('b').textContent = u.nombre;
+    box.querySelector('span').textContent = '@' + u.username + ' · ' + u.email;
+    box.querySelector('small').textContent = u.estado === 'PENDIENTE' ? 'Esperando aprobación' : 'Estado: ' + u.estado.toLowerCase();
+    const resolver = async (aprobar, btn) => {
+      clearMsg();
+      busy(btn, true);
+      try {
+        const r = await post('/api/auth/aprobacion', { token, aprobar });
+        pintar(`<p class="sub" style="color:#f1f1f5"></p><a class="btn" href="/#/admin">Ir a administración</a>`);
+        box.querySelector('p').textContent = r.message + '. Le avisamos por correo.';
+      } catch (err) { msg(err.message); busy(btn, false); }
+    };
+    $('#ok').addEventListener('click', (e) => resolver(true, e.currentTarget));
+    $('#no').addEventListener('click', (e) => resolver(false, e.currentTarget));
+  }).catch(() => msg('No hay conexión con el servidor'));
 }

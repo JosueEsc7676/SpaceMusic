@@ -151,9 +151,16 @@ export const player = {
     this._load(this.index - 1, true);
   },
 
+  /** Duración real del audio, o la de la base de datos mientras el navegador no la conoce. */
+  duration() {
+    return isFinite(audio.duration) && audio.duration > 0 ? audio.duration : (this.current?.duracionSegundos || 0);
+  },
+
   seek(t) {
-    if (!isFinite(audio.duration)) return;
-    audio.currentTime = Math.max(0, Math.min(audio.duration - 0.2, t));
+    const dur = this.duration();
+    if (!dur || !isFinite(t)) return;
+    audio.currentTime = Math.max(0, Math.min(dur - 0.25, t));
+    bus.emit('player:time');
   },
 
   seekBy(d) { this.seek(audio.currentTime + d); },

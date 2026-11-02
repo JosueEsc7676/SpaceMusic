@@ -129,6 +129,16 @@ public class ImagenService {
         }
     }
 
+    /** Miniatura ya generada, o null si todavía no existe. */
+    public byte[] leerMiniatura(Long id, String huella, int lado) {
+        Path p = carpeta("cache/portadas").resolve(id + "_" + huella + "_" + lado + ".jpg");
+        try {
+            return Files.isRegularFile(p) ? Files.readAllBytes(p) : null;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
     public boolean existeMiniatura(Long id, String huella, int lado) {
         return Files.isRegularFile(carpeta("cache/portadas").resolve(id + "_" + huella + "_" + lado + ".jpg"));
     }
@@ -212,18 +222,21 @@ public class ImagenService {
         int hue2 = (hue + 40) % 360;
         String inicial = (texto == null || texto.isBlank()) ? "" : texto.trim().substring(0, 1).toUpperCase();
         inicial = inicial.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        // Identidad "Noir": base grafito con un brillo de color suave y la nota en blanco
         String svg = """
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">
-              <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="hsl(%d,55%%,38%%)"/><stop offset="1" stop-color="hsl(%d,60%%,16%%)"/>
-              </linearGradient></defs>
+              <defs>
+                <linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a1a20"/><stop offset="1" stop-color="#060608"/></linearGradient>
+                <radialGradient id="g" cx=".22" cy=".18" r=".9"><stop offset="0" stop-color="hsl(%d,70%%,62%%)" stop-opacity=".55"/><stop offset=".55" stop-color="hsl(%d,60%%,40%%)" stop-opacity=".12"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+              </defs>
+              <rect width="300" height="300" fill="url(#b)"/>
               <rect width="300" height="300" fill="url(#g)"/>
-              <g fill="none" stroke="rgba(255,255,255,.55)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+              <g fill="none" stroke="rgba(255,255,255,.86)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M128 196V96l78-16v100"/>
-                <circle cx="108" cy="196" r="20" fill="rgba(255,255,255,.55)" stroke="none"/>
-                <circle cx="186" cy="180" r="20" fill="rgba(255,255,255,.55)" stroke="none"/>
+                <circle cx="108" cy="196" r="20" fill="rgba(255,255,255,.86)" stroke="none"/>
+                <circle cx="186" cy="180" r="20" fill="rgba(255,255,255,.86)" stroke="none"/>
               </g>
-              <text x="24" y="276" font-family="system-ui,sans-serif" font-size="34" font-weight="700" fill="rgba(255,255,255,.35)">%s</text>
+              <text x="24" y="276" font-family="system-ui,sans-serif" font-size="30" font-weight="800" fill="rgba(255,255,255,.3)">%s</text>
             </svg>""".formatted(hue, hue2, inicial);
         return svg.getBytes(StandardCharsets.UTF_8);
     }

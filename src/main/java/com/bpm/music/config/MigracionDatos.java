@@ -70,8 +70,34 @@ public class MigracionDatos {
             int viejas = imagenes.limpiarMiniaturasAntiguas();
             if (viejas > 0) log.info("Migración: {} miniaturas antiguas borradas", viejas);
             jdbc.update("UPDATE playlist SET portada_url = NULL WHERE portada_url LIKE '%singlecolorimage%'");
+            crearIndices();
         } catch (Exception e) {
             log.warn("Migración de datos omitida: {}", e.getMessage());
+        }
+    }
+
+    /** Índices para las consultas más usadas (si ya existen, no pasa nada). */
+    private void crearIndices() {
+        String[][] indices = {
+                {"cancion", "idx_cancion_ruta", "ruta_archivo(255)"},
+                {"cancion", "idx_cancion_fecha", "fecha_agregada"},
+                {"playlist", "idx_playlist_usuario", "usuario_id, fecha_creacion"},
+                {"playlist", "idx_playlist_publica", "publica, fecha_actualizacion"},
+                {"usuario_reproduccion", "idx_ur_usuario_fecha", "usuario_id, fecha"},
+                {"usuario", "idx_usuario_estado", "estado_cuenta"},
+                {"usuario", "idx_usuario_aprobacion", "aprobacion_token"},
+        };
+        for (String[] i : indices) {
+            try {
+                Integer existe = jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.statistics"
+                        + " WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?", Integer.class, i[0], i[1]);
+                if (existe != null && existe == 0) {
+                    jdbc.execute("CREATE INDEX " + i[1] + " ON " + i[0] + " (" + i[2] + ")");
+                    log.info("Índice creado: {}.{}", i[0], i[1]);
+                }
+            } catch (Exception e) {
+                log.debug("Índice {} omitido: {}", i[1], e.getMessage());
+            }
         }
     }
 }

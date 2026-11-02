@@ -58,6 +58,32 @@ function visibles() {
   return $$('.f', capa()).filter((e) => e.offsetParent !== null && !e.disabled);
 }
 
+// ── Desplazamiento suave propio ──
+// Se calcula siempre hacia una posición final fija (no desde la posición a mitad de animación),
+// así pulsar las flechas rápido no provoca saltos ni deja la pantalla trabada.
+const animaciones = new WeakMap();
+function desplazar(box, eje, destino) {
+  const prop = eje === 'x' ? 'scrollLeft' : 'scrollTop';
+  const max = eje === 'x' ? box.scrollWidth - box.clientWidth : box.scrollHeight - box.clientHeight;
+  destino = Math.round(Math.max(0, Math.min(max, destino)));
+  const clave = animaciones.get(box) || {};
+  animaciones.set(box, clave);
+  const a = clave[eje] || (clave[eje] = { raf: 0, destino: box[prop] });
+  if (Math.abs(destino - box[prop]) < 2) { box[prop] = destino; a.destino = destino; return; }
+  a.destino = destino;
+  cancelAnimationFrame(a.raf);
+  const desde = box[prop], inicio = performance.now(), dur = 220;
+  const paso = (now) => {
+    const t = Math.min(1, (now - inicio) / dur);
+    const e = 1 - Math.pow(1 - t, 3);
+    box[prop] = desde + (a.destino - desde) * e;
+    if (t < 1) a.raf = requestAnimationFrame(paso);
+  };
+  a.raf = requestAnimationFrame(paso);
+}
+// Posición final pedida (si hay una animación en curso, se parte de ella)
+const destinoDe = (box, eje) => animaciones.get(box)?.[eje]?.destino ?? (eje === 'x' ? box.scrollLeft : box.scrollTop);
+
 function enfocar(el, { scroll = true } = {}) {
   if (!el) return;
   const npAbierto = $('.np.open');
@@ -67,27 +93,50 @@ function enfocar(el, { scroll = true } = {}) {
   el.classList.add('focused');
   const enRail = !!el.closest('.rail');
   $('.rail')?.classList.toggle('open', enRail);
-  if (scroll && !enRail) {
-    const shelf = el.closest('.shelf');
-    if (shelf) {
-      const r = el.getBoundingClientRect(), sr = shelf.getBoundingClientRect();
-      if (r.left < sr.left + 40) shelf.scrollLeft -= sr.left + 40 - r.left;
-      if (r.right > sr.right - 40) shelf.scrollLeft += r.right - (sr.right - 40);
-    }
-    const screen = el.closest('.screen');
-    if (screen) {
-      const r = el.getBoundingClientRect(), vr = screen.getBoundingClientRect();
-      const objetivo = el.closest('.row, .head, .actions, .search-box') || el;
-      const or = objetivo.getBoundingClientRect();
-      if (or.top < vr.top + 80 || r.bottom > vr.bottom - 120) {
-        screen.scrollTop += or.top - vr.top - vr.height * 0.18;
-      }
-    }
+  if (!scroll || enRail) return;
+  const shelf = el.closest('.shelf');
+  if (shelf) {
+    const sr = shelf.getBoundingClientRect(), r = el.getBoundingClientRect();
+    const base = destinoDe(shelf, 'x') - shelf.scrollLeft; // corrige la animación en curso
+    const izq = r.left - sr.left + base, der = r.right - sr.left + base, margen = sr.width * 0.08;
+    const actual = destinoDe(shelf, 'x');
+    if (izq < margen) desplazar(shelf, 'x', actual + izq - margen);
+    else if (der > sr.width - margen) desplazar(shelf, 'x', actual + der - sr.width + margen);
   }
+  const screen = el.closest('.screen');
+  if (screen) {
+    const vr = screen.getBoundingClientRect();
+    // En listas largas se sigue a la canción; en filas de tarjetas se muestra la fila con su título
+    const fila = el.closest('.track') ? el : (el.closest('.row, .head, .actions, .search-box') || el);
+    const objetivo = fila.getBoundingClientRect().height > vr.height * 0.6 ? el : fila;
+    const r = objetivo.getBoundingClientRect();
+    const actual = destinoDe(screen, 'y');
+    const top = r.top - vr.top + screen.scrollTop, bottom = r.bottom - vr.top + screen.scrollTop;
+    const arriba = vr.height * 0.16, abajo = vr.height * 0.82;
+    if (el === $('.f', screen)) desplazar(screen, 'y', 0);
+    else if (top - actual < arriba) desplazar(screen, 'y', top - arriba);
+    else if (bottom - actual > abajo) desplazar(screen, 'y', bottom - abajo);
+  }
+}
+
+/** Atajo para listas: arriba/abajo en canciones e izquierda/derecha en tarjetas van al vecino directo. */
+function vecino(dir) {
+  if (!focused) return null;
+  if ((dir === 'up' || dir === 'down') && focused.classList.contains('track')) {
+    const n = dir === 'down' ? focused.nextElementSibling : focused.previousElementSibling;
+    return n?.classList.contains('track') ? n : null;
+  }
+  if ((dir === 'left' || dir === 'right') && focused.parentElement?.classList.contains('shelf')) {
+    const n = dir === 'right' ? focused.nextElementSibling : focused.previousElementSibling;
+    return n?.classList.contains('f') ? n : null;
+  }
+  return null;
 }
 
 /** Busca el elemento más cercano en la dirección pulsada. */
 function mover(dir) {
+  const v = vecino(dir);
+  if (v) { enfocar(v); return; }
   const lista = visibles();
   if (!focused || !lista.includes(focused)) { enfocar(lista.find((e) => !e.closest('.rail')) || lista[0]); return; }
   const a = focused.getBoundingClientRect();
@@ -133,6 +182,9 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   const mapa = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+  if ((k === 'ArrowLeft' || k === 'ArrowRight') && focused?.dataset.c === 'seek') {
+    e.preventDefault(); saltar(k === 'ArrowRight' ? 1 : -1); return;
+  }
   if (mapa[k]) { e.preventDefault(); mover(mapa[k]); return; }
   if (k === 'Enter' || k === ' ') { e.preventDefault(); activar(); return; }
   if (k === 'Escape' || k === 'Backspace' || k === 'GoBack' || k === 'BrowserBack') { e.preventDefault(); atras(); return; }
@@ -251,11 +303,17 @@ const tPlaylist = (p) => `<button class="card f" data-playlist="${p.id}"><div cl
   <div class="t ellipsis">${esc(p.nombre)}</div><div class="s">${plural(p.cancionesCount, 'canción', 'canciones')}</div></button>`;
 const tMix = (m) => `<button class="card mix f" data-mix="${esc(m.id)}"><div class="art">${mosaic(m.portadas)}<div class="label">${esc(m.titulo)}</div></div>
   <div class="s ellipsis">${esc((m.artistas || []).join(', '))}</div></button>`;
-const COLORES = ['#e13300', '#1e3264', '#8400e7', '#e8115b', '#148a08', '#bc5900', '#509bf5', '#dc148c', '#477d95', '#27856a'];
-const tGenero = (g, i) => `<button class="genre f" data-genero="${esc(g.nombre)}" style="background:${COLORES[i % COLORES.length]}">${esc(g.nombre)}</button>`;
+const COLORES = ['#6c5ce7', '#3a7bd5', '#c2547a', '#d07a4a', '#3c9d9b', '#8e5bd1', '#b8863b', '#4d6fd8', '#a34fa0', '#5c8a6a'];
+const tGenero = (g, i) => `<button class="genre f" data-genero="${esc(g.nombre)}" style="--g:${COLORES[i % COLORES.length]}">${esc(g.nombre)}</button>`;
 
 // Clics (Enter) sobre tarjetas
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
+  const mp = e.target.closest('[data-mixplay]');
+  if (mp) {
+    const songs = await api(`/api/mixes/${encodeURIComponent(mp.dataset.mixplay)}?cantidad=40`).catch(() => []);
+    if (songs.length) { player.play(songs, 0, { type: 'mix', label: 'Mezcla' }); abrirNP(); }
+    return;
+  }
   const t = e.target.closest('[data-play],[data-album],[data-artista],[data-playlist],[data-mix],[data-genero]');
   if (!t) return;
   if (t.dataset.play) {
@@ -279,8 +337,18 @@ async function vistaInicio() {
   cargando();
   const d = await api('/api/inicio');
   const nombre = session.user?.nombreDisplay?.split(' ')[0] || '';
-  await pantalla(`<h1 class="title">${saludo()}${nombre ? ', ' + esc(nombre) : ''}</h1>
-    ${fila('Hecho para ti', (d.mixes || []).map(tMix).join(''))}
+  const m = (d.mixes || [])[0];
+  const destacado = m ? `<section class="spot row">
+      ${m.portadas?.[0] ? `<div class="spot-bg" style="background-image:url('${esc(cover(m.portadas[0], 300))}')"></div>` : ''}
+      <div class="spot-body"><div class="eyebrow">Hecho para ti</div><h2 class="spot-t">${esc(m.titulo)}</h2>
+        <p class="spot-s ellipsis">${esc((m.artistas || []).join(', '))}</p>
+        <div class="actions"><button class="btn primary f" data-mixplay="${esc(m.id)}">${icon('play')} Reproducir</button>
+          <button class="btn f" data-mix="${esc(m.id)}">Ver mezcla</button></div></div>
+      <div class="spot-art">${mosaic(m.portadas)}</div></section>` : '';
+  await pantalla(`<div class="eyebrow">${esc(new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' }))}</div>
+    <h1 class="title">${saludo()}${nombre ? ', ' + esc(nombre) : ''}</h1>
+    ${destacado}
+    ${fila('Tus mezclas', (d.mixes || []).slice(1).map(tMix).join(''))}
     ${fila('Escuchado recientemente', tarjetasCanciones(d.recientes, { type: 'historial', label: 'Recientes' }))}
     ${fila('Lo que más escuchas', tarjetasCanciones(d.tusFavoritas, { type: 'top', label: 'Lo que más escuchas' }))}
     ${fila('Recién agregadas', tarjetasCanciones(d.recienAgregadas, { type: 'nuevas', label: 'Recién agregadas' }))}
@@ -318,7 +386,7 @@ async function vistaBuscar(q = store.get('sm_tv_q', '')) {
 async function vistaMeGusta() {
   cargando();
   const songs = await api('/api/usuario/favoritos');
-  coleccion({ kind: 'Playlist', titulo: 'Me gusta', arte: `<div class="ph" style="background:linear-gradient(135deg,#4a1fb8,#8fa7d8);color:#fff">${icon('heartFill')}</div>`,
+  coleccion({ kind: 'Playlist', titulo: 'Me gusta', arte: `<div class="ph art-liked">${icon('heartFill')}</div>`,
     meta: plural(songs.length, 'canción', 'canciones'), songs, ctx: { type: 'favoritos', label: 'Me gusta', route: '#/favoritos' }, color: [80, 56, 200] });
 }
 
@@ -436,15 +504,32 @@ function pintarMini() {
   m.innerHTML = `${img(s.portadaUrl, 160)}<span style="min-width:0;text-align:left"><div class="t ellipsis">${esc(s.nombre)}</div><div class="s ellipsis">${esc(s.artista)}</div></span>
     <span class="eq"><i></i><i></i><i></i></span><span class="bar"><i></i></span>`;
 }
+// Adelantar/retroceder con la barra: cada pulsación seguida salta un poco más (10 s, 10 s, 20 s, 30 s…)
+let saltoT = 0, saltoN = 0;
+function saltar(sentido) {
+  const ahora = performance.now();
+  saltoN = ahora - saltoT < 450 ? saltoN + 1 : 0;
+  saltoT = ahora;
+  const paso = saltoN < 2 ? 10 : saltoN < 6 ? 20 : 30;
+  player.seekBy(sentido * paso);
+  pintarBarra();
+  const tip = $('#np .np-prog .tip');
+  if (tip) { tip.textContent = (sentido > 0 ? '+' : '−') + paso + ' s'; tip.classList.remove('show'); void tip.offsetWidth; tip.classList.add('show'); }
+}
+
 function pintarBarra() {
   const a = player.audio;
   const p = a.duration ? (a.currentTime / a.duration) * 100 : 0;
   const b = $('#mini .bar i');
   if (b) b.style.width = p + '%';
   if ($('.np.open')) {
-    $('#np .rail2 i').style.width = p + '%';
+    const dur0 = player.duration();
+    const p2 = dur0 ? Math.min(100, (a.currentTime / dur0) * 100) : 0;
+    $('#np .rail2 i').style.width = p2 + '%';
+    const knob = $('#np .np-prog .knob');
+    if (knob) knob.style.left = p2 + '%';
     $('#np [data-cur]').textContent = fmtTime(a.currentTime);
-    const dur = a.duration || player.current?.duracionSegundos || 0;
+    const dur = player.duration();
     $('#np [data-dur]').textContent = '-' + fmtTime(Math.max(0, dur - a.currentTime));
   }
 }
@@ -491,16 +576,17 @@ function pintarNP(cambio) {
         <div class="np-head">
           <div class="tt"><div class="np-name">${esc(s.nombre)}</div><div class="np-artist">${esc(s.artista)}${s.album && s.album !== 'Single' ? ' — ' + esc(s.album) : ''}</div></div>
         </div>
-        <div class="np-prog"><div class="rail2"><i></i></div><div class="times"><span data-cur>0:00</span><span data-dur>0:00</span></div></div>
+        <button class="np-prog f" data-c="seek" aria-label="Adelantar o retroceder"><div class="rail2"><i></i><b class="knob"></b></div>
+          <div class="times"><span data-cur>0:00</span><span class="seek-hint">◀ ▶ para adelantar</span><span data-dur>0:00</span></div><span class="tip"></span></button>
         <div class="np-ctrls">
-          <button class="cb sm f" data-c="shuffle">${icon('shuffle')}</button>
-          <button class="cb f" data-c="prev">${icon('rew')}</button>
-          <button class="cb big f" data-c="play">${icon(player.playing ? 'pause' : 'play')}</button>
-          <button class="cb f" data-c="next">${icon('fwd')}</button>
-          <button class="cb sm f" data-c="repeat">${icon('repeat')}</button>
+          <button class="cb f" data-c="prev" aria-label="Anterior">${icon('rew')}</button>
+          <button class="cb big f" data-c="play" aria-label="Reproducir o pausar">${icon(player.playing ? 'pause' : 'play')}</button>
+          <button class="cb f" data-c="next" aria-label="Siguiente">${icon('fwd')}</button>
         </div>
         <div class="np-bottom">
-          <button class="cb sm f" data-c="fav">${icon('heart')}</button>
+          <button class="cb sm f" data-c="shuffle" aria-label="Aleatorio">${icon('shuffle')}</button>
+          <button class="cb sm f" data-c="repeat" aria-label="Repetir">${icon('repeat')}</button>
+          <button class="cb sm f" data-c="fav" aria-label="Me gusta">${icon('heart')}</button>
           <div class="np-up" id="up"></div>
         </div>
       </div>

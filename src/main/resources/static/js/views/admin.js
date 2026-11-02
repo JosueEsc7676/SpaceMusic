@@ -15,16 +15,17 @@ export async function adminView(el, _p, query, isStale) {
   const tab = query.tab || 'resumen';
   setTitle('Administración');
   setHero([120, 40, 50]);
-  const tabs = [['resumen', 'Resumen'], ['biblioteca', 'Biblioteca'], ['usuarios', 'Usuarios'], ['solicitudes', 'Solicitudes']];
+  const tabs = [['resumen', 'Resumen'], ['cuentas', 'Cuentas nuevas'], ['biblioteca', 'Biblioteca'], ['usuarios', 'Usuarios'], ['solicitudes', 'Colaboradores']];
   const resumen = await api('/api/admin/resumen');
   if (isStale()) return;
   el.innerHTML = `<div class="section-head" style="margin-top:8px"><h2 style="font-size:28px">${icon('shield')} Administración</h2></div>
-    <div class="chips">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? 'active' : ''}" href="#/admin?tab=${k}">${l}${k === 'solicitudes' && resumen.solicitudesPendientes ? ` <span class="badge warning">${resumen.solicitudesPendientes}</span>` : ''}</a>`).join('')}</div>
+    <div class="chips">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? 'active' : ''}" href="#/admin?tab=${k}">${l}${k === 'solicitudes' && resumen.solicitudesPendientes ? ` <span class="badge warning">${resumen.solicitudesPendientes}</span>` : ''}${k === 'cuentas' && resumen.cuentasPendientes ? ` <span class="badge warning">${resumen.cuentasPendientes}</span>` : ''}</a>`).join('')}</div>
     <div data-body></div>`;
   const body = el.querySelector('[data-body]');
   if (tab === 'resumen') await resumenTab(body, resumen);
   else if (tab === 'biblioteca') await bibliotecaTab(body);
   else if (tab === 'usuarios') await usuariosTab(body);
+  else if (tab === 'cuentas') await cuentasTab(body);
   else await solicitudesTab(body);
 }
 
@@ -159,6 +160,29 @@ async function usuariosTab(el) {
         toast('Correo marcado como verificado');
       }
     } catch (err) { errorToast(err); }
+  });
+}
+
+/** Cuentas recién creadas que esperan aprobación (también llegan por correo a los administradores). */
+async function cuentasTab(el) {
+  const list = await api('/api/admin/cuentas/pendientes');
+  if (!list.length) { el.innerHTML = emptyState('checkCircle', 'No hay cuentas por aprobar', 'Cuando alguien se registre aparecerá aquí y recibirás un correo.'); return; }
+  el.innerHTML = list.map((u) => `<div class="request" data-u="${u.id}">${avatarHtml(u)}
+    <div class="grow"><strong>${esc(u.nombreDisplay || u.username)}</strong> <span class="muted">@${esc(u.username)} · ${esc(u.email)}</span>
+      <div class="muted" style="font-size:12px">Se registró ${timeAgo(u.fechaRegistro)}</div></div>
+    <div class="row"><button class="btn primary sm" data-ok>${icon('check', 'sm')} Aprobar</button><button class="btn danger sm" data-no>Rechazar</button></div></div>`).join('');
+  el.addEventListener('click', async (e) => {
+    const box = e.target.closest('[data-u]');
+    if (!box) return;
+    const ok = e.target.closest('[data-ok]'), no = e.target.closest('[data-no]');
+    if (!ok && !no) return;
+    (ok || no).disabled = true;
+    try {
+      await api(`/api/admin/cuentas/${box.dataset.u}/${ok ? 'aprobar' : 'rechazar'}`, { method: 'POST' });
+      box.remove();
+      toast(ok ? 'Cuenta aprobada · le avisamos por correo' : 'Cuenta rechazada');
+      if (!el.querySelector('[data-u]')) cuentasTab(el);
+    } catch (err) { (ok || no).disabled = false; errorToast(err); }
   });
 }
 

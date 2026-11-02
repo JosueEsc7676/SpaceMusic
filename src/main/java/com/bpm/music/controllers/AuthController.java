@@ -44,6 +44,17 @@ public class AuthController {
         return respuesta(auth.registrar(b.get("email"), b.get("username"), b.get("password"), b.get("nombreDisplay")));
     }
 
+    /** Enlace del correo de los administradores: ver la cuenta y aprobarla o rechazarla. */
+    @GetMapping("/aprobacion")
+    public ResponseEntity<Map<String, Object>> aprobacion(@RequestParam(required = false) String token) {
+        return respuesta(auth.cuentaPorToken(token));
+    }
+
+    @PostMapping("/aprobacion")
+    public ResponseEntity<Map<String, Object>> resolverAprobacion(@RequestBody Map<String, Object> b) {
+        return respuesta(auth.resolverPorToken((String) b.get("token"), Boolean.TRUE.equals(b.get("aprobar"))));
+    }
+
     @GetMapping("/verify")
     public ResponseEntity<Void> verify(@RequestParam(required = false) String token) {
         var r = auth.verificarEmail(token);

@@ -74,9 +74,9 @@ export function coverImg(url, size = 300, alt = '', cls = '') {
 export function mosaic(urls, size = 300) {
   const u = [...new Set((urls || []).filter(Boolean))];
   if (u.length === 0) return `<div class="cover-fallback">${icon('note')}</div>`;
-  if (u.length < 4) return `<div class="mosaic one"><img src="${esc(cover(u[0], size))}" alt="" loading="lazy" data-fallback></div>`;
-  const half = size >= 300 ? 300 : 160;
-  return `<div class="mosaic">${u.slice(0, 4).map((x) => `<img src="${esc(cover(x, half))}" alt="" loading="lazy" data-fallback>`).join('')}</div>`;
+  if (u.length < 4) return `<div class="mosaic one"><img src="${esc(cover(u[0], size))}" alt="" loading="lazy" decoding="async" data-fallback></div>`;
+  const half = size >= 600 ? 300 : 160; // cada cuadro ocupa la mitad: basta una miniatura más pequeña
+  return `<div class="mosaic">${u.slice(0, 4).map((x) => `<img src="${esc(cover(x, half))}" alt="" loading="lazy" decoding="async" data-fallback>`).join('')}</div>`;
 }
 
 export function debounce(fn, ms) {
@@ -124,7 +124,7 @@ export const bus = {
 /** Color dominante de una imagen (para los fondos). Devuelve [r,g,b]. */
 const colorCache = new Map();
 export function dominantColor(url) {
-  if (!url) return Promise.resolve([30, 215, 96]);
+  if (!url) return Promise.resolve([70, 66, 92]);
   const key = cover(url, 64);
   if (colorCache.has(key)) return Promise.resolve(colorCache.get(key));
   return new Promise((resolve) => {

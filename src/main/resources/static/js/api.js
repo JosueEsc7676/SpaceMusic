@@ -29,6 +29,8 @@ export const session = {
 
 export function logout(reason) {
   session.clear();
+  // Los datos y canciones guardados sin conexión son de esta cuenta: se borran al salir
+  try { navigator.serviceWorker?.controller?.postMessage({ tipo: 'limpiar-usuario' }); } catch { }
   const p = new URLSearchParams();
   if (reason) p.set('motivo', reason);
   if (reason && location.hash.length > 2) p.set('next', location.hash);

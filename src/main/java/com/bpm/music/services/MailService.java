@@ -64,6 +64,29 @@ public class MailService {
     }
 
     @Async
+    public void nuevaCuentaPendiente(String adminEmail, String adminNombre, String nombre, String username,
+                                     String email, String token) {
+        enviar(adminEmail, "Nueva cuenta por aprobar: " + username,
+                "Hola " + adminNombre,
+                nombre + " (@" + username + ", " + email + ") acaba de crear una cuenta en SpaceMusic y espera tu aprobación.",
+                "Revisar y aprobar", url("/aprobar.html?token=" + token),
+                "También puedes aprobarla desde Administración → Cuentas nuevas.");
+    }
+
+    @Async
+    public void cuentaResuelta(String email, String nombre, boolean aprobada) {
+        if (aprobada) {
+            enviar(email, "Tu cuenta de SpaceMusic está lista", "¡Bienvenido, " + nombre + "!",
+                    "Un administrador aprobó tu cuenta. Ya puedes entrar y empezar a escuchar.",
+                    "Entrar a SpaceMusic", url("/login.html"), "");
+        } else {
+            enviar(email, "Sobre tu cuenta de SpaceMusic", "Hola " + nombre,
+                    "Tu solicitud de cuenta no fue aprobada. Si crees que es un error, responde a este correo.",
+                    "Abrir SpaceMusic", url("/login.html"), "");
+        }
+    }
+
+    @Async
     public void solicitudResuelta(String email, String nombre, boolean aprobada, String nota) {
         String texto = aprobada
                 ? "¡Tu solicitud para ser colaborador fue aprobada! Ya puedes subir canciones, letras y editar datos."
@@ -87,12 +110,12 @@ public class MailService {
             h.setSubject(asunto);
             String e = HtmlUtils.htmlEscape(enlace);
             String html = """
-                <div style="background:#0b0b0f;padding:32px 12px;font-family:Segoe UI,Helvetica,Arial,sans-serif">
-                  <div style="max-width:480px;margin:0 auto;background:#16161d;border-radius:16px;padding:32px;color:#eaeaf0">
-                    <div style="font-size:20px;font-weight:800;color:#1ed760;margin-bottom:24px">&#9835; SpaceMusic</div>
+                <div style="background:#000;padding:32px 12px;font-family:Segoe UI,Helvetica,Arial,sans-serif">
+                  <div style="max-width:480px;margin:0 auto;background:#111114;border:1px solid #26262c;border-radius:20px;padding:32px;color:#f2f2f5">
+                    <div style="margin-bottom:24px;font-size:19px;font-weight:800;color:#fff"><span style="display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;background:#000;border:1px solid #333;border-radius:8px;margin-right:8px">&#9835;</span>SpaceMusic</div>
                     <h1 style="font-size:22px;margin:0 0 12px">%s</h1>
                     <p style="font-size:15px;line-height:1.6;color:#b9b9c6;margin:0 0 24px">%s</p>
-                    <a href="%s" style="display:inline-block;background:#1ed760;color:#000;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">%s</a>
+                    <a href="%s" style="display:inline-block;background:#fff;color:#000;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">%s</a>
                     <p style="font-size:12px;color:#77778a;margin:24px 0 0;word-break:break-all">O copia este enlace: %s</p>
                     <p style="font-size:12px;color:#77778a;margin:12px 0 0">%s</p>
                   </div>

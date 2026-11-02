@@ -20,8 +20,10 @@ public class AdminController {
     private final UsuarioRepository usuarios;
     private final EscanerService escaner;
     private final MailService mail;
+    private final AuthService auth;
 
-    public AdminController(UsuarioRepository usuarios, EscanerService escaner, MailService mail) {
+    public AdminController(UsuarioRepository usuarios, EscanerService escaner, MailService mail, AuthService auth) {
+        this.auth = auth;
         this.usuarios = usuarios;
         this.escaner = escaner;
         this.mail = mail;
@@ -34,6 +36,21 @@ public class AdminController {
         return usuarios.findAll().stream()
                 .sorted(Comparator.comparing(Usuario::getId))
                 .map(this::toMap).toList();
+    }
+
+    @GetMapping("/cuentas/pendientes")
+    public List<Map<String, Object>> cuentasPendientes() {
+        return usuarios.findByEstadoCuentaOrderByFechaRegistroDesc(Usuario.EstadoCuenta.PENDIENTE).stream().map(this::toMap).toList();
+    }
+
+    @PostMapping("/cuentas/{userId}/aprobar")
+    public Map<String, Object> aprobarCuenta(@PathVariable Long userId) {
+        return auth.resolverCuenta(usuario(userId), true);
+    }
+
+    @PostMapping("/cuentas/{userId}/rechazar")
+    public Map<String, Object> rechazarCuenta(@PathVariable Long userId) {
+        return auth.resolverCuenta(usuario(userId), false);
     }
 
     @GetMapping("/solicitudes")
@@ -120,6 +137,8 @@ public class AdminController {
         r.put("inactivos", todos.stream().filter(u -> !u.isActivo()).count());
         r.put("solicitudesPendientes", todos.stream()
                 .filter(u -> u.getSolicitudColaborador() == Usuario.EstadoSolicitud.PENDIENTE).count());
+        r.put("cuentasPendientes", todos.stream()
+                .filter(u -> u.getEstadoCuenta() == Usuario.EstadoCuenta.PENDIENTE).count());
         r.put("correoConfigurado", mail.configurado());
         return r;
     }
@@ -168,6 +187,8 @@ public class AdminController {
         Map<String, Object> m = new LinkedHashMap<>(AuthService.perfilPublico(u));
         m.put("activo", u.isActivo());
         m.put("emailVerificado", u.isEmailVerificado());
+        m.put("estadoCuenta", u.getEstadoCuenta().name());
+        m.put("fechaRegistro", u.getFechaRegistro());
         m.put("motivoSolicitud", u.getMotivoSolicitud());
         m.put("fechaSolicitud", u.getFechaSolicitud());
         return m;

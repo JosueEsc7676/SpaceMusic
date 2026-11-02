@@ -16,12 +16,15 @@ import { albumView, artistView, playlistView, likedView, genreView, mixView, his
 import { profileView, statsView, applyAccent, avatarHtml, openEqualizer } from './views/account.js';
 import { adminView, uploadView } from './views/admin.js';
 import { pintarCuerpo, ocultarSplash } from './splash.js';
+import { iniciarOffline } from './offline.js';
+import { iniciarNativo, modoLigero } from './nativo.js';
 
 if (!session.valid()) {
   logout(session.token ? 'expirada' : '');
   throw new Error('Sin sesión');
 }
 applyAccent();
+modoLigero();
 
 // ═══════════════════ Estructura de la página ═══════════════════
 
@@ -143,7 +146,7 @@ function paintSidebar() {
   const { path } = parse();
   const ctxRoute = player.context?.route;
   const fav = `<a class="side-item ${path === '/favoritos' ? 'active' : ''} ${ctxRoute === '#/favoritos' ? 'playing' : ''}" href="#/favoritos">
-    <div class="thumb" style="background:linear-gradient(135deg,#4a1fb8,#8fa7d8);display:grid;place-items:center">${icon('heartFill')}</div>
+    <div class="thumb art-liked">${icon('heartFill')}</div>
     <div class="meta"><div class="t ellipsis">Me gusta</div><div class="s">${plural(lib.favs.size, 'canción', 'canciones')}</div></div></a>`;
   const items = lib.playlists.map((p) => `<a class="side-item ${path === '/playlist/' + p.id ? 'active' : ''} ${ctxRoute === '#/playlist/' + p.id ? 'playing' : ''}" href="#/playlist/${p.id}">
     <div class="thumb" style="overflow:hidden">${playlistArt(p, 160)}</div>
@@ -512,10 +515,13 @@ async function boot() {
   if (session.isAdmin) {
     api('/api/admin/resumen').then((r) => {
       const b = $('[data-pending]');
-      if (r.solicitudesPendientes) { b.textContent = r.solicitudesPendientes; b.classList.remove('hidden'); }
+      const n = (r.solicitudesPendientes || 0) + (r.cuentasPendientes || 0);
+      if (n) { b.textContent = n; b.classList.remove('hidden'); }
     }).catch(() => { });
   }
   registrarServiceWorker();
+  iniciarOffline({ toast });
+  iniciarNativo();
 }
 
 /** Guarda la app en el dispositivo y avisa cuando hay una versión nueva. */
