@@ -1,6 +1,6 @@
 // Modo sin conexión: guarda en el dispositivo lo que escuchas, sin descargas manuales.
 // El service worker (sw.js) sirve luego esas canciones, portadas y datos cuando no hay red.
-import { audioUrl, downloadUrl } from './api.js';
+import { audioUrl, downloadUrl, deUsuario } from './api.js';
 import { bus } from './util.js';
 import { player } from './player.js';
 
@@ -12,8 +12,8 @@ const ahorroDatos = () => !!navigator.connection?.saveData;
 const CLAVE = 'sm_descargadas';
 
 // ── Descargas a mano (permanentes) ──
-function leer() { try { return JSON.parse(localStorage.getItem(CLAVE) || '{}'); } catch { return {}; } }
-function escribir(m) { try { localStorage.setItem(CLAVE, JSON.stringify(m)); } catch { } }
+function leer() { try { localStorage.removeItem(CLAVE); return JSON.parse(localStorage.getItem(deUsuario(CLAVE)) || '{}'); } catch { return {}; } }
+function escribir(m) { try { localStorage.setItem(deUsuario(CLAVE), JSON.stringify(m)); } catch { } }
 
 /** Canciones descargadas en este dispositivo (las más recientes primero). */
 export function descargadas() {

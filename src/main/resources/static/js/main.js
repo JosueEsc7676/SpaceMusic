@@ -1,6 +1,6 @@
 // Punto de entrada de la aplicación
 import { api, session, logout } from './api.js';
-import { $, $$, esc, bus, debounce, fmtTime, cover, coverImg, dominantColor, isMobile, plural } from './util.js';
+import { $, $$, esc, bus, debounce, fmtTime, cover, coverImg, dominantColor, isMobile, plural , esIOS } from './util.js';
 import { icon } from './icons.js';
 import { lib } from './state.js';
 import { player, sleep, prefs } from './player.js';
@@ -25,6 +25,13 @@ if (!session.valid()) {
 }
 applyAccent();
 modoLigero();
+if (esIOS) {
+  document.documentElement.classList.add('ios');
+  // iOS 17+: tratar el audio como reproducción de música (sigue sonando con la pantalla bloqueada)
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { }
+  prefs.visualizer = false;
+  prefs.eqEnabled = false;
+}
 
 // ═══════════════════ Estructura de la página ═══════════════════
 
@@ -523,6 +530,22 @@ async function boot() {
   registrarServiceWorker();
   iniciarOffline({ toast });
   iniciarNativo();
+  mostrarNovedades();
+}
+
+/** Aviso de actualización: muestra una vez las novedades de cada versión. */
+async function mostrarNovedades() {
+  try {
+    const n = await fetch('/app/novedades.json', { cache: 'no-store' }).then((r) => r.json());
+    const visto = localStorage.getItem('sm_novedades');
+    if (!n?.version || visto === n.version) return;
+    localStorage.setItem('sm_novedades', n.version);
+    setTimeout(() => modal({
+      title: n.titulo || 'Novedades',
+      body: `<ul class="novedades">${(n.puntos || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`,
+      actions: [{ label: 'Entendido', primary: true, value: true }],
+    }), 1800);
+  } catch { /* sin conexión */ }
 }
 
 /** Guarda la app en el dispositivo y avisa cuando hay una versión nueva. */

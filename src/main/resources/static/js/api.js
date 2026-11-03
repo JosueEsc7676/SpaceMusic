@@ -27,7 +27,12 @@ export const session = {
   get canEdit() { return this.role === 'ADMIN' || this.role === 'COLABORADOR'; },
 };
 
+/** Clave de almacenamiento propia de la cuenta abierta (así no se mezclan datos entre usuarios del mismo equipo). */
+export const deUsuario = (clave) => `${clave}:${session.user?.id ?? 'anon'}`;
+
 export function logout(reason) {
+  // Para la música de esta cuenta antes de salir
+  try { document.querySelectorAll('audio').forEach((a) => a.pause()); } catch { }
   session.clear();
   // Los datos y canciones guardados sin conexión son de esta cuenta: se borran al salir
   try { navigator.serviceWorker?.controller?.postMessage({ tipo: 'limpiar-usuario' }); } catch { }

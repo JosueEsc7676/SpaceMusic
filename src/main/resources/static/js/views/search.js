@@ -1,18 +1,19 @@
 // Búsqueda
-import { api } from '../api.js';
+import { api , deUsuario } from '../api.js';
 import { esc, store, coverImg, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { setHero, setTitle } from '../router.js';
 import { trackList, cardAlbum, cardArtist, cardPlaylist, cardGenre, section, emptyState, registerList } from '../ui.js';
 
-const RECENT = 'sm_busquedas';
+const RECENT_BASE = 'sm_busquedas';
+const RECENT_KEY = () => deUsuario(RECENT_BASE); // cada cuenta ve sus propias búsquedas
 
 export function addRecentSearch(q) {
   q = q.trim();
   if (q.length < 2) return;
-  const r = store.get(RECENT, []).filter((x) => x.toLowerCase() !== q.toLowerCase());
+  const r = store.get(RECENT_KEY(), []).filter((x) => x.toLowerCase() !== q.toLowerCase());
   r.unshift(q);
-  store.set(RECENT, r.slice(0, 10));
+  store.set(RECENT_KEY(), r.slice(0, 10));
 }
 
 let generosCache = null;
@@ -26,7 +27,7 @@ export async function searchView(el, _p, query, isStale) {
   if (!q) {
     if (!generosCache) generosCache = await api('/api/generos').catch(() => []);
     if (isStale()) return;
-    const recientes = store.get(RECENT, []);
+    const recientes = store.get(RECENT_KEY(), []);
     el.innerHTML = `
       ${recientes.length ? section('Búsquedas recientes', `<div class="recent-searches">${recientes.map((r) =>
         `<a class="chip" href="#/buscar?q=${encodeURIComponent(r)}">${icon('history', 'sm')} ${esc(r)}</a>`).join('')}
@@ -34,7 +35,7 @@ export async function searchView(el, _p, query, isStale) {
       ${generosCache.length ? section('Explorar todo', `<div class="genre-grid">${generosCache.map(cardGenre).join('')}</div>`) :
         emptyState('search', 'Busca canciones, artistas y álbumes', 'Escribe arriba lo que quieras escuchar. No importan los acentos ni pequeños errores.')}
     `;
-    el.querySelector('[data-clear-recent]')?.addEventListener('click', () => { store.del(RECENT); el.querySelector('.recent-searches').closest('.section').remove(); });
+    el.querySelector('[data-clear-recent]')?.addEventListener('click', () => { store.del(RECENT_KEY()); el.querySelector('.recent-searches').closest('.section').remove(); });
     return;
   }
 

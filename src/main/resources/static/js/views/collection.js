@@ -24,6 +24,23 @@ function head({ kind, title, art, round = false, meta = '', desc = '', editable 
 
 const sep = '<span class="sep"></span>';
 
+/** Botón "Guardar en biblioteca" para álbumes y playlists públicas de otros. */
+function botonGuardar(tipo, clave) {
+  const g = lib.estaGuardado(tipo, clave);
+  return `<button class="btn ${g ? '' : 'outline'} sm" data-guardar aria-pressed="${g}">${icon(g ? 'check' : 'plus', 'sm')} ${g ? 'En tu biblioteca' : 'Guardar en biblioteca'}</button>`;
+}
+function conectarGuardar(el, tipo, clave) {
+  const b = el.querySelector('[data-guardar]');
+  b?.addEventListener('click', async () => {
+    try {
+      const g = await lib.toggleGuardado(tipo, clave);
+      b.outerHTML = botonGuardar(tipo, clave);
+      conectarGuardar(el, tipo, clave);
+      toast(g ? 'Guardado en tu biblioteca' : 'Quitado de tu biblioteca');
+    } catch (e) { errorToast(e); }
+  });
+}
+
 function actions({ playId = 'play', extra = '', filter = false, liked = null }) {
   return `<div class="actions-bar">
     <button class="play-fab" data-${playId} aria-label="Reproducir">${icon('play')}</button>
@@ -121,9 +138,10 @@ export async function albumView(el, { nombre }, _q, isStale) {
     kind: 'Álbum', title: a.nombre, art: coverImg(a.portadaUrl, 640, a.nombre),
     meta: `${artistLink}${a.anio ? sep + a.anio : ''}${sep}${plural(a.totalCanciones, 'canción', 'canciones')}, <span class="muted">${fmtLong(a.duracionTotal)}</span>`,
   })
-    + actions({ liked: a.canciones.every((s) => lib.isFav(s.id)) })
+    + actions({ liked: a.canciones.every((s) => lib.isFav(s.id)), extra: botonGuardar('album', a.nombre) })
     + trackList(a.canciones, { context: ctx, showAlbum: false, showCover: a.artista === 'Varios artistas', numbers: 'track' })
     + (otros.length ? `<div style="height:36px"></div>` + section('Más de ' + a.artista, `<div class="grid">${otros.slice(0, 6).map(cardAlbum).join('')}</div>`, { more: '#/artista/' + encodeURIComponent(a.artista) }) : '');
+  conectarGuardar(el, 'album', a.nombre);
   wire(el, () => a.canciones, ctx, () => [
     a.artista !== 'Varios artistas' ? { label: 'Ir al artista', icon: 'user', fn: () => go('/artista/' + encodeURIComponent(a.artista)) } : null,
     { label: 'Crear playlist con este álbum', icon: 'plus', fn: () => editPlaylist(null, a.canciones).then((p) => p && go('/playlist/' + p.id)) },
@@ -183,7 +201,7 @@ export async function playlistView(el, { id }, _q, isStale) {
       editable: p.propia,
       meta: `<strong>${esc(autor)}</strong>${sep}${plural(canciones.length, 'canción', 'canciones')}${canciones.length ? `, <span class="muted">${fmtLong(p.duracionTotal)}</span>` : ''}`,
     })
-      + actions({ filter: canciones.length > 8, extra: p.propia ? '' : `<button class="btn outline sm" data-save>${icon('plus', 'sm')} Guardar copia</button>` })
+      + actions({ filter: canciones.length > 8, extra: p.propia ? '' : botonGuardar('playlist', p.id) })
       + (canciones.length
         ? `<div id="pltracks">${trackList(canciones, { context: ctx, playlist: p.propia ? p.id : null })}</div>`
         : emptyState('note', 'Esta playlist está vacía', 'Busca canciones y usa “Agregar a playlist” en su menú.', `<a class="btn primary" href="#/buscar">Buscar canciones</a>`))
@@ -201,7 +219,7 @@ export async function playlistView(el, { id }, _q, isStale) {
       { label: 'Guardar una copia en mi biblioteca', icon: 'copy', fn: duplicar },
     ]);
     el.querySelector('[data-edit-cover]')?.addEventListener('click', edit);
-    el.querySelector('[data-save]')?.addEventListener('click', duplicar);
+    if (!p.propia) conectarGuardar(el, 'playlist', p.id);
 
     const tl = el.querySelector('#pltracks .tracks');
     if (tl && p.propia) {

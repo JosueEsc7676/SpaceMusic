@@ -31,7 +31,9 @@ self.addEventListener('message', (e) => {
   const d = e.data;
   if (d === 'activar') { self.skipWaiting(); return; }
   if (d?.tipo === 'guardar-audio') e.waitUntil(guardarAudio(d.url, d.clave));
-  if (d?.tipo === 'limpiar-usuario') e.waitUntil(Promise.all([caches.delete(API), caches.delete(AUDIO), caches.delete(DESCARGAS)]));
+  // Al cerrar sesión se borran los datos de la cuenta; las canciones descargadas se conservan
+  // (cada cuenta solo ve su propia lista de descargas)
+  if (d?.tipo === 'limpiar-usuario') e.waitUntil(caches.delete(API));
   if (d?.tipo === 'descargar-audio') e.waitUntil(descargar(d.url, d.id).then((ok) => avisar({ tipo: 'descarga', id: d.id, ok })));
   if (d?.tipo === 'quitar-descarga') e.waitUntil(caches.open(DESCARGAS).then((c) => c.delete(`/offline/audio/${d.id}`)));
   if (d?.tipo === 'estado-offline') e.waitUntil(contarAudio().then((n) => e.source?.postMessage({ tipo: 'estado-offline', canciones: n })));
@@ -142,7 +144,7 @@ async function portada(req) {
 }
 
 // Datos de la API que conviene tener sin conexión (solo lectura)
-const API_OFFLINE = /^\/api\/(inicio|buscar|albumes|artistas|generos|mixes|playlists|letras|canciones\/\d+$|canciones\/(recientes|top|favoritos)|usuario\/favoritos|historial|biblioteca)/;
+const API_OFFLINE = /^\/api\/(inicio|buscar|albumes|artistas|generos|mixes|playlists|letras|canciones\/\d+$|canciones\/(recientes|top|favoritos)|usuario\/favoritos|usuario\/guardados|historial|biblioteca)/;
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;

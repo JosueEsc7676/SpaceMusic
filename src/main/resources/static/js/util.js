@@ -103,6 +103,10 @@ export function shuffleArr(a) {
   return r;
 }
 
+/** iPhone / iPad (incluye iPad con "sitio de escritorio"). */
+export const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
 // ── Almacenamiento local seguro (modo privado, cuota llena, etc.) ──
 export const store = {
   get(k, def = null) {

@@ -1,4 +1,12 @@
 {
-  "movil": { "code": 2, "nombre": "1.1", "url": "/app/SpaceMusic.apk" },
-  "tv": { "code": 1, "nombre": "1.0", "url": "/app/SpaceMusic-TV.apk" }
+  "movil": {
+    "code": 3,
+    "nombre": "1.2",
+    "url": "/app/SpaceMusic.apk"
+  },
+  "tv": {
+    "code": 1,
+    "nombre": "1.0",
+    "url": "/app/SpaceMusic-TV.apk"
+  }
 }

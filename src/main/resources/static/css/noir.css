@@ -335,3 +335,9 @@ html.lite .topbar.solid, html.lite .menu, html.lite .player { background: #11111
 /* Dentro de la app de Android: sin resaltado al tocar y sin rebote */
 html.in-app, html.in-app body { overscroll-behavior: none; }
 html.in-app * { -webkit-tap-highlight-color: transparent; }
+
+/* iPhone: el volumen se controla con los botones del teléfono (Safari no deja cambiarlo desde la web) */
+html.ios .volume, html.ios .np-vol, html.ios [data-eq] { display: none !important; }
+
+.novedades { margin: 0; padding-left: 20px; display: grid; gap: 10px; color: var(--text-2); line-height: 1.45; }
+.novedades li::marker { color: #b4a5ff; }

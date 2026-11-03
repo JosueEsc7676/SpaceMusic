@@ -211,7 +211,7 @@ export function cardPlaylist(p) {
   return `<a class="card" href="#/playlist/${p.id}">
     <div class="art">${playlistArt(p)}${p.cancionesCount ? playBtn(`data-act="play-playlist" data-id="${p.id}"`) : ''}</div>
     <div class="t ellipsis">${esc(p.nombre)}</div>
-    <div class="s">${p.propia === false && p.autor ? 'De ' + esc(p.autor) : 'Playlist'} • ${plural(p.cancionesCount, 'canción', 'canciones')}</div>
+    <div class="s">${p.propia === false ? `<span class="badge">${icon('globe', 'sm')} Pública</span> ${p.autor ? 'de ' + esc(p.autor) : ''}` : 'Playlist'} • ${plural(p.cancionesCount, 'canción', 'canciones')}</div>
   </a>`;
 }
 

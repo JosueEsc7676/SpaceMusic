@@ -94,8 +94,8 @@ export async function homeView(el, _p, _q, isStale) {
     ${d.tendencias?.length ? section('Tendencias de la semana', ranking(d.tendencias, { type: 'tendencias', label: 'Tendencias' }), { eyebrow: 'Lo más escuchado por todos' }) : ''}
     ${section('Lo que más escuchas', songShelf(d.tusFavoritas, { type: 'top', label: 'Lo que más escuchas' }), { eyebrow: 'Últimos 30 días', more: '#/estadisticas' })}
     ${section('Recién llegadas', songShelf(d.recienAgregadas, { type: 'nuevas', label: 'Recién agregadas' }), { eyebrow: 'Nuevo en el servidor' })}
-    ${section('Álbumes', shelf((d.albumesRecientes || []).map(cardAlbum).join('')), { more: '#/biblioteca?tab=albumes' })}
-    ${section('Artistas', shelf((d.artistas || []).map(cardArtist).join('')), { more: '#/biblioteca?tab=artistas' })}
+    ${section('Álbumes', shelf((d.albumesRecientes || []).map(cardAlbum).join('')))}
+    ${section('Artistas', shelf((d.artistas || []).map(cardArtist).join('')))}
     ${section('De la comunidad', shelf((d.playlistsPublicas || []).map(cardPlaylist).join('')), { eyebrow: 'Playlists públicas' })}
     ${d.generos?.length ? section('Explora por género', `<div class="genre-grid">${d.generos.slice(0, 8).map(cardGenre).join('')}</div>`, { more: '#/buscar' }) : ''}
     ${!d.recientes?.length && d.top?.length ? section('Más reproducidas', songShelf(d.top, { type: 'top', label: 'Más reproducidas' })) : ''}

@@ -9,7 +9,7 @@ import { descargadas } from '../offline.js';
 
 let cache = { artistas: null, albumes: null, publicas: null, t: 0 };
 
-const TABS = [['playlists', 'Playlists', 'library'], ['descargadas', 'Descargadas', 'download'], ['artistas', 'Artistas', 'user'], ['albumes', 'Álbumes', 'disc'], ['comunidad', 'Comunidad', 'globe']];
+const TABS = [['playlists', 'Playlists', 'library'], ['albumes', 'Álbumes', 'disc'], ['descargadas', 'Descargadas', 'download']];
 
 /** Fila de la vista en lista. */
 function fila({ href, art, t, s, round = false }) {
@@ -18,23 +18,27 @@ function fila({ href, art, t, s, round = false }) {
 }
 
 export async function libraryView(el, _p, query, isStale) {
-  const tab = query.tab || store.get('sm_lib_tab', 'playlists');
+  let tab = query.tab || store.get('sm_lib_tab', 'playlists');
+  if (!TABS.some(([k]) => k === tab)) tab = 'playlists'; // pestañas antiguas (Artistas, Comunidad)
   store.set('sm_lib_tab', tab);
   setTitle('Biblioteca');
   setHero(null);
 
   if (Date.now() - cache.t > 60000) {
-    const [artistas, albumes, publicas] = await Promise.all([
+    const [albumes, publicas] = await Promise.all([
       // Sin conexión se muestran listas vacías (las descargas siguen disponibles)
-      api('/api/artistas').catch(() => []), api('/api/albumes').catch(() => []), api('/api/playlists/publicas').catch(() => []),
+      api('/api/albumes').catch(() => []), api('/api/playlists/publicas').catch(() => []),
     ]);
-    cache = { artistas, albumes, publicas, t: Date.now() };
+    cache = { artistas: [], albumes, publicas, t: Date.now() };
   }
   if (isStale()) return;
 
   const sort = store.get('sm_lib_sort', 'reciente');
   const vista = store.get('sm_lib_view', 'grid');
-  const resumen = [plural(lib.playlists.length, 'playlist', 'playlists'), plural(cache.artistas.length, 'artista', 'artistas'), plural(cache.albumes.length, 'álbum', 'álbumes')].join(' · ');
+  // Solo lo que el usuario guardó: sus playlists, las públicas que guardó y sus álbumes
+  const guardadas = cache.publicas.filter((x) => lib.estaGuardado('playlist', x.id)).map((x) => ({ ...x, propia: false }));
+  const albumesGuardados = cache.albumes.filter((x) => lib.estaGuardado('album', x.nombre));
+  const resumen = [plural(lib.playlists.length + guardadas.length, 'playlist', 'playlists'), plural(albumesGuardados.length, 'álbum', 'álbumes'), plural(descargadas().length, 'descarga', 'descargas')].join(' · ');
 
   el.innerHTML = `
     <header class="lib-head">
@@ -79,10 +83,10 @@ export async function libraryView(el, _p, query, isStale) {
           ${lib.favs.size ? `<button class="play-fab" data-act="play-liked" aria-label="Reproducir">${icon('play')}</button>` : ''}</a>
         <a class="feature-tile art-history" href="#/historial">${icon('history', 'xl')}<div><b>Escuchado recientemente</b><small>Tu historial</small></div></a>
       </div>`;
-      const pls = by(lib.playlists, (p) => p.nombre, (p) => p.cancionesCount, (p) => p.fechaActualizacion || p.fechaCreacion);
+      const pls = by([...lib.playlists, ...guardadas], (p) => p.nombre, (p) => p.cancionesCount, (p) => p.fechaActualizacion || p.fechaCreacion);
       html = fijos + pinta(pls, cardPlaylist,
-        (p) => fila({ href: '#/playlist/' + p.id, art: playlistArt(p, 160), t: p.nombre, s: 'Playlist · ' + plural(p.cancionesCount, 'canción', 'canciones') }),
-        q ? emptyState('search', 'Ninguna playlist coincide') : emptyState('library', 'Crea tu primera playlist', 'Guarda tus canciones favoritas en listas para escucharlas cuando quieras.'));
+        (p) => fila({ href: '#/playlist/' + p.id, art: playlistArt(p, 160), t: p.nombre, s: (p.propia === false ? `Pública${p.autor ? ' · de ' + esc(p.autor) : ''}` : 'Playlist') + ' · ' + plural(p.cancionesCount, 'canción', 'canciones') }),
+        q ? emptyState('search', 'Ninguna playlist coincide') : emptyState('library', 'Crea tu primera playlist', 'Guarda tus canciones en listas. Las playlists públicas que encuentres en el buscador también se pueden guardar aquí.'));
     } else if (tab === 'descargadas') {
       const d = descargadas().filter((x) => !q || norm(x.nombre + ' ' + x.artista).includes(q));
       html = d.length
@@ -94,10 +98,10 @@ export async function libraryView(el, _p, query, isStale) {
         (x) => fila({ href: '#/artista/' + encodeURIComponent(x.nombre), art: coverImg(x.portadaUrl, 160, x.nombre), t: x.nombre, s: 'Artista · ' + plural(x.totalCanciones, 'canción', 'canciones'), round: true }),
         emptyState('user', q ? 'Ningún artista coincide' : 'No hay artistas'));
     } else if (tab === 'albumes') {
-      const a = by(cache.albumes, (x) => x.nombre + ' ' + x.artista, (x) => x.reproducciones, (x) => x.anio || 0);
+      const a = by(albumesGuardados, (x) => x.nombre + ' ' + x.artista, (x) => x.reproducciones, (x) => x.anio || 0);
       html = pinta(a, cardAlbum,
         (x) => fila({ href: '#/album/' + encodeURIComponent(x.nombre), art: coverImg(x.portadaUrl, 160, x.nombre), t: x.nombre, s: (x.anio ? x.anio + ' · ' : '') + esc(x.artista) }),
-        emptyState('disc', q ? 'Ningún álbum coincide' : 'No hay álbumes', 'Las canciones con el álbum “Single” aparecen en su artista.'));
+        emptyState('disc', q ? 'Ningún álbum coincide' : 'Aún no guardas álbumes', 'Abre un álbum y toca “Guardar en biblioteca” para tenerlo aquí.'));
     } else {
       const a = by(cache.publicas, (x) => x.nombre, (x) => x.cancionesCount, (x) => x.fechaActualizacion);
       html = pinta(a, cardPlaylist,

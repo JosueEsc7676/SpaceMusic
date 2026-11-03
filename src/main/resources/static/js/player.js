@@ -1,7 +1,7 @@
 // Motor de reproducción: cola, aleatorio, repetir, radio automática,
 // registro de escuchas, sesión de medios, temporizador y ecualizador.
-import { api, audioUrl } from './api.js';
-import { bus, store, shuffleArr, cover } from './util.js';
+import { api, audioUrl , session, deUsuario} from './api.js';
+import { bus, store, shuffleArr, cover , esIOS } from './util.js';
 
 const SAVE_KEY = 'sm_player';
 const PREFS_KEY = 'sm_prefs';
@@ -312,9 +312,11 @@ export const player = {
   // ═══════════════════ Persistencia ═══════════════════
 
   _save() {
-    if (!this.items.length) { store.del(SAVE_KEY); return; }
+    // Solo se guarda para la cuenta con la que se abrió la página (nunca bajo otra cuenta)
+    if (!session.user?.id || session.user.id !== this._uid) return;
+    if (!this.items.length) { store.del(deUsuario(SAVE_KEY)); return; }
     const from = Math.max(0, this.index - 30);
-    store.set(SAVE_KEY, {
+    store.set(deUsuario(SAVE_KEY), {
       items: this.items.slice(from, this.index + 300).map(strip),
       index: this.index - from,
       time: audio.currentTime || 0,
@@ -328,7 +330,9 @@ export const player = {
     const v = store.get('sm_volume');
     if (v) { this.volume = v.v ?? 0.8; this.muted = !!v.m; }
     this._applyVolume();
-    const s = store.get(SAVE_KEY);
+    this._uid = session.user?.id ?? null;
+    store.del(SAVE_KEY); // formato anterior (compartido por todas las cuentas del equipo)
+    const s = store.get(deUsuario(SAVE_KEY));
     if (!s?.items?.length) return;
     this.items = s.items.map((x) => withUid(x));
     this.shuffle = !!s.shuffle;
@@ -473,6 +477,7 @@ export const fx = {
   /** Crea el grafo solo cuando hace falta (la primera vez que se usa el EQ o el visualizador). */
   ensure() {
     if (this.ctx) return true;
+    if (esIOS) return false; // en iPhone el ecualizador cortaría la música en segundo plano
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
     try {

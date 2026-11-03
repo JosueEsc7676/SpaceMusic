@@ -1,5 +1,24 @@
 # Registro de cambios
 
+## Versión 2.3 (app Android 1.2)
+- **Cada cuenta por separado:**
+  - lo que se escuchaba, la cola, las búsquedas recientes y la lista de descargas son de cada cuenta;
+  - al cerrar sesión se para la música;
+  - otra cuenta en el mismo equipo ya no ve lo de la anterior.
+- **Biblioteca:**
+  - pestañas *Playlists*, *Álbumes* y *Descargadas*; se quitan *Artistas* y *Comunidad*;
+  - *Álbumes* muestra solo los guardados con el botón **Guardar en biblioteca** de cada álbum;
+  - las playlists públicas de otros se guardan con el mismo botón y aparecen en *Playlists* marcadas como "Pública · de …";
+  - nueva tabla `usuario_guardado` y API `/api/usuario/guardados`.
+- **iPhone:**
+  - sin ecualizador ni visualizador (iOS cortaba la música al bloquear la pantalla o salir de Safari);
+  - la sesión de audio se marca como reproducción de música;
+  - la barra de volumen se oculta, porque Safari no deja cambiarlo desde la web: se usan los botones del teléfono.
+- **Volumen:** comprobado en computadora y Android. La barra usa una curva suave a propósito.
+- **Aviso "Novedades":** se muestra una vez a cada usuario después de la actualización (`/app/novedades.json`).
+- **App Android 1.2:** la app avisa e instala la actualización.
+- **Biblioteca sin repetidas:** se omitieron 15 canciones repetidas que se habían subido desde spotdown.
+
 ## Versión 2.2
 - **Descargador más estable** (`scripts/descargar`, instalado en el servidor como `descargar`, y `Descargar musica.bat`):
   - no repite canciones: lleva un historial de lo ya descargado, salta lo que ya existe y la biblioteca ignora una canción repetida (mismo título, artista principal y duración);
