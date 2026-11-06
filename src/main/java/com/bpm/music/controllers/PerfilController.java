@@ -1,9 +1,18 @@
 package com.bpm.music.controllers;
 
 import com.bpm.music.security.CurrentUser;
+import com.bpm.music.services.ImagenService;
 import com.bpm.music.services.PerfilService;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
 
 import java.util.List;
 import java.util.Map;
@@ -24,9 +33,46 @@ import java.util.Map;
 public class PerfilController {
 
     private final PerfilService perfiles;
+    private final ImagenService imagenes;
 
-    public PerfilController(PerfilService perfiles) {
+    public PerfilController(PerfilService perfiles, ImagenService imagenes) {
         this.perfiles = perfiles;
+        this.imagenes = imagenes;
+    }
+
+    // ── Foto de portada del perfil ──
+
+    @PostMapping("/perfiles/yo/banner")
+    public ResponseEntity<Map<String, Object>> subirBanner(@RequestParam("file") MultipartFile file) {
+        try {
+            Long id = CurrentUser.id();
+            String nombre = imagenes.guardar(file, "banners", "banner_" + id, 1800);
+            String url = "/api/perfiles/banner/" + nombre;
+            borrarBanner(perfiles.ponerBanner(id, url));
+            return ResponseEntity.ok(Map.of("ok", true, "banner", url));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage() == null ? "No se pudo guardar la imagen" : e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/perfiles/yo/banner")
+    public Map<String, Object> quitarBanner() {
+        borrarBanner(perfiles.ponerBanner(CurrentUser.id(), null));
+        return Map.of("ok", true);
+    }
+
+    private void borrarBanner(String url) {
+        if (url != null && url.startsWith("/api/perfiles/banner/")) imagenes.borrar("banners", url.substring("/api/perfiles/banner/".length()));
+    }
+
+    @GetMapping("/perfiles/banner/{archivo}")
+    public ResponseEntity<Resource> banner(@PathVariable String archivo) {
+        Path p = imagenes.resolver("banners", archivo);
+        if (p == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(ImagenService.tipoContenido(archivo)))
+                .cacheControl(CacheControl.maxAge(365, TimeUnit.DAYS).cachePublic().immutable())
+                .body(new FileSystemResource(p));
     }
 
     @GetMapping("/perfiles")

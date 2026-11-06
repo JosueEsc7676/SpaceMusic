@@ -11,8 +11,8 @@ export JAVA_HOME="${JAVA_HOME:-/c/Users/Josue/.jdks/liberica-full-21.0.8}"
 JBIN="$JAVA_HOME/bin"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 OUT="$DIR/build"
-VERSION_CODE="${VERSION_CODE:-4}"
-VERSION_NAME="${VERSION_NAME:-1.3}"
+VERSION_CODE="${VERSION_CODE:-5}"
+VERSION_NAME="${VERSION_NAME:-1.4}"
 
 rm -rf "$OUT" && mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/dex"
 

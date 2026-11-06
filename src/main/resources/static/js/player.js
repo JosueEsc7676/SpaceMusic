@@ -276,7 +276,7 @@ export const player = {
     this._save();
     // Si quedan pocas canciones y la radio está activa, prepararla
     if (prefs.autoRadio && this.repeat === 'off' && this.items.length - this.index <= 2 && this.context?.type !== 'cola') {
-      setTimeout(() => this._extendWithRadio(false), 4000);
+      setTimeout(() => this._extendWithRadio(false), 1500); // pronto, para que la siguiente ya se pueda precargar
     }
   },
 

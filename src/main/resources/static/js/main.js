@@ -18,6 +18,8 @@ import { adminView, uploadView } from './views/admin.js';
 import { pintarCuerpo, ocultarSplash } from './splash.js';
 import { iniciarOffline } from './offline.js';
 import { perfilPublicoView } from './views/people.js';
+import { mensajesView } from './views/mensajes.js';
+import { iniciarAvisos } from './avisos.js';
 import { iniciarNativo, modoLigero } from './nativo.js';
 
 if (!session.valid()) {
@@ -44,6 +46,7 @@ pintarCuerpo(`
       <a class="nav-link" href="#/" data-nav="/">${icon('home')}Inicio</a>
       <a class="nav-link" href="#/buscar" data-nav="/buscar">${icon('search')}Buscar</a>
       <a class="nav-link" href="#/biblioteca" data-nav="/biblioteca">${icon('library')}Tu biblioteca</a>
+      <a class="nav-link" href="#/mensajes" data-nav="/mensajes">${icon('chat')}Mensajes<span class="badge accent hidden" data-badge-msg></span></a>
       <a class="nav-link" href="#/estadisticas" data-nav="/estadisticas">${icon('chart')}Tus estadísticas</a>
       <a class="nav-link hidden" href="#/subir" data-nav="/subir" data-role="edit">${icon('upload')}Subir canciones</a>
       <a class="nav-link hidden" href="#/admin" data-nav="/admin" data-role="admin">${icon('shield')}Administración<span class="badge warning hidden" data-pending></span></a>
@@ -62,6 +65,8 @@ pintarCuerpo(`
         <button class="clear hidden" data-clear-search aria-label="Borrar búsqueda">${icon('close', 'sm')}</button></div>
       <div class="topbar-title ellipsis" id="topTitle"></div>
       <div class="spacer"></div>
+      <a class="round-btn top-ico" href="#/mensajes" aria-label="Mensajes" title="Mensajes">${icon('chat')}<i class="dot-badge hidden" data-badge-msg></i></a>
+      <button class="round-btn top-ico" data-notif-btn aria-label="Notificaciones" title="Notificaciones">${icon('bell')}<i class="dot-badge hidden" data-badge-notif></i></button>
       <button class="user-btn" data-user-menu aria-label="Tu cuenta"><span data-avatar></span><span class="name ellipsis" data-uname></span></button>
     </header>
     <div class="view" id="view"></div>
@@ -118,6 +123,8 @@ route('/genero/:nombre', genreView);
 route('/mix/:id', mixView);
 route('/perfil', profileView);
 route('/u/:username', perfilPublicoView);
+route('/mensajes', mensajesView);
+route('/mensajes/:username', mensajesView);
 route('/estadisticas', statsView);
 route('/admin', adminView);
 route('/subir', uploadView);
@@ -242,6 +249,8 @@ async function playCollection(kind, val) {
   } catch (err) { errorToast(err); }
 }
 
+const CONTEXTOS_SUELTOS = new Set(['busqueda', 'historial', 'top', 'tendencias', 'nuevas', 'amigos', 'perfil', 'recomendadas']);
+
 document.addEventListener('click', (e) => {
   if (e.target.closest('[data-stop]')) return; // enlaces dentro de filas
   const el = e.target.closest('[data-act]');
@@ -257,6 +266,12 @@ document.addEventListener('click', (e) => {
     const i = +el.dataset.i;
     const s = l.songs[i];
     if (player.current?.id === s.id && player.context?.route === l.context?.route) { player.toggle(); return; }
+    // Canción suelta (buscador, inicio, historial, perfiles…): suena esa y la radio sigue con
+    // canciones distintas del mismo estilo. En álbumes y playlists se respeta el orden de la lista.
+    if (prefs.autoRadio && CONTEXTOS_SUELTOS.has(l.context?.type)) {
+      player.playOne(s, { ...l.context, type: 'cancion', label: 'Radio de ' + s.nombre });
+      return;
+    }
     player.play(l.songs, i, l.context);
     return;
   }
@@ -534,6 +549,7 @@ async function boot() {
   iniciarNativo();
   mostrarNovedades();
   avisarActividad();
+  iniciarAvisos();
 }
 
 /** Comparte con tus amigos lo que suena (si lo permites en tu perfil). */

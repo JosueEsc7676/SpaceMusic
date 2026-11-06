@@ -30,6 +30,7 @@ public class PerfilService {
     private final PlaylistService playlists;
     private final BibliotecaService biblioteca;
     private final UsuarioReproduccionRepository repros;
+    private final com.bpm.music.repositories.NotificacionRepository notificaciones;
     private final CacheTemporal<Long, Map<String, Object>> cacheStats = new CacheTemporal<>(120_000, 500);
 
     /** Lo que suena ahora en cada cuenta (se avisa desde el reproductor). */
@@ -37,7 +38,9 @@ public class PerfilService {
     private final Map<Long, Presencia> presencia = new ConcurrentHashMap<>();
 
     public PerfilService(UsuarioRepository usuarios, SeguimientoRepository seguimientos, UsuarioService usuarioService,
-                         PlaylistService playlists, BibliotecaService biblioteca, UsuarioReproduccionRepository repros) {
+                         PlaylistService playlists, BibliotecaService biblioteca, UsuarioReproduccionRepository repros,
+                         com.bpm.music.repositories.NotificacionRepository notificaciones) {
+        this.notificaciones = notificaciones;
         this.usuarios = usuarios;
         this.seguimientos = seguimientos;
         this.usuarioService = usuarioService;
@@ -86,6 +89,7 @@ public class PerfilService {
         Map<String, Object> p = new LinkedHashMap<>(mini(u, viewerId));
         p.put("esYo", yo);
         p.put("biografia", u.getBiografia());
+        p.put("banner", u.getBanner());
         p.put("desde", u.getFechaRegistro());
         p.put("seguidores", seguimientos.countBySeguidoId(u.getId()));
         p.put("siguiendo", seguimientos.countBySeguidorId(u.getId()));
@@ -226,6 +230,15 @@ public class PerfilService {
         if (u.getId().equals(yo)) throw new IllegalArgumentException("No puedes seguirte a ti mismo");
         if (!seguimientos.existsBySeguidorIdAndSeguidoId(yo, u.getId())) {
             seguimientos.save(Seguimiento.builder().seguidorId(yo).seguidoId(u.getId()).build());
+            // Aviso para la persona seguida (y si ya lo seguía, ahora son amigos)
+            usuarios.findById(yo).ifPresent(me -> {
+                boolean amigos = seguimientos.existsBySeguidorIdAndSeguidoId(u.getId(), yo);
+                notificaciones.save(com.bpm.music.models.Notificacion.builder()
+                        .usuarioId(u.getId()).deId(yo).tipo(amigos ? "AMIGO" : "SEGUIDOR")
+                        .texto(amigos ? me.getNombreVisible() + " te siguió también: ahora son amigos y pueden enviarse mensajes"
+                                : me.getNombreVisible() + " empezó a seguirte")
+                        .ruta("#/u/" + me.getUsername()).build());
+            });
         }
         return mini(u, yo);
     }
@@ -273,6 +286,15 @@ public class PerfilService {
                 .filter(u -> BibliotecaService.normalizar(u.getUsername()).contains(nq)
                         || BibliotecaService.normalizar(u.getNombreVisible()).contains(nq))
                 .limit(8).map(u -> mini(u, viewerId)).toList();
+    }
+
+    /** Cambia (o quita, con url = null) la foto de portada. Devuelve la anterior para borrarla. */
+    public String ponerBanner(Long uid, String url) {
+        Usuario u = usuarios.findById(uid).orElseThrow();
+        String anterior = u.getBanner();
+        u.setBanner(url);
+        usuarios.save(u);
+        return anterior;
     }
 
     public Map<String, Object> guardarPrivacidad(Long uid, Map<String, Object> b) {

@@ -1,12 +1,12 @@
 {
-  "version": "2.4",
-  "titulo": "Novedades: amigos y perfiles",
+  "version": "2.5",
+  "titulo": "Novedades: mensajes y notificaciones",
   "puntos": [
-    "Perfiles públicos: busca personas en el buscador (pestaña Personas) y síguelas. Si se siguen los dos, son amigos.",
-    "En cada perfil: sus playlists públicas, lo que más escucha, sus géneros favoritos, sus vibras y tu compatibilidad musical con esa persona.",
-    "En Inicio verás lo que escuchan tus amigos, incluso en vivo.",
-    "Tú decides qué se ve de tu perfil: entra a Perfil y ajustes → Tu perfil público.",
-    "Radio más inteligente: al terminar tu lista sigue con canciones del mismo estilo y género.",
-    "La siguiente canción se precarga para que empiece al instante."
+    "Mensajes: si tú y otra persona se siguen, ya son amigos y pueden escribirse. Entra con el ícono de mensajes arriba o con el botón “Mensaje” en su perfil.",
+    "Comparte con un toque la canción que estás escuchando dentro del chat.",
+    "Notificaciones (campana arriba): te avisamos cuando alguien te sigue, cuando ya son amigos y cuando te escriben.",
+    "Ponle una foto de portada a tu perfil: entra a tu perfil y toca “Poner foto de portada”.",
+    "Cuando pones una canción desde el buscador o el inicio, después suena otra distinta del mismo estilo.",
+    "Nuevo diseño de “Lo que escuchan tus amigos”."
   ]
 }

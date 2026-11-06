@@ -87,6 +87,9 @@ public class Usuario {
     // ── Perfil público y privacidad (null = visible, así las cuentas anteriores quedan visibles) ──
     @Column(length = 160)
     private String biografia;
+    /** Foto de portada del perfil (URL pública). */
+    @Column(length = 200)
+    private String banner;
     private Boolean mostrarCanciones;
     private Boolean mostrarGeneros;
     private Boolean mostrarVibras;

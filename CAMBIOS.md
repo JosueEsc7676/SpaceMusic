@@ -1,5 +1,19 @@
 # Registro de cambios
 
+## Versión 2.5 (app Android 1.4)
+- **Mensajes entre amigos** (solo si se siguen los dos):
+  - lista de conversaciones y chat con "Visto";
+  - compartir la canción que suena;
+  - nuevas tablas `mensaje` y API `/api/mensajes`.
+- **Notificaciones:**
+  - campana con contador: nuevo seguidor, ahora son amigos (tabla `notificacion`);
+  - mensajes nuevos con aviso dentro de la app;
+  - notificación del sistema en Android (app 1.4) y en el navegador si se da permiso;
+  - se consulta cada 20 s (`/api/notificaciones/resumen`).
+- **Foto de portada del perfil:** subir y quitar desde el propio perfil (`/api/perfiles/yo/banner`).
+- **Canción suelta:** desde el buscador, el inicio, el historial o un perfil suena esa canción y después la radio sigue con otras del mismo estilo. Los álbumes y playlists respetan su orden.
+- **"Lo que escuchan tus amigos":** nuevo diseño en tarjetas horizontales. Antes la foto del amigo se estiraba sobre toda la tarjeta.
+
 ## Versión 2.4 (app Android 1.3)
 - **Géneros automáticos:** cada artista se consulta una vez en MusicBrainz (y en Deezer si no aparece) y su género pasa a las canciones que no lo tienen (tabla `artista_genero`, se revisa cada 30 min). Con colaboraciones ("Bad Bunny, ABRA") se usa el artista principal. Resultado: 533 de 543 canciones con género.
 - **Radio más inteligente:** al terminar la lista sigue con canciones parecidas. Usa:

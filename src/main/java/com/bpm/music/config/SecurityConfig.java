@@ -55,6 +55,7 @@ public class SecurityConfig {
                         "/api/portada/**",
                         "/api/playlists/imagen/**",
                         "/api/usuario/avatar/**",
+                        "/api/perfiles/banner/**",
                         "/api/auth/avatar/**").permitAll()
                 // ── Administración ──
                 .requestMatchers("/api/admin/**", "/api/estadisticas/**").hasRole("ADMIN")

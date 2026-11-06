@@ -1,5 +1,5 @@
 // Perfiles públicos: seguir, amigos, playlists públicas, lo más escuchado, géneros, vibras y compatibilidad
-import { api, session } from '../api.js';
+import { api, session, upload } from '../api.js';
 import { esc, plural, timeAgo, cover, coverImg, fmtNum } from '../util.js';
 import { icon } from '../icons.js';
 import { setHero, setTitle } from '../router.js';
@@ -26,6 +26,8 @@ const fechaMes = (iso) => {
 
 function botonSeguir(p) {
   if (p.esYo) return `<a class="btn outline" href="#/perfil">${icon('edit', 'sm')} Editar perfil</a>`;
+  const msg = p.amigos ? `<a class="btn" href="#/mensajes/${encodeURIComponent(p.username)}">${icon('chat', 'sm')} Mensaje</a>` : '';
+  if (p.yoSigo) return `<button class="btn" data-seguir="dejar">${icon('check', 'sm')} ${p.amigos ? 'Amigos' : 'Siguiendo'}</button>${msg}`;
   if (p.yoSigo) return `<button class="btn" data-seguir="dejar">${icon('check', 'sm')} ${p.amigos ? 'Amigos' : 'Siguiendo'}</button>`;
   return `<button class="btn primary" data-seguir="seguir">${icon('plus', 'sm')} ${p.meSigue ? 'Seguir también' : 'Seguir'}</button>`;
 }
@@ -69,7 +71,10 @@ export async function perfilPublicoView(el, { username }, _q, isStale) {
     const privado = !p.esYo && !p.topCanciones && !p.topGeneros && !p.vibras
       ? `<p class="muted p-private">${icon('lock', 'sm')} ${esc(p.nombre)} prefiere no mostrar lo que escucha.</p>` : '';
 
-    el.innerHTML = `
+    const banner = `<div class="p-banner ${p.banner ? 'has' : ''}" ${p.banner ? `style="background-image:url('${esc(p.banner)}')"` : ''}>
+        ${p.esYo ? `<div class="p-banner-tools"><label class="btn glass sm">${icon('edit', 'sm')} ${p.banner ? 'Cambiar portada' : 'Poner foto de portada'}<input type="file" accept="image/*" data-banner hidden></label>
+          ${p.banner ? `<button class="btn glass sm" data-quitar-banner>${icon('trash', 'sm')}</button>` : ''}</div>` : ''}</div>`;
+    el.innerHTML = `${banner}
       <header class="p-head">
         ${avatarPersona(p, 'xl')}
         <div class="p-info">
@@ -97,6 +102,22 @@ export async function perfilPublicoView(el, { username }, _q, isStale) {
         draw();
       } catch (err) { errorToast(err); }
     });
+    el.querySelector('[data-banner]')?.addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const form = new FormData();
+      form.append('file', f);
+      toast('Subiendo portada…');
+      try {
+        const r = await upload('/api/perfiles/yo/banner', form);
+        p = { ...p, banner: r.banner };
+        draw();
+        toast('Portada actualizada');
+      } catch (err) { errorToast(err); }
+    });
+    el.querySelector('[data-quitar-banner]')?.addEventListener('click', async () => {
+      try { await api('/api/perfiles/yo/banner', { method: 'DELETE' }); p = { ...p, banner: null }; draw(); } catch (err) { errorToast(err); }
+    });
     el.querySelectorAll('[data-lista]').forEach((b) => b.addEventListener('click', () => verLista(p, b.dataset.lista)));
     el.querySelector('[data-compartir]')?.addEventListener('click', () => {
       const url = location.origin + '/#/u/' + encodeURIComponent(p.username);
@@ -123,12 +144,14 @@ export async function actividadAmigos(box) {
   if (!lista.length || !box.isConnected) return;
   const lid = registerList(lista.map((x) => x.cancion), { type: 'amigos', label: 'Lo que escuchan tus amigos' });
   box.innerHTML = section('Lo que escuchan tus amigos', `<div class="shelf friends">${lista.map((x, i) => `
-    <div class="friend-card" data-act="play-list" data-list="${lid}" data-i="${i}">
-      <div class="art">${coverImg(x.cancion.portadaUrl, 300)}
-        <a class="friend-who" href="#/u/${encodeURIComponent(x.usuario.username)}">${avatarPersona(x.usuario, 'sm')}<span class="ellipsis">${esc(x.usuario.nombre)}</span></a>
-        ${x.ahora ? '<span class="live-tag"><i class="dot"></i> Ahora</span>' : ''}</div>
-      <div class="t ellipsis">${esc(x.cancion.nombre)}</div>
-      <div class="s ellipsis">${esc(x.cancion.artista)}${x.ahora ? '' : ' · ' + esc(timeAgo(x.hace))}</div></div>`).join('')}</div>`, { eyebrow: 'Amigos', more: '#/buscar' });
+    <div class="friend ${x.ahora ? 'live' : ''}" data-act="play-list" data-list="${lid}" data-i="${i}">
+      <span class="f-cover">${coverImg(x.cancion.portadaUrl, 160)}<span class="f-play">${icon('play', 'sm')}</span></span>
+      <span class="f-tt">
+        <a class="f-who" href="#/u/${encodeURIComponent(x.usuario.username)}" data-stop>${avatarPersona(x.usuario, 'sm')}<span class="ellipsis">${esc(x.usuario.nombre)}</span></a>
+        <b class="ellipsis">${esc(x.cancion.nombre)}</b>
+        <span class="ellipsis">${esc(x.cancion.artista)}</span>
+        <small>${x.ahora ? '<i class="dot"></i> Escuchando ahora' : esc(timeAgo(x.hace))}</small>
+      </span></div>`).join('')}</div>`, { eyebrow: 'Amigos' });
 }
 
 void cover; void session; void plural;

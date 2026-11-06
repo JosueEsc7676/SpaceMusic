@@ -109,6 +109,23 @@ public class MainActivity extends Activity {
         if (savedInstanceState != null) web.restoreState(savedInstanceState);
         else cargar();
         pedirPermisoNotificaciones();
+        // Si la app se abrió desde una notificación, ir a esa pantalla cuando cargue
+        final Intent inicio = getIntent();
+        web.postDelayed(() -> abrirRuta(inicio), 4000);
+    }
+
+    /** Al tocar una notificación con la app abierta. */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        abrirRuta(intent);
+    }
+
+    private void abrirRuta(Intent intent) {
+        String ruta = intent == null ? null : intent.getStringExtra("ruta");
+        if (ruta == null || ruta.isEmpty() || web == null) return;
+        String r = ruta.replace("\\", "").replace("'", "");
+        web.evaluateJavascript("window.smAbrir ? window.smAbrir('" + r + "') : (location.hash='" + r + "')", null);
     }
 
     String servidor() {
@@ -256,6 +273,12 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void guardarArchivo(String url, String nombre) {
             runOnUiThread(() -> Descargas.cancion(MainActivity.this, url, nombre));
+        }
+
+        /** Notificación del sistema (mensaje nuevo, nuevo seguidor…). Al tocarla se abre esa pantalla. */
+        @JavascriptInterface
+        public void notificar(String titulo, String texto, String ruta) {
+            runOnUiThread(() -> Avisos.mostrar(MainActivity.this, titulo, texto, ruta));
         }
 
         /** Descarga e instala la versión nueva de la app. */
