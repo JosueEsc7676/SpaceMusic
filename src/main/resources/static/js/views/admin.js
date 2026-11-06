@@ -1,9 +1,9 @@
 // Administración y subida de canciones
 import { api, session, upload } from '../api.js';
-import { esc, fmtNum, timeAgo, norm, plural, fmtDate } from '../util.js';
+import { esc, fmtNum, timeAgo, norm, plural, fmtDate, isMobile } from '../util.js';
 import { icon } from '../icons.js';
 import { setHero, setTitle } from '../router.js';
-import { toast, errorToast, confirmDialog, promptDialog, emptyState, trackList, cardArtist } from '../ui.js';
+import { toast, errorToast, confirmDialog, promptDialog, emptyState, trackList, cardArtist, modal, genreColor } from '../ui.js';
 import { bus } from '../util.js';
 import { avatarHtml } from './account.js';
 
@@ -15,7 +15,7 @@ export async function adminView(el, _p, query, isStale) {
   const tab = query.tab || 'resumen';
   setTitle('Administración');
   setHero([120, 40, 50]);
-  const tabs = [['resumen', 'Resumen'], ['cuentas', 'Cuentas nuevas'], ['biblioteca', 'Biblioteca'], ['usuarios', 'Usuarios'], ['solicitudes', 'Colaboradores']];
+  const tabs = [['resumen', 'Resumen'], ['soporte', 'Soporte'], ['generos', 'Géneros'], ['cuentas', 'Cuentas nuevas'], ['biblioteca', 'Biblioteca'], ['usuarios', 'Usuarios'], ['solicitudes', 'Colaboradores']];
   const resumen = await api('/api/admin/resumen');
   if (isStale()) return;
   el.innerHTML = `<div class="section-head" style="margin-top:8px"><h2 style="font-size:28px">${icon('shield')} Administración</h2></div>
@@ -26,6 +26,8 @@ export async function adminView(el, _p, query, isStale) {
   else if (tab === 'biblioteca') await bibliotecaTab(body);
   else if (tab === 'usuarios') await usuariosTab(body);
   else if (tab === 'cuentas') await cuentasTab(body);
+  else if (tab === 'soporte') await soporteTab(body);
+  else if (tab === 'generos') await generosTab(body);
   else await solicitudesTab(body);
 }
 
@@ -124,7 +126,7 @@ async function usuariosTab(el) {
     <td><select data-rol ${u.id === me ? 'disabled title="No puedes cambiar tu propio rol"' : ''}>${['USER', 'COLABORADOR', 'ADMIN'].map((r) => `<option ${u.rol === r ? 'selected' : ''} value="${r}">${{ USER: 'Usuario', COLABORADOR: 'Colaborador', ADMIN: 'Admin' }[r]}</option>`).join('')}</select></td>
     <td>${u.activo ? '<span class="badge accent dot">Activo</span>' : '<span class="badge danger dot">Desactivado</span>'}</td>
     <td class="muted" style="white-space:nowrap">${u.ultimoLogin ? timeAgo(u.ultimoLogin) : 'nunca'}</td>
-    <td style="white-space:nowrap">${u.emailVerificado ? '' : `<button class="btn sm ghost" data-verify>Verificar</button>`}
+    <td style="white-space:nowrap"><button class="btn sm ghost" data-detalle>${icon('info', 'sm')} Detalle</button>${u.emailVerificado ? '' : `<button class="btn sm ghost" data-verify>Verificar</button>`}
       ${u.id === me ? '' : `<button class="btn sm ${u.activo ? 'ghost' : 'primary'}" data-toggle>${u.activo ? 'Desactivar' : 'Activar'}</button>`}</td></tr>`;
   const draw = () => {
     const q = norm(el.querySelector('[data-q]')?.value || '');
@@ -154,6 +156,8 @@ async function usuariosTab(el) {
         if (u.activo && !(await confirmDialog(`${u.nombreDisplay} no podrá iniciar sesión.`, { title: 'Desactivar cuenta', ok: 'Desactivar', danger: true }))) return;
         const r = await api(`/api/admin/usuarios/${id}/estado`, { method: 'PUT', body: { activo: !u.activo } });
         upd(r.usuario);
+      } else if (e.target.closest('[data-detalle]')) {
+        detalleUsuario(id);
       } else if (e.target.closest('[data-verify]')) {
         const r = await api(`/api/admin/usuarios/${id}/verificar`, { method: 'POST' });
         upd(r.usuario);
@@ -220,14 +224,22 @@ export async function uploadView(el) {
   setTitle('Subir canciones');
   setHero([40, 90, 140]);
   el.innerHTML = `<div class="section-head" style="margin-top:8px"><h2 style="font-size:28px">Subir canciones</h2></div>
-    <label class="dropzone" data-drop>${icon('upload')}<div style="font-size:17px;font-weight:700;color:var(--text)">Arrastra archivos aquí o haz clic para elegir</div>
-      <div>MP3, FLAC, M4A, OGG, OPUS o WAV · hasta 200 MB por archivo</div><input type="file" multiple accept="${EXT.map((e) => '.' + e).join(',')}" hidden data-file></label>
-    <p class="muted" style="font-size:13px">Se guardan en la carpeta <strong>Subidas</strong> de la biblioteca y aparecen al instante. Los datos (título, artista, álbum, portada) se leen de las etiquetas del archivo.</p>
+    <label class="dropzone" data-drop>${icon('upload')}<div style="font-size:17px;font-weight:700;color:var(--text)">${isMobile() ? 'Toca para elegir canciones' : 'Arrastra canciones aquí o haz clic para elegir'}</div>
+      <div>Puedes elegir varias a la vez</div><small>MP3, FLAC, M4A, OGG, OPUS o WAV · hasta 200 MB por archivo</small>
+      <input type="file" multiple accept="${EXT.map((e) => '.' + e).join(',')}" hidden data-file></label>
+    <p class="muted" style="font-size:13px;margin-top:14px">Se guardan en la carpeta <strong>Subidas</strong> y aparecen al instante. El título, artista, álbum y portada se leen del archivo. Si una canción ya existe, no se repite.</p>
+    <div class="upload-sum hidden" data-sum></div>
     <div data-items></div>`;
   const items = el.querySelector('[data-items]');
   const drop = el.querySelector('[data-drop]');
   const input = el.querySelector('[data-file]');
-  let cola = Promise.resolve();
+  const carriles = [Promise.resolve(), Promise.resolve()];
+  let total = 0, hechas = 0, fallidas = 0;
+  const sum = el.querySelector('[data-sum]');
+  const pintarResumen = () => {
+    sum.classList.remove('hidden');
+    sum.innerHTML = `<span>${hechas} de ${total} ${total === 1 ? 'canción' : 'canciones'}${fallidas ? ` · <span style="color:var(--danger)">${fallidas} con error</span>` : ''}</span>${hechas === total ? `<span class="badge accent">${icon('check', 'sm')} Terminado</span>` : '<span class="muted">Subiendo…</span>'}`;
+  };
 
   const add = (files) => {
     for (const f of files) {
@@ -239,8 +251,11 @@ export async function uploadView(el) {
       const st = it.querySelector('.st'), bar = it.querySelector('.progress-line i');
       if (!EXT.includes(ext)) { st.textContent = 'Formato no soportado'; st.style.color = 'var(--danger)'; continue; }
       if (f.size > 200 * 1024 * 1024) { st.textContent = 'Demasiado grande (máx. 200 MB)'; st.style.color = 'var(--danger)'; continue; }
-      // Subir de uno en uno para no saturar la conexión
-      cola = cola.then(async () => {
+      total++;
+      pintarResumen();
+      // Dos a la vez: más rápido sin saturar la conexión
+      const turno = carriles[total % 2];
+      carriles[total % 2] = turno.then(async () => {
         const fd = new FormData();
         fd.append('files', f);
         st.textContent = 'Subiendo…';
@@ -255,7 +270,10 @@ export async function uploadView(el) {
         } catch (e) {
           st.textContent = e.message || 'Error';
           st.style.color = 'var(--danger)';
+          fallidas++;
         }
+        hechas++;
+        pintarResumen();
       });
     }
   };
@@ -263,4 +281,160 @@ export async function uploadView(el) {
   drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
   drop.addEventListener('dragleave', () => drop.classList.remove('over'));
   drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); add(e.dataTransfer.files); });
+}
+
+// ═══════════════════ Soporte técnico ═══════════════════
+
+const dur = (seg) => {
+  const d = Math.floor(seg / 86400), h = Math.floor((seg % 86400) / 3600), m = Math.floor((seg % 3600) / 60);
+  return d ? `${d} d ${h} h` : h ? `${h} h ${m} min` : `${m} min`;
+};
+const barra = (usado, total) => {
+  const pct = total ? Math.min(100, Math.round((usado / total) * 100)) : 0;
+  return `<div class="progress-line ${pct > 85 ? 'alto' : ''}"><i style="width:${pct}%"></i></div>`;
+};
+
+async function soporteTab(el) {
+  const [s, errs] = await Promise.all([api('/api/admin/sistema'), api('/api/admin/errores')]);
+  const stat = (ico, k, v, d = '') => `<div class="stat"><div class="k">${icon(ico)} ${k}</div><div class="v">${v}</div>${d ? `<div class="d">${d}</div>` : ''}</div>`;
+  const usadoDisco = Math.max(0, s.discoTotalGb - s.discoLibreGb);
+  el.innerHTML = `
+    <div class="stat-cards">
+      ${stat('check', 'Estado', 'En línea', `Versión ${esc(s.version || '—')} · encendido hace ${dur(s.activoSegundos)}`)}
+      ${stat('users', 'Conectados ahora', fmtNum(s.enLinea.length), plural(s.enLinea.reduce((a, u) => a + u.dispositivos, 0), 'dispositivo', 'dispositivos'))}
+      ${stat('play', 'Reproducciones', fmtNum(s.reproducciones24h), 'en las últimas 24 horas')}
+      ${stat('info', 'Errores', fmtNum(s.erroresRecientes), s.erroresRecientes ? 'revisa la lista de abajo' : 'todo en orden')}
+    </div>
+    <div class="panels">
+      <div class="panel"><h3>${icon('sliders')} Servidor</h3>
+        <div class="kv"><span>Memoria</span><b>${fmtNum(s.memoriaUsadaMb)} de ${fmtNum(s.memoriaMaxMb)} MB</b></div>${barra(s.memoriaUsadaMb, s.memoriaMaxMb)}
+        <div class="kv"><span>Disco de la música</span><b>${s.discoLibreGb} GB libres de ${s.discoTotalGb} GB</b></div>${barra(usadoDisco, s.discoTotalGb)}
+        <div class="kv"><span>Procesador</span><b>${s.procesadores} núcleos${s.carga != null ? ` · carga ${s.carga}` : ''}</b></div>
+        <div class="kv"><span>Sistema</span><b>${esc(s.sistema)} · Java ${esc(s.java)}</b></div>
+        <div class="kv"><span>Escáner</span><b>${esc(s.escaner.fase || '—')}</b></div>
+        <div class="row wrap" style="margin-top:14px">
+          <button class="btn sm" data-refrescar>${icon('refresh', 'sm')} Recargar biblioteca</button>
+          <a class="btn sm ghost" href="#/admin?tab=biblioteca">${icon('folder', 'sm')} Escanear música</a>
+        </div></div>
+      <div class="panel"><h3>${icon('note')} Datos guardados</h3>
+        <div class="kv"><span>Canciones</span><b>${fmtNum(s.canciones)}</b></div>
+        <div class="kv"><span>Usuarios</span><b>${fmtNum(s.usuarios)}</b></div>
+        <div class="kv"><span>Playlists</span><b>${fmtNum(s.playlists)}</b></div>
+        <div class="kv"><span>Mensajes</span><b>${fmtNum(s.mensajes)}</b></div>
+        <div class="kv"><span>Notificaciones</span><b>${fmtNum(s.notificaciones)}</b></div></div>
+    </div>
+    <div class="panels">
+      <div class="panel"><h3>${icon('users')} Conectados ahora</h3>
+        ${s.enLinea.length ? s.enLinea.map((u) => `<button class="kv kv-btn" data-detalle="${u.id}"><span>${esc(u.nombre)} <small class="muted">@${esc(u.username)}</small></span><b>${plural(u.dispositivos, 'dispositivo', 'dispositivos')}</b></button>`).join('')
+          : '<p class="muted">Nadie tiene la app abierta en este momento.</p>'}</div>
+      <div class="panel"><h3>${icon('bell')} Aviso para todos</h3>
+        <p class="muted" style="margin-top:0">Llega a las notificaciones de todos los usuarios (web y app de Android).</p>
+        <div class="field"><textarea data-aviso maxlength="300" rows="3" placeholder="Ej.: El servidor se reiniciará esta noche a las 11"></textarea></div>
+        <div class="field"><input data-aviso-ruta maxlength="120" placeholder="Enlace opcional dentro de la app, ej. #/novedades"></div>
+        <button class="btn primary sm" data-enviar-aviso>${icon('send', 'sm')} Enviar aviso</button></div>
+    </div>
+    <div class="panel"><div class="row" style="justify-content:space-between;margin-bottom:8px"><h3 style="margin:0">${icon('info')} Errores y advertencias recientes</h3>
+      ${errs.length ? `<button class="btn sm ghost" data-vaciar-errores>${icon('trash', 'sm')} Vaciar</button>` : ''}</div>
+      ${errs.length ? `<div class="log">${errs.map((e) => `<div class="log-row ${e.nivel === 'ERROR' ? 'err' : ''}">
+          <span class="badge ${e.nivel === 'ERROR' ? 'danger' : 'warning'}">${e.nivel === 'ERROR' ? 'Error' : 'Aviso'}</span>
+          <div><b>${esc(e.mensaje)}</b>${e.detalle ? `<small>${esc(e.detalle)}</small>` : ''}<small>${esc(e.origen)} · ${esc(timeAgo(e.fecha))}</small></div></div>`).join('')}</div>`
+        : '<p class="muted">Sin errores desde que se encendió el servidor.</p>'}</div>`;
+
+  el.querySelector('[data-refrescar]').onclick = async () => {
+    try { const r = await api('/api/admin/sistema/refrescar', { method: 'POST' }); toast(`Biblioteca recargada: ${fmtNum(r.canciones)} canciones`); bus.emit('library:changed'); }
+    catch (e) { errorToast(e); }
+  };
+  el.querySelector('[data-enviar-aviso]').onclick = async () => {
+    const texto = el.querySelector('[data-aviso]').value.trim();
+    const ruta = el.querySelector('[data-aviso-ruta]').value.trim();
+    if (!texto) { toast('Escribe el aviso', { error: true }); return; }
+    if (!(await confirmDialog(`Se enviará a todos los usuarios: “${texto}”`, { title: 'Enviar aviso', ok: 'Enviar' }))) return;
+    try {
+      const r = await api('/api/admin/aviso', { method: 'POST', body: { texto, ruta } });
+      toast(`Aviso enviado a ${plural(r.enviados, 'usuario', 'usuarios')}`);
+      el.querySelector('[data-aviso]').value = '';
+      el.querySelector('[data-aviso-ruta]').value = '';
+    } catch (e) { errorToast(e); }
+  };
+  el.querySelector('[data-vaciar-errores]')?.addEventListener('click', async () => {
+    await api('/api/admin/errores', { method: 'DELETE' }).catch(errorToast);
+    soporteTab(el);
+  });
+  el.querySelectorAll('[data-detalle]').forEach((b) => b.addEventListener('click', () => detalleUsuario(+b.dataset.detalle)));
+}
+
+/** Ficha de soporte de un usuario: su cuenta, actividad y acciones rápidas. */
+async function detalleUsuario(id) {
+  let u;
+  try { u = await api(`/api/admin/usuarios/${id}/detalle`); } catch (e) { errorToast(e); return; }
+  const kv = (k, v) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`;
+  const body = `<div class="user-cell" style="margin-bottom:14px">${avatarHtml(u)}<div><strong>${esc(u.nombreDisplay)}</strong><div class="muted" style="font-size:13px">@${esc(u.username)} · ${esc(u.email)}</div></div></div>
+    ${kv('Estado', u.activo ? (u.estadoCuenta === 'PENDIENTE' ? 'Esperando aprobación' : 'Activa') : 'Desactivada')}
+    ${kv('Correo', u.emailVerificado ? 'Verificado' : 'Sin verificar')}
+    ${kv('Rol', { USER: 'Usuario', COLABORADOR: 'Colaborador', ADMIN: 'Administrador' }[u.rol] || u.rol)}
+    ${kv('Registro', u.fechaRegistro ? esc(fmtDate(u.fechaRegistro)) : '—')}
+    ${kv('Último acceso', u.ultimoLogin ? esc(timeAgo(u.ultimoLogin)) : 'nunca')}
+    ${kv('Conectado ahora', u.dispositivosConectados ? plural(u.dispositivosConectados, 'dispositivo', 'dispositivos') : 'No')}
+    ${kv('Reproducciones', fmtNum(u.reproducciones))}
+    ${kv('Me gusta · Playlists', `${fmtNum(u.favoritos)} · ${fmtNum(u.playlists)}`)}
+    ${kv('Seguidores · Siguiendo', `${fmtNum(u.seguidores)} · ${fmtNum(u.siguiendo)}`)}
+    ${kv('Sin leer', `${plural(u.mensajesSinLeer, 'mensaje', 'mensajes')} · ${plural(u.notificacionesSinLeer, 'notificación', 'notificaciones')}`)}
+    <h4 style="margin:16px 0 6px">Últimas canciones</h4>
+    ${u.ultimasCanciones.length ? u.ultimasCanciones.map((c) => `<div class="kv"><span class="ellipsis">${esc(c.nombre)} <small class="muted">${esc(c.artista)}</small></span><small class="muted">${esc(timeAgo(c.fecha))}</small></div>`).join('') : '<p class="muted">Aún no escucha nada.</p>'}`;
+  const v = await modal({
+    title: 'Soporte de usuario', body,
+    actions: [{ label: 'Cerrar', value: null }, ...(u.id === session.user?.id ? [] : [{ label: 'Cerrar sus sesiones', value: 'salir', danger: true }]),
+      { label: 'Enviar correo de contraseña', value: 'reset', primary: true }],
+  });
+  if (v === 'salir') {
+    if (!(await confirmDialog(`${u.nombreDisplay} tendrá que volver a iniciar sesión en todos sus dispositivos.`, { title: 'Cerrar sesiones', ok: 'Cerrar sesiones', danger: true }))) return;
+    try { await api(`/api/admin/usuarios/${id}/cerrar-sesiones`, { method: 'POST' }); toast('Sesiones cerradas'); } catch (e) { errorToast(e); }
+  }
+  if (v === 'reset') {
+    if (!(await confirmDialog(`${u.nombreDisplay} recibirá un correo para crear una contraseña nueva.`, { title: 'Recuperar contraseña', ok: 'Enviar' }))) return;
+    try { await api(`/api/admin/usuarios/${id}/recuperar`, { method: 'POST' }); toast('Correo enviado'); } catch (e) { errorToast(e); }
+  }
+}
+
+// ═══════════════════ Géneros del servidor ═══════════════════
+
+async function generosTab(el) {
+  const g = await api('/api/admin/generos');
+  const pct = g.totalCanciones ? Math.round((g.conGenero / g.totalCanciones) * 100) : 0;
+  const max = Math.max(1, ...g.generos.map((x) => x.canciones));
+  const familias = {};
+  const NOMBRE_FAMILIA = { urbano: 'Urbano', regional: 'Regional mexicano', tropical: 'Tropical', cristiana: 'Cristiana', hiphop: 'Hip hop', rnb: 'R&B', electronica: 'Electrónica', romantica: 'Romántica', rock: 'Rock', pop: 'Pop', clasica: 'Clásica y jazz', otros: 'Otros' };
+  g.generos.forEach((x) => { const f = NOMBRE_FAMILIA[x.familia] ? x.familia : 'otros'; familias[f] = (familias[f] || 0) + x.canciones; });
+  el.innerHTML = `
+    <div class="stat-cards">
+      <div class="stat"><div class="k">${icon('sparkles')} Géneros</div><div class="v">${fmtNum(g.generos.length)}</div><div class="d">${Object.keys(familias).length} familias</div></div>
+      <div class="stat"><div class="k">${icon('note')} Con género</div><div class="v">${pct}%</div><div class="d">${fmtNum(g.conGenero)} de ${fmtNum(g.totalCanciones)} canciones</div></div>
+      <div class="stat"><div class="k">${icon('user')} Artistas sin género</div><div class="v">${fmtNum(g.artistasSinGenero)}</div><div class="d">${g.buscando ? 'buscando ahora…' : 'se buscan solos cada 30 min'}</div></div>
+    </div>
+    <div class="panel" style="margin-bottom:16px"><h3>${icon('library')} Por familia</h3><div class="row wrap">${Object.entries(familias).sort((a, b) => b[1] - a[1])
+      .map(([f, n]) => `<span class="badge">${esc(NOMBRE_FAMILIA[f] || f)}: ${fmtNum(n)}</span>`).join('')}</div></div>
+    <div class="panels">
+      <div class="panel"><h3>${icon('chart')} Géneros en el servidor</h3>
+        <div class="genre-bars">${g.generos.map((x) => `<a class="genre-bar" href="#/genero/${encodeURIComponent(x.genero)}" title="${esc(x.ejemplos.join(', '))}">
+          <span class="gb-name ellipsis">${esc(x.genero)}</span>
+          <span class="gb-track"><i style="width:${Math.max(3, (x.canciones / max) * 100)}%;background:${genreColor(x.genero)}"></i></span>
+          <span class="gb-num">${fmtNum(x.canciones)} <small>· ${plural(x.artistas, 'artista', 'artistas')}</small></span></a>`).join('') || '<p class="muted">Todavía no hay géneros.</p>'}</div></div>
+      <div class="panel"><div class="row" style="justify-content:space-between;margin-bottom:8px"><h3 style="margin:0">${icon('user')} Artistas sin género</h3>
+        <button class="btn sm" data-buscar ${g.buscando ? 'disabled' : ''}>${icon('refresh', 'sm')} ${g.buscando ? 'Buscando…' : 'Buscar ahora'}</button></div>
+        <p class="muted" style="margin-top:0;font-size:13px">Si internet no conoce al artista, ponle el género a mano: se aplica a todas sus canciones.</p>
+        ${g.sinGenero.length ? g.sinGenero.map((a) => `<div class="kv"><span class="ellipsis">${esc(a.artista)} <small class="muted">${plural(a.canciones, 'canción', 'canciones')}</small></span>
+          <button class="btn sm ghost" data-poner="${esc(a.artista)}">${icon('edit', 'sm')} Poner género</button></div>`).join('')
+          : `<p class="muted">${icon('check', 'sm')} Todas las canciones tienen género.</p>`}</div>
+    </div>`;
+  el.querySelector('[data-buscar]').onclick = async () => {
+    try { const r = await api('/api/admin/generos/buscar', { method: 'POST' }); toast(r.iniciado ? 'Buscando géneros en internet… tarda unos minutos' : 'Ya hay una búsqueda en marcha'); generosTab(el); }
+    catch (e) { errorToast(e); }
+  };
+  el.querySelectorAll('[data-poner]').forEach((b) => b.addEventListener('click', async () => {
+    const artista = b.dataset.poner;
+    const genero = await promptDialog(`Género de ${artista}`, { label: 'Género', placeholder: 'Ej.: Banda, Reggaetón, Cristiana, Bachata', ok: 'Guardar' });
+    if (!genero) return;
+    try { const r = await api('/api/admin/generos/artista', { method: 'PUT', body: { artista, genero } }); toast(`Listo: ${plural(r.canciones, 'canción', 'canciones')} actualizadas`); bus.emit('library:changed'); generosTab(el); }
+    catch (e) { errorToast(e); }
+  }));
 }

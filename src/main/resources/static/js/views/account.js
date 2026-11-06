@@ -148,7 +148,8 @@ export async function profileView(el, _p, _q, isStale) {
     const [a, b, c] = ['[data-p0]', '[data-p1]', '[data-p2]'].map((s) => $(s).value);
     if (b !== c) return toast('Las contraseñas nuevas no coinciden', { error: true });
     try {
-      await api('/api/usuario/cambiar-password', { method: 'POST', body: { actual: a, nueva: b } });
+      const r = await api('/api/usuario/cambiar-password', { method: 'POST', body: { actual: a, nueva: b } });
+      if (r?.token) session.save(r.token); // los demás dispositivos quedan fuera; este sigue dentro
       ['[data-p0]', '[data-p1]', '[data-p2]'].forEach((s) => { $(s).value = ''; });
       toast('Contraseña actualizada');
     } catch (err) { errorToast(err); }

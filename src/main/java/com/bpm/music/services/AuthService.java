@@ -220,6 +220,8 @@ public class AuthService {
         String err = validarPassword(nueva);
         if (err != null) return Map.of("error", err);
         u.setPassword(encoder.encode(nueva));
+        u.setSesionesDesde(LocalDateTime.now()); // cierra la sesión en los demás dispositivos
+        com.bpm.music.security.JwtFilter.olvidar(u.getId());
         u.setResetToken(null);
         u.setResetTokenExpiry(null);
         u.setEmailVerificado(true); // si recibió el correo, el correo es suyo
@@ -249,8 +251,12 @@ public class AuthService {
         if (err != null) return Map.of("error", err);
         if (encoder.matches(nueva, u.getPassword())) return Map.of("error", "La nueva contraseña debe ser distinta");
         u.setPassword(encoder.encode(nueva));
+        u.setSesionesDesde(LocalDateTime.now()); // cierra la sesión en los demás dispositivos
         repo.save(u);
-        return Map.of("ok", true, "message", "Contraseña actualizada");
+        com.bpm.music.security.JwtFilter.olvidar(u.getId());
+        // Este dispositivo sigue dentro con una sesión nueva
+        return Map.of("ok", true, "message", "Contraseña actualizada",
+                "token", jwtUtil.generateToken(u.getId(), u.getUsername(), u.getRol().name()));
     }
 
     @Transactional

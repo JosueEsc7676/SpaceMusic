@@ -65,8 +65,12 @@ public class MainActivity extends Activity {
         s.setTextZoom(100);                           // el diseño no cambia con el tamaño de letra del sistema
         s.setUserAgentString(s.getUserAgentString() + " SpaceMusicApp/1.0");
 
+        // Seguridad: la web no puede leer archivos del teléfono y nadie puede inspeccionar la app por USB
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(false);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         web.addJavascriptInterface(new Puente(), "SpaceMusicApp");
-        WebView.setWebContentsDebuggingEnabled(true);
+        WebView.setWebContentsDebuggingEnabled(false);
         web.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
@@ -103,8 +107,9 @@ public class MainActivity extends Activity {
         });
 
         // Enlaces de descarga (botón "Descargar" de la web): se guardan en Música/SpaceMusic
-        web.setDownloadListener((url, agente, disposicion, tipo, largo) ->
-                Descargas.cancion(this, url, android.webkit.URLUtil.guessFileName(url, disposicion, tipo)));
+        web.setDownloadListener((url, agente, disposicion, tipo, largo) -> {
+            if (mismoServidor(url)) Descargas.cancion(this, url, android.webkit.URLUtil.guessFileName(url, disposicion, tipo));
+        });
 
         if (savedInstanceState != null) web.restoreState(savedInstanceState);
         else cargar();
@@ -124,8 +129,20 @@ public class MainActivity extends Activity {
     private void abrirRuta(Intent intent) {
         String ruta = intent == null ? null : intent.getStringExtra("ruta");
         if (ruta == null || ruta.isEmpty() || web == null) return;
-        String r = ruta.replace("\\", "").replace("'", "");
+        // Solo pantallas de la app ("#/mensajes/ana"…): nada de código desde otras apps
+        if (!ruta.matches("#/[\\w\\-/%?=&.]{0,160}")) return;
+        String r = ruta;
         web.evaluateJavascript("window.smAbrir ? window.smAbrir('" + r + "') : (location.hash='" + r + "')", null);
+    }
+
+    /** true si la dirección es del servidor de SpaceMusic (con conexión segura). */
+    boolean mismoServidor(String url) {
+        try {
+            Uri u = Uri.parse(url), base = Uri.parse(servidor());
+            return "https".equals(u.getScheme()) && u.getHost() != null && u.getHost().equalsIgnoreCase(base.getHost());
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     String servidor() {
@@ -204,7 +221,8 @@ public class MainActivity extends Activity {
                 .setView(campo)
                 .setPositiveButton("Guardar", (d, w) -> {
                     String v = campo.getText().toString().trim();
-                    if (!v.startsWith("http")) v = "https://" + v;
+                    if (v.startsWith("http://")) v = "https://" + v.substring(7); // siempre conexión segura
+                    if (!v.startsWith("https://")) v = "https://" + v;
                     prefs.edit().putString("servidor", v).apply();
                     cargar();
                 })
@@ -272,6 +290,7 @@ public class MainActivity extends Activity {
         /** Guarda una canción en la carpeta Música/SpaceMusic del teléfono. */
         @JavascriptInterface
         public void guardarArchivo(String url, String nombre) {
+            if (!mismoServidor(url)) return; // solo canciones de nuestro servidor
             runOnUiThread(() -> Descargas.cancion(MainActivity.this, url, nombre));
         }
 
@@ -284,6 +303,7 @@ public class MainActivity extends Activity {
         /** Descarga e instala la versión nueva de la app. */
         @JavascriptInterface
         public void actualizar(String url) {
+            if (!mismoServidor(url)) return; // la actualización solo puede venir de nuestro servidor
             runOnUiThread(() -> Descargas.actualizar(MainActivity.this, url));
         }
     }

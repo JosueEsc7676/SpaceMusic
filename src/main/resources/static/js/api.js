@@ -52,19 +52,28 @@ export class ApiError extends Error {
  * Petición a la API. Agrega el token, convierte a JSON y lanza ApiError
  * con un mensaje en español si algo falla.
  */
-export async function api(path, { method = 'GET', body, form, signal } = {}) {
+export async function api(path, { method = 'GET', body, form, signal, timeout } = {}) {
   const headers = {};
   if (session.token) headers.Authorization = 'Bearer ' + session.token;
   let payload;
   if (form) payload = form;
   else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
 
-  let res;
+  let res, reloj;
+  if (timeout) {
+    const ctrl = new AbortController();
+    signal?.addEventListener('abort', () => ctrl.abort());
+    reloj = setTimeout(() => ctrl.abort('tiempo'), timeout);
+    signal = ctrl.signal;
+  }
   try {
     res = await fetch(path, { method, headers, body: payload, signal });
   } catch (e) {
+    if (signal?.reason === 'tiempo') throw new ApiError('La conexión está lenta. Inténtalo de nuevo.', 0);
     if (e.name === 'AbortError') throw e;
     throw new ApiError('No hay conexión con el servidor', 0);
+  } finally {
+    clearTimeout(reloj);
   }
   if (res.status === 401 && !path.startsWith('/api/auth/login')) {
     logout('expirada');

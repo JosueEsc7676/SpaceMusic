@@ -4,7 +4,8 @@ import { cardPersona } from './people.js';
 import { esc, store, coverImg, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { setHero, setTitle } from '../router.js';
-import { trackList, cardAlbum, cardArtist, cardPlaylist, cardGenre, section, emptyState, registerList } from '../ui.js';
+import { trackList, cardAlbum, cardArtist, cardPlaylist, cardGenre, cardSong, section, emptyState, registerList, getList } from '../ui.js';
+import { player } from '../player.js';
 
 const RECENT_BASE = 'sm_busquedas';
 const RECENT_KEY = () => deUsuario(RECENT_BASE); // cada cuenta ve sus propias búsquedas
@@ -44,7 +45,8 @@ export async function searchView(el, _p, query, isStale) {
   if (isStale()) return;
   addRecentSearch(q);
 
-  const total = r.canciones.length + r.artistas.length + r.albumes.length + r.playlists.length + (r.usuarios?.length || 0);
+  const estilo = r.estilo?.canciones?.length ? r.estilo : null;
+  const total = r.canciones.length + r.artistas.length + r.albumes.length + r.playlists.length + (r.usuarios?.length || 0) + (estilo ? 1 : 0);
   const tabs = [['todo', 'Todo'], ['canciones', 'Canciones'], ['artistas', 'Artistas'], ['albumes', 'Álbumes'], ['playlists', 'Playlists'], ['personas', 'Personas']];
   const chips = `<div class="chips">${tabs.map(([k, l]) =>
     `<a class="chip ${tab === k ? 'active' : ''}" href="#/buscar?q=${encodeURIComponent(q)}${k === 'todo' ? '' : '&tab=' + k}">${l}</a>`).join('')}</div>`;
@@ -56,6 +58,17 @@ export async function searchView(el, _p, query, isStale) {
 
   const ctx = { type: 'busqueda', label: `Búsqueda “${q}”`, route: `#/buscar?q=${encodeURIComponent(q)}` };
   let html = chips;
+
+  // Género o estado de ánimo ("banda", "relajante", "reggaetón"): su música, lista para escuchar
+  if (estilo && tab === 'todo') {
+    const lid = registerList(estilo.canciones, { type: 'estilo', label: estilo.titulo, route: `#/buscar?q=${encodeURIComponent(q)}` });
+    html += `<section class="estilo-hero">
+      <div><div class="eyebrow">${icon('sparkles', 'sm')} Según lo que buscaste</div><h2>${esc(estilo.titulo)}</h2>
+        <p class="muted">${plural(estilo.total || estilo.canciones.length, 'canción', 'canciones')} en el servidor</p></div>
+      <div class="row"><button class="btn primary" data-act="play-list" data-list="${lid}" data-i="0">${icon('play', 'sm')} Reproducir</button>
+        <button class="btn glass" data-estilo-shuffle="${lid}">${icon('shuffle', 'sm')} Aleatorio</button></div></section>
+      <div class="shelf">${estilo.canciones.slice(0, 20).map((c, i) => cardSong(c, lid, i)).join('')}</div><div style="height:28px"></div>`;
+  }
 
   if (tab === 'todo') {
     // Resultado principal: el artista si coincide de lleno, si no la primera canción
@@ -74,9 +87,12 @@ export async function searchView(el, _p, query, isStale) {
         <div class="t ellipsis">${esc(s.nombre)}</div><div class="s"><span class="badge">Canción</span>${esc(s.artista)}</div>
         <button class="play-fab" data-act="play-list" data-list="${lid}" data-i="0" aria-label="Reproducir">${icon('play')}</button></div>`;
     }
-    html += `<div class="search-top"><div><div class="section-head"><h2>Resultado principal</h2></div>${top}</div>
-      <div style="min-width:0"><div class="section-head"><h2>Canciones</h2>${r.canciones.length > 5 ? `<a class="more" href="#/buscar?q=${encodeURIComponent(q)}&tab=canciones">Mostrar todo</a>` : ''}</div>
-      ${trackList(r.canciones.slice(0, 5), { context: ctx, showAlbum: false, header: false })}</div></div>`;
+    // Sin coincidencias directas (p. ej. solo el género) no se muestran encabezados vacíos
+    if (top || r.canciones.length) {
+      html += `<div class="search-top"><div><div class="section-head"><h2>Resultado principal</h2></div>${top}</div>
+      <div style="min-width:0">${r.canciones.length ? `<div class="section-head"><h2>Canciones</h2>${r.canciones.length > 5 ? `<a class="more" href="#/buscar?q=${encodeURIComponent(q)}&tab=canciones">Mostrar todo</a>` : ''}</div>
+      ${trackList(r.canciones.slice(0, 5), { context: ctx, showAlbum: false, header: false })}` : ''}</div></div>`;
+    }
     html += section('Artistas', r.artistas.length ? `<div class="grid">${r.artistas.slice(0, 6).map(cardArtist).join('')}</div>` : '');
     html += section('Álbumes', r.albumes.length ? `<div class="grid">${r.albumes.slice(0, 6).map(cardAlbum).join('')}</div>` : '');
     html += section('Playlists', r.playlists.length ? `<div class="grid">${r.playlists.slice(0, 6).map(cardPlaylist).join('')}</div>` : '');
@@ -94,5 +110,9 @@ export async function searchView(el, _p, query, isStale) {
     html += r.usuarios?.length ? `<div class="grid people">${r.usuarios.map(cardPersona).join('')}</div>` : emptyState('users', 'No encontramos a nadie con ese nombre');
   }
   el.innerHTML = html;
+  el.querySelector('[data-estilo-shuffle]')?.addEventListener('click', (e) => {
+    const l = getList(e.currentTarget.dataset.estiloShuffle);
+    if (l) player.play(l.songs, -1, l.context, { shuffle: true });
+  });
   void plural;
 }

@@ -100,6 +100,14 @@ function bindQueue(box) {
 
 // ═══════════════════ Pantalla completa ═══════════════════
 
+/** Color de la barra de estado del teléfono (iPhone/Android): el de la canción con el reproductor abierto. */
+function colorBarra(el) {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const c = el ? getComputedStyle(el).getPropertyValue('--np').trim() : '';
+  meta.setAttribute('content', c ? `rgb(${c})` : '#000000');
+}
+
 export const np = {
   el: null,
   isOpen: false,
@@ -123,6 +131,7 @@ export const np = {
           <div class="tt"><div class="name ellipsis" data-np-name></div><div class="artist ellipsis" data-np-artist></div></div>
           <button class="np-more" data-np-more aria-label="Más opciones">${icon('more')}</button>
         </div>
+        <button class="np-mini-lyr hidden" data-mini-lyr aria-label="Ver la letra completa"></button>
         <div class="np-controls">
           <div class="np-progress"><div class="seek" data-seek="np"><div class="rail"><div class="buf"></div><div class="fill"></div></div><div class="knob"></div><div class="tip"></div></div>
             <div class="times"><span data-np-cur>0:00</span><span data-np-dur>-0:00</span></div></div>
@@ -162,6 +171,8 @@ export const np = {
       this.setTab(this.tab === b.dataset.panel ? null : b.dataset.panel);
     }));
     el.querySelector('[data-np-artist]').addEventListener('click', (e) => { if (e.target.closest('a')) this.close(); });
+    // Letra en miniatura: al tocarla se abre la letra completa
+    el.querySelector('[data-mini-lyr]').addEventListener('click', () => this.setTab('letra'));
 
     const tabBox = el.querySelector('[data-np-tab]');
     bindQueue(tabBox);
@@ -199,6 +210,7 @@ export const np = {
     else if (isMobile()) this.tab = null; // en el celular se abre mostrando la portada
     this.isOpen = true;
     this.el.classList.add('open');
+    colorBarra(this.el);
     this.el.setAttribute('aria-hidden', 'false');
     this.sync(true);
     this.loop();
@@ -209,6 +221,7 @@ export const np = {
     if (!this.el) return;
     this.isOpen = false;
     this.el.classList.remove('open');
+    colorBarra(null);
     this.el.setAttribute('aria-hidden', 'true');
     cancelAnimationFrame(this.raf);
     bus.emit('np:close');
@@ -277,7 +290,8 @@ export const np = {
       el.querySelector('.np-bg').style.backgroundImage = `url("${cover(s.portadaUrl, 300)}")`;
       el.querySelector('[data-np-name]').textContent = s.nombre;
       el.querySelector('[data-np-artist]').innerHTML = `<a href="#/artista/${encodeURIComponent(s.artista)}">${esc(s.artista)}</a>`;
-      dominantColor(s.portadaUrl).then((rgb) => el.style.setProperty('--np', rgb.join(',')));
+      dominantColor(s.portadaUrl).then((rgb) => { el.style.setProperty('--np', rgb.join(',')); if (this.isOpen) colorBarra(el); });
+      this.cargarMini(s);
       this.renderTab();
     }
     this.syncState();
@@ -412,11 +426,41 @@ export const np = {
     }
   },
 
+  /** Letra sincronizada en miniatura (debajo del título, cuando no hay panel abierto). */
+  async cargarMini(s) {
+    const box = this.el?.querySelector('[data-mini-lyr]');
+    if (!box) return;
+    this.mini = { lines: [], activa: -2 };
+    box.classList.add('hidden');
+    box.innerHTML = '';
+    const d = await getLyrics(s).catch(() => ({}));
+    if (player.current?.id !== s.id || !d?.letraSincronizada) return;
+    this.mini.lines = parseLrc(d.letraSincronizada).filter((l) => !l.interlude && l.text?.trim());
+    if (this.mini.lines.length) box.classList.remove('hidden');
+    this.updateMini(true);
+  },
+
+  updateMini(force) {
+    const m = this.mini;
+    if (!m?.lines.length || this.tab) return;
+    const t = player.audio.currentTime + getOffset(player.current?.id) + 0.12;
+    let i = -1;
+    for (let k = 0; k < m.lines.length; k++) { if (m.lines[k].t <= t) i = k; else break; }
+    if (i === m.activa && !force) return;
+    m.activa = i;
+    const box = this.el.querySelector('[data-mini-lyr]');
+    const fila = (k, cls) => (m.lines[k] ? `<span class="${cls}">${esc(m.lines[k].text)}</span>` : '');
+    box.innerHTML = i < 0
+      ? `<span class="act dim">♪</span>${fila(0, 'sig')}`
+      : `${fila(i, 'act')}${fila(i + 1, 'sig')}`;
+  },
+
   loop() {
     cancelAnimationFrame(this.raf);
     const frame = () => {
       if (!this.isOpen) return;
       this.updateLyrics(false);
+      this.updateMini(false);
       this.raf = requestAnimationFrame(frame);
     };
     frame();

@@ -1,13 +1,26 @@
 {
-  "version": "2.6",
-  "titulo": "Novedades: notificaciones y portada",
+  "version": "2.7",
+  "titulo": "Novedades: busca por género y letra en el reproductor",
   "puntos": [
-    "La campana ahora guarda todo: actualizaciones de SpaceMusic, canciones nuevas en el servidor, playlists que publican las personas que sigues, nuevos seguidores y amigos.",
-    "Puedes borrar una notificación o vaciar todas con un toque.",
-    "Nueva portada del perfil: elige qué parte de la foto se ve con el botón “Ajustar”.",
-    "Los mensajes llegan al instante, sin recargar, y el chat del celular ocupa toda la pantalla."
+    "Busca por género o por ánimo: escribe “banda”, “bachata”, “reggaetón” o “música relajante” y te aparece esa música lista para escuchar.",
+    "La letra sincronizada aparece en pequeño en el reproductor, debajo del artista. Tócala para verla completa.",
+    "Mensajes abre al instante, también con datos móviles, y muestra la última conversación aunque la señal sea mala.",
+    "En iPhone la siguiente canción ya se prepara antes, para que siga sonando con la pantalla apagada.",
+    "Subir canciones: nuevo diseño y puedes subir varias a la vez.",
+    "Arreglos de diseño: notificaciones en el celular, color de la barra de arriba al cerrar el reproductor y portadas sin bordes cortados.",
+    "Más seguridad: si cambias tu contraseña se cierra la sesión en tus otros dispositivos."
   ],
   "anteriores": [
+    {
+      "version": "2.6",
+      "titulo": "Novedades: notificaciones y portada",
+      "puntos": [
+        "La campana ahora guarda todo: actualizaciones de SpaceMusic, canciones nuevas en el servidor, playlists que publican las personas que sigues, nuevos seguidores y amigos.",
+        "Puedes borrar una notificación o vaciar todas con un toque.",
+        "Nueva portada del perfil: elige qué parte de la foto se ve con el botón “Ajustar”.",
+        "Los mensajes llegan al instante, sin recargar, y el chat del celular ocupa toda la pantalla."
+      ]
+    },
     {
       "version": "2.5",
       "titulo": "Novedades: mensajes y notificaciones",

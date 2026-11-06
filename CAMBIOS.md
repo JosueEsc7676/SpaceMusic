@@ -1,5 +1,33 @@
 # Registro de cambios
 
+## Versión 2.7 (app Android 1.5)
+- **Buscar por género o ánimo:** "banda", "bachata", "reggaetón", "música relajante", "para el gym"… muestran esa música lista para escuchar (`GeneroService.buscarPorEstilo`, campo `estilo` en `/api/buscar`).
+- **Letra en miniatura** en el reproductor del celular, debajo del artista (línea actual y siguiente). Al tocarla se abre la letra completa.
+- **Mensajes con datos móviles:** la pantalla ya no espera a que lleguen la lista y el chat (antes, con señal lenta, parecía no abrir nunca). Las peticiones se cortan a los 8–20 s y se reintentan; se muestra la última copia guardada de la conversación, y si falla aparece "Reintentar".
+- **iPhone con la pantalla apagada:** la siguiente canción se descarga antes a la memoria (hasta 30 MB) y el cambio es instantáneo. La radio se pide con tiempo. En iOS ya no se usa el segundo `<audio>` para precargar.
+- **Diseño:**
+  - la barra de estado del teléfono vuelve a negro al cerrar el reproductor;
+  - las portadas de las filas ya no se ven cortadas;
+  - la canción que suena se marca con un punto en lugar del contorno blanco;
+  - el panel de notificaciones ocupa el ancho del celular;
+  - Subir canciones tiene un diseño nuevo y sube varias a la vez (dos en paralelo, con resumen);
+  - en el buscador ya no salen títulos vacíos.
+- **Administración:**
+  - **Soporte:** estado del servidor (memoria, disco, versión, tiempo encendido), quién está conectado, errores y advertencias recientes (`RegistroErrores`), aviso para todos y recargar la biblioteca;
+  - ficha de cada usuario (actividad, últimas canciones), correo de contraseña y "Cerrar sus sesiones";
+  - **Géneros:** cuántas canciones y artistas hay por género y familia, artistas sin género, buscar ahora y poner el género a mano.
+- **Seguridad:**
+  - el rol y el estado de la cuenta se leen de la base de datos en cada petición (con caché de 20 s), no del token: desactivar una cuenta o quitarle un rol surte efecto al instante;
+  - cambiar o recuperar la contraseña cierra la sesión en los demás dispositivos (`sesionesDesde`);
+  - máximo 6 conexiones en vivo por cuenta;
+  - los avisos solo aceptan enlaces internos.
+- **App Android 1.5:**
+  - sin depuración remota ni copias de seguridad (protege la sesión guardada);
+  - solo conexiones seguras (HTTPS);
+  - la web no puede leer archivos del teléfono;
+  - descargas y actualizaciones solo desde el servidor de SpaceMusic;
+  - las notificaciones solo abren pantallas de la app.
+
 ## Versión 2.6
 - **Notificaciones (campana)**, guardadas hasta que el usuario las borre (una por una o "Vaciar"):
   - ACTUALIZACION: cada versión nueva, se envía al arrancar el servidor y abre `#/novedades`;

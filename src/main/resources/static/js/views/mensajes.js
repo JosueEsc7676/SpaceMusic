@@ -1,6 +1,6 @@
 // Mensajes entre amigos (solo si se siguen los dos)
-import { api } from '../api.js';
-import { esc, timeAgo, coverImg, bus } from '../util.js';
+import { api, deUsuario } from '../api.js';
+import { esc, timeAgo, coverImg, bus, store } from '../util.js';
 import { icon } from '../icons.js';
 import { setHero, setTitle } from '../router.js';
 import { emptyState, errorToast, registerList, toast } from '../ui.js';
@@ -8,6 +8,21 @@ import { player } from '../player.js';
 import { avatarPersona } from './people.js';
 
 let sondeo = null;
+
+// Con datos móviles una petición puede quedarse colgada: se corta a los pocos segundos
+// y se reintenta (3 intentos, cada vez con más paciencia).
+async function conReintento(path, opts = {}) {
+  let error;
+  for (const espera of [8000, 12000, 20000]) {
+    try { return await api(path, { ...opts, timeout: espera }); } catch (e) {
+      error = e;
+      if (e.status && e.status !== 0 && e.status < 500) throw e; // error real (no de red): no reintentar
+      await new Promise((r) => setTimeout(r, 600));
+    }
+  }
+  throw error;
+}
+const claveChat = (u) => deUsuario('sm_chat_' + u);
 const hora = (iso) => { try { return new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
 
 function filaConversacion(c, activa) {
@@ -51,7 +66,8 @@ export async function mensajesView(el, params, _q, isStale) {
   const username = params.username || null;
   setTitle('Mensajes');
   setHero(null);
-  const cargar = () => Promise.all([api('/api/mensajes').catch(() => []), api('/api/mensajes/amigos').catch(() => [])]);
+  const cargar = () => Promise.all([conReintento('/api/mensajes').catch(() => ultimaLista?.[0] || []),
+    conReintento('/api/mensajes/amigos').catch(() => ultimaLista?.[1] || [])]);
   pantallaChat(!!username);
 
   // Se muestra al instante la última lista conocida; la actual llega en paralelo con el chat
@@ -63,7 +79,7 @@ export async function mensajesView(el, params, _q, isStale) {
     const datos = await cargar();
     ultimaLista = datos;
     const box = el.querySelector('[data-lista]');
-    if (box?.isConnected && !isStale()) box.innerHTML = htmlLista(...datos, username);
+    if (box && !isStale()) box.innerHTML = htmlLista(...datos, username);
   };
   const tareas = [pintarLista()];
 
@@ -78,7 +94,9 @@ export async function mensajesView(el, params, _q, isStale) {
     }, 400);
   }));
   if (username) tareas.push(abrirChat(el.querySelector('[data-chat]'), username, isStale));
-  await Promise.all(tareas);
+  // No se espera a la red: la pantalla aparece al instante y la lista y el chat se llenan al llegar
+  // (con datos móviles esperar ambas cosas hacía que "Mensajes" pareciera no abrir nunca).
+  Promise.all(tareas).catch(() => { });
 }
 
 let ultimaLista = null;
@@ -107,14 +125,39 @@ function pantallaChat(activa) {
 }
 
 async function abrirChat(box, username, isStale) {
+  // Se muestra al instante la última copia guardada de la conversación (si la hay)
+  const guardada = store.get(claveChat(username), null);
   let d;
-  try { d = await api('/api/mensajes/' + encodeURIComponent(username)); } catch (e) {
-    box.innerHTML = emptyState('user', 'No se pudo abrir la conversación', e.message);
+  if (guardada?.usuario) {
+    d = guardada;
+    pintarChat(box, d, isStale, true);
+  }
+  try {
+    d = await conReintento('/api/mensajes/' + encodeURIComponent(username));
+  } catch (e) {
+    if (guardada?.usuario) { toast('Sin conexión: mostrando los últimos mensajes guardados'); return; }
+    box.innerHTML = `${emptyState('user', 'No se pudo abrir la conversación', e.message)}
+      <div style="text-align:center;margin-top:-20px"><button class="btn" data-reintentar>${icon('refresh', 'sm')} Reintentar</button></div>`;
+    box.querySelector('[data-reintentar]')?.addEventListener('click', () => {
+      box.innerHTML = '<div class="dm-loading">Cargando…</div>';
+      abrirChat(box, username, isStale);
+    });
     return;
   }
   if (isStale()) return;
+  try { store.set(claveChat(username), { ...d, mensajes: d.mensajes.slice(-60) }); } catch { }
+  pintarChat(box, d, isStale, false);
+}
+
+function pintarChat(box, d, isStale, copia) {
+  if (isStale()) return;
+  // Al repintar (copia guardada → datos nuevos) se quitan las escuchas anteriores
+  box._fin?.();
+  const mias = [];
+  box._fin = () => mias.splice(0).forEach((f) => f());
+  const escucha = (f) => { mias.push(f); quitarEscuchas.push(f); };
   const u = d.usuario;
-  bus.emit('mensajes:leidos');
+  if (!copia) bus.emit('mensajes:leidos');
   box.innerHTML = `<header class="dm-head"><a class="round-btn dm-back" href="#/mensajes" aria-label="Volver">${icon('left')}</a>
       <a class="dm-who" href="#/u/${encodeURIComponent(u.username)}">${avatarPersona(u)}<span><b>${esc(u.nombre)}</b><small>@${esc(u.username)}${d.puedeEscribir ? ' · Amigos' : ''}</small></span></a></header>
     <div class="dm-msgs" data-msgs>${d.mensajes.length ? d.mensajes.map(burbuja).join('')
@@ -127,6 +170,9 @@ async function abrirChat(box, username, isStale) {
   const msgs = box.querySelector('[data-msgs]');
   const bajar = () => { msgs.scrollTop = msgs.scrollHeight; };
   bajar();
+  // La pantalla puede mostrarse un instante después: bajar otra vez al último mensaje
+  requestAnimationFrame(() => requestAnimationFrame(bajar));
+  setTimeout(bajar, 350);
   let ultimo = d.mensajes.at(-1)?.id || 0;
 
   const pintar = (nuevos) => {
@@ -161,12 +207,12 @@ async function abrirChat(box, username, isStale) {
   });
 
   // En vivo: los mensajes de esta conversación aparecen al instante, sin recargar
-  quitarEscuchas.push(bus.on('dm:mensaje', (d) => {
+  escucha(bus.on('dm:mensaje', (d) => {
     if (!box.isConnected || d.con !== u.username || d.mensaje.id <= ultimo) return;
     pintar([d.mensaje]);
     if (!d.mensaje.mio) api('/api/mensajes/' + encodeURIComponent(u.username) + '/leidos', { method: 'POST' }).then(() => bus.emit('mensajes:leidos')).catch(() => { });
   }));
-  quitarEscuchas.push(bus.on('dm:visto', (d) => {
+  escucha(bus.on('dm:visto', (d) => {
     if (!box.isConnected || d.por !== u.username) return;
     msgs.querySelectorAll('.bubble.mine time').forEach((t) => { if (!t.textContent.includes('Visto')) t.textContent += ' · Visto'; });
   }));
@@ -177,7 +223,7 @@ async function abrirChat(box, username, isStale) {
     if (!box.isConnected) { clearInterval(sondeo); return; }
     if (document.hidden) return;
     try {
-      const r = await api('/api/mensajes/' + encodeURIComponent(u.username));
+      const r = await api('/api/mensajes/' + encodeURIComponent(u.username), { timeout: 12000 });
       const nuevos = r.mensajes.filter((m) => m.id > ultimo);
       if (nuevos.length) { pintar(nuevos); bus.emit('mensajes:leidos'); }
       // Actualizar "Visto" de los míos

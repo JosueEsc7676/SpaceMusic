@@ -100,6 +100,7 @@ public class AdminController {
             return ResponseEntity.badRequest().body(Map.of("error", "Debe quedar al menos un administrador"));
         }
         u.setRol(nuevo);
+        com.bpm.music.security.JwtFilter.olvidar(u.getId());
         if (nuevo != Usuario.Rol.USER && u.getSolicitudColaborador() == Usuario.EstadoSolicitud.PENDIENTE) {
             u.setSolicitudColaborador(Usuario.EstadoSolicitud.APROBADA);
         }
@@ -117,6 +118,7 @@ public class AdminController {
         }
         u.setActivo(activo);
         usuarios.save(u);
+        com.bpm.music.security.JwtFilter.olvidar(u.getId());
         return ResponseEntity.ok(Map.of("ok", true, "usuario", toMap(u)));
     }
 

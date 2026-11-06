@@ -50,6 +50,12 @@ public interface CancionRepository extends JpaRepository<Cancion, Long> {
 
     Optional<Cancion> findFirstByRutaArchivo(String rutaArchivo);
 
+    /** Cambia el género de unas canciones (corrección manual desde Administración). */
+    @Transactional
+    @Modifying
+    @Query("UPDATE Cancion c SET c.genero = :genero WHERE c.id IN :ids")
+    int cambiarGenero(@Param("ids") java.util.Collection<Long> ids, @Param("genero") String genero);
+
     /** Pone el género a canciones que no lo tienen (se obtiene del artista). */
     @Transactional
     @Modifying

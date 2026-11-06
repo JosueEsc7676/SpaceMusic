@@ -23,6 +23,12 @@ public class EventosService {
     public SseEmitter conectar(Long uid) {
         SseEmitter e = new SseEmitter(0L); // sin límite: se mantiene abierta con latidos
         List<SseEmitter> lista = conexiones.computeIfAbsent(uid, k -> new CopyOnWriteArrayList<>());
+        // Máximo 6 dispositivos en vivo por cuenta: se cierra la conexión más vieja (evita que una
+        // sola cuenta acapare el servidor abriendo conexiones sin parar)
+        while (lista.size() >= 6) {
+            SseEmitter vieja = lista.remove(0);
+            try { vieja.complete(); } catch (Exception ignored) { }
+        }
         lista.add(e);
         Runnable quitar = () -> lista.remove(e);
         e.onCompletion(quitar);
@@ -30,6 +36,13 @@ public class EventosService {
         e.onError(x -> quitar.run());
         try { e.send(SseEmitter.event().name("hola").data("{}")); } catch (Exception ex) { quitar.run(); }
         return e;
+    }
+
+    /** Usuarios conectados ahora mismo (con la app o la web abierta) → número de dispositivos. */
+    public Map<Long, Integer> conectados() {
+        Map<Long, Integer> r = new java.util.HashMap<>();
+        conexiones.forEach((uid, lista) -> { if (!lista.isEmpty()) r.put(uid, lista.size()); });
+        return r;
     }
 
     /** Envía un evento a todos los dispositivos abiertos de un usuario. */

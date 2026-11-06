@@ -92,6 +92,8 @@ public class Usuario {
     private String banner;
     /** Qué parte vertical de la portada se ve (0 = arriba, 100 = abajo). */
     private Integer bannerPos;
+    /** Las sesiones iniciadas antes de esta fecha ya no valen (cambio de contraseña o "cerrar sesiones"). */
+    private LocalDateTime sesionesDesde;
     private Boolean mostrarCanciones;
     private Boolean mostrarGeneros;
     private Boolean mostrarVibras;

@@ -76,6 +76,90 @@ public class GeneroService {
     /** Cada 30 minutos: busca el género de los artistas nuevos y lo pone en sus canciones sin género. */
     @Scheduled(initialDelay = 90_000, fixedDelay = 30 * 60_000)
     public void enriquecer() {
+        if (!buscando.compareAndSet(false, true)) return; // ya hay una búsqueda en marcha
+        try { enriquecerAhora(); } finally { buscando.set(false); }
+    }
+
+    private final java.util.concurrent.atomic.AtomicBoolean buscando = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** Administración: lanza la búsqueda de géneros ahora, en segundo plano. */
+    public boolean buscarEnSegundoPlano() {
+        if (buscando.get()) return false;
+        Thread.ofVirtual().start(this::enriquecer);
+        return true;
+    }
+
+    public boolean estaBuscando() { return buscando.get(); }
+
+    /** Administración: qué géneros hay en el servidor y qué artistas no tienen género. */
+    public Map<String, Object> resumenAdmin() {
+        Map<String, int[]> porGenero = new HashMap<>();
+        Map<String, Set<String>> artistasPorGenero = new HashMap<>();
+        Map<String, Integer> sinGenero = new HashMap<>();
+        Map<String, String> nombreSin = new HashMap<>();
+        int total = 0, conGenero = 0;
+        for (CancionDTO c : biblioteca.todas()) {
+            total++;
+            String g = c.getGenero();
+            if (g == null || g.isBlank() || "Desconocido".equalsIgnoreCase(g)) {
+                String k = clave(c.getArtista());
+                if (k.isEmpty()) continue;
+                sinGenero.merge(k, 1, Integer::sum);
+                nombreSin.putIfAbsent(k, principal(c.getArtista()));
+                continue;
+            }
+            conGenero++;
+            porGenero.computeIfAbsent(g, x -> new int[1])[0]++;
+            artistasPorGenero.computeIfAbsent(g, x -> new HashSet<>()).add(principal(c.getArtista()));
+        }
+        List<Map<String, Object>> generos = new ArrayList<>();
+        porGenero.forEach((g, n) -> {
+            Set<String> arts = artistasPorGenero.get(g);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("genero", g);
+            m.put("familia", familia(g));
+            m.put("canciones", n[0]);
+            m.put("artistas", arts.size());
+            m.put("ejemplos", arts.stream().sorted().limit(6).toList());
+            generos.add(m);
+        });
+        generos.sort(Comparator.comparingInt((Map<String, Object> m) -> -(int) m.get("canciones")));
+        List<Map<String, Object>> sin = sinGenero.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                .limit(150)
+                .map(e -> Map.<String, Object>of("artista", nombreSin.get(e.getKey()), "canciones", e.getValue()))
+                .toList();
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("totalCanciones", total);
+        r.put("conGenero", conGenero);
+        r.put("generos", generos);
+        r.put("sinGenero", sin);
+        r.put("artistasSinGenero", sinGenero.size());
+        r.put("buscando", buscando.get());
+        return r;
+    }
+
+    /** Administración: fija a mano el género de un artista (y de todas sus canciones). */
+    public int fijarGenero(String artista, String genero) {
+        String k = clave(artista);
+        String g = genero == null ? "" : genero.trim();
+        if (k.isEmpty() || g.isEmpty() || g.length() > 60) throw new IllegalArgumentException("Artista o género inválido");
+        g = mostrar(g.toLowerCase(Locale.ROOT));
+        ArtistaGenero a = repo.findByClave(k).orElseGet(() -> ArtistaGenero.builder().clave(k).build());
+        a.setNombre(principal(artista));
+        a.setGeneros(g.toLowerCase(Locale.ROOT));
+        a.setPrincipal(g);
+        a.setFecha(LocalDateTime.now());
+        repo.save(a);
+        cache.remove(k);
+        List<Long> ids = biblioteca.todas().stream().filter(c -> clave(c.getArtista()).equals(k)).map(CancionDTO::getId).toList();
+        int n = ids.isEmpty() ? 0 : canciones.cambiarGenero(ids, g);
+        biblioteca.invalidar();
+        log.info("Género de {} cambiado a mano a {} ({} canciones)", artista, g, n);
+        return n;
+    }
+
+    private void enriquecerAhora() {
         Map<String, List<CancionDTO>> sinGenero = new HashMap<>();
         Map<String, String> nombres = new HashMap<>();
         for (CancionDTO c : biblioteca.todas()) {
@@ -239,5 +323,82 @@ public class GeneroService {
         Set<String> fb = b.stream().limit(3).map(GeneroService::familia).collect(Collectors.toSet());
         fa.retainAll(fb);
         return Math.min(1, jaccard + (fa.isEmpty() ? 0 : 0.35));
+    }
+
+    // ═══════════════════ Buscar por género o estado de ánimo ═══════════════════
+
+    private record Estilo(String titulo, Set<String> familias, List<String> palabras) {}
+
+    /** Palabras que la gente escribe → qué música buscar. */
+    private static final Map<String, Estilo> ESTILOS = new LinkedHashMap<>();
+    static {
+        Estilo urbano = new Estilo("Reggaetón y urbano", Set.of("urbano"), List.of("reggaeton", "trap latino", "dembow"));
+        for (String k : List.of("reggaeton", "regueton", "reguetón", "reggaetón", "perreo", "urbano", "dembow", "trap latino")) ESTILOS.put(k, urbano);
+        Estilo regional = new Estilo("Regional mexicano", Set.of("regional"), List.of("regional", "banda", "corrido", "norteño", "mexicana"));
+        for (String k : List.of("banda", "corridos", "corrido", "regional", "norteño", "norteno", "mexicana", "sierreño", "sierreno", "tumbados", "mariachi", "rancheras")) ESTILOS.put(k, regional);
+        Estilo tropical = new Estilo("Tropical: salsa, bachata y cumbia", Set.of("tropical"), List.of("salsa", "bachata", "cumbia", "merengue"));
+        for (String k : List.of("bachata", "salsa", "cumbia", "merengue", "tropical", "vallenato")) ESTILOS.put(k, tropical);
+        Estilo hiphop = new Estilo("Hip hop y rap", Set.of("hiphop"), List.of("hip hop", "rap", "trap"));
+        for (String k : List.of("rap", "hiphop", "hip hop", "trap", "drill")) ESTILOS.put(k, hiphop);
+        Estilo electronica = new Estilo("Electrónica", Set.of("electronica"), List.of("electr", "house", "techno", "edm"));
+        for (String k : List.of("electronica", "electrónica", "house", "techno", "edm", "dj", "electro")) ESTILOS.put(k, electronica);
+        Estilo rnb = new Estilo("R&B", Set.of("rnb"), List.of("r&b", "soul"));
+        for (String k : List.of("rnb", "r&b", "soul")) ESTILOS.put(k, rnb);
+        Estilo rock = new Estilo("Rock", Set.of("rock"), List.of("rock", "metal", "indie"));
+        for (String k : List.of("rock", "metal", "indie", "alternativo", "punk")) ESTILOS.put(k, rock);
+        Estilo pop = new Estilo("Pop", Set.of("pop"), List.of("pop"));
+        ESTILOS.put("pop", pop);
+        Estilo cristiana = new Estilo("Música cristiana", Set.of("cristiana"), List.of("cristian", "alabanza", "worship", "gospel"));
+        for (String k : List.of("cristiana", "cristiano", "alabanza", "alabanzas", "adoracion", "adoración", "gospel", "worship")) ESTILOS.put(k, cristiana);
+        Estilo romantica = new Estilo("Romántica", Set.of("romantica", "rnb"), List.of("balada", "bolero", "romant"));
+        for (String k : List.of("romantica", "romántica", "romantico", "amor", "baladas", "balada", "boleros", "bolero", "enamorado")) ESTILOS.put(k, romantica);
+        // Estados de ánimo
+        Estilo relajante = new Estilo("Música relajante", Set.of("rnb", "romantica", "clasica"), List.of("ambient", "lo-fi", "chill", "soul", "jazz"));
+        for (String k : List.of("relajante", "relajar", "relax", "tranquila", "tranquilo", "calma", "chill", "dormir", "estudiar", "suave", "lofi", "lo fi")) ESTILOS.put(k, relajante);
+        Estilo fiesta = new Estilo("Para la fiesta", Set.of("urbano", "tropical", "electronica"), List.of("dance", "reggaeton", "house"));
+        for (String k : List.of("fiesta", "bailar", "party", "antro", "rumba", "perrear", "fiestera", "bailable")) ESTILOS.put(k, fiesta);
+        Estilo triste = new Estilo("Para el despecho", Set.of("romantica", "regional"), List.of("balada", "bolero"));
+        for (String k : List.of("triste", "despecho", "desamor", "llorar", "nostalgia", "nostalgica")) ESTILOS.put(k, triste);
+        Estilo gym = new Estilo("Con energía", Set.of("hiphop", "urbano", "electronica", "rock"), List.of("trap", "edm"));
+        for (String k : List.of("gym", "gimnasio", "entrenar", "motivacion", "motivación", "energia", "energía", "correr", "ejercicio")) ESTILOS.put(k, gym);
+    }
+
+    /**
+     * Si la búsqueda es un género o un estado de ánimo ("banda", "música relajante", "reggaetón"),
+     * devuelve un título y las canciones que encajan. Si no, null.
+     */
+    public Map<String, Object> buscarPorEstilo(String consulta) {
+        String q = BibliotecaService.normalizar(consulta).replaceAll("\b(musica|music|canciones|de|para|el|la|los|las|un|una)\b", " ").trim().replaceAll("\s+", " ");
+        if (q.length() < 3) return null;
+        Estilo e = ESTILOS.get(q);
+        if (e == null) for (String palabra : q.split(" ")) { e = ESTILOS.get(palabra); if (e != null) break; }
+        List<CancionDTO> todas = biblioteca.todas();
+        List<CancionDTO> r = new ArrayList<>();
+        String titulo;
+        if (e != null) {
+            final Estilo est = e;
+            for (CancionDTO c : todas) {
+                String g = BibliotecaService.normalizar(c.getGenero());
+                if (g.isEmpty() || g.equals("desconocido")) continue;
+                if (est.familias().contains(familia(c.getGenero())) || est.palabras().stream().anyMatch(g::contains)) r.add(c);
+            }
+            titulo = est.titulo();
+        } else {
+            // ¿Coincide con un género que existe en el servidor? ("bolero beat", "dancehall"…)
+            for (CancionDTO c : todas) if (BibliotecaService.normalizar(c.getGenero()).contains(q)) r.add(c);
+            if (r.isEmpty()) return null;
+            titulo = mostrar(r.get(0).getGenero());
+        }
+        if (r.isEmpty()) return Map.of("titulo", titulo, "canciones", List.of(), "vacio", true);
+        // Las más escuchadas primero, con algo de variedad entre artistas
+        r.sort(Comparator.comparingInt(CancionDTO::getReproducciones).reversed());
+        Map<String, Integer> porArtista = new HashMap<>();
+        List<CancionDTO> elegidas = new ArrayList<>(), resto = new ArrayList<>();
+        for (CancionDTO c : r) {
+            int n = porArtista.merge(BibliotecaService.normalizar(c.getArtista()), 1, Integer::sum);
+            (n <= 4 ? elegidas : resto).add(c);
+        }
+        elegidas.addAll(resto);
+        return Map.of("titulo", titulo, "canciones", elegidas.stream().limit(50).toList(), "total", r.size());
     }
 }

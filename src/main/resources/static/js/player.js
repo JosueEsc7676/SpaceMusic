@@ -25,6 +25,31 @@ const preloader = new Audio();
 preloader.preload = 'auto';
 preloader.muted = true;
 
+// iPhone: con la pantalla apagada (y más con datos móviles) iOS corta el audio si la
+// siguiente canción tarda en llegar. Se descarga antes a la memoria y el cambio es instantáneo.
+// (En iOS no se usa el segundo <audio> para precargar: puede interrumpir al principal.)
+const MAX_MEMORIA = 30 * 1024 * 1024;
+const siguiente = { id: null, url: null, ctrl: null };
+function soltarSiguiente() {
+  siguiente.ctrl?.abort();
+  if (siguiente.url) URL.revokeObjectURL(siguiente.url);
+  siguiente.id = siguiente.url = siguiente.ctrl = null;
+}
+async function traerSiguiente(id) {
+  soltarSiguiente();
+  siguiente.id = id;
+  const ctrl = (siguiente.ctrl = new AbortController());
+  try {
+    const r = await fetch(audioUrl(id), { signal: ctrl.signal });
+    const largo = Number(r.headers.get('Content-Length') || 0);
+    if (!r.ok || largo > MAX_MEMORIA) { ctrl.abort(); return; }
+    const blob = await r.blob();
+    if (siguiente.id !== id || blob.size > MAX_MEMORIA) return;
+    siguiente.url = URL.createObjectURL(blob);
+  } catch { /* sin conexión o cancelada: se usará la red normal */ }
+}
+let urlEnUso = null; // copia en memoria que suena ahora (se libera al cambiar)
+
 export const player = {
   audio,
   items: [],
@@ -259,7 +284,17 @@ export const player = {
     this._scrobbled = false;
     this._lastTick = 0;
     this.buffering = true;
-    audio.src = audioUrl(s.id);
+    if (urlEnUso) { URL.revokeObjectURL(urlEnUso); urlEnUso = null; }
+    if (siguiente.id === s.id && siguiente.url) {
+      // Ya estaba en memoria: arranca al instante aunque la pantalla esté apagada
+      urlEnUso = siguiente.url;
+      siguiente.url = null;
+      siguiente.id = null;
+      audio.src = urlEnUso;
+    } else {
+      if (siguiente.id !== null && siguiente.id !== s.id) soltarSiguiente();
+      audio.src = audioUrl(s.id);
+    }
     if (startAt > 0) {
       const onMeta = () => { audio.currentTime = Math.min(startAt, (audio.duration || startAt) - 1); audio.removeEventListener('loadedmetadata', onMeta); };
       audio.addEventListener('loadedmetadata', onMeta);
@@ -364,9 +399,19 @@ audio.addEventListener('timeupdate', () => {
   if ('mediaSession' in navigator && navigator.mediaSession.setPositionState && isFinite(audio.duration)) {
     try { navigator.mediaSession.setPositionState({ duration: audio.duration, position: Math.min(audio.currentTime, audio.duration), playbackRate: 1 }); } catch { }
   }
+  // Si la cola se acaba, pedir la radio con tiempo (no justo al terminar)
+  const cur = player.current;
+  if (prefs.autoRadio && cur && player.repeat === 'off' && player.items.length - player.index <= 1
+      && audio.duration && audio.currentTime > audio.duration * 0.4 && player._radioPara !== cur._uid) {
+    player._radioPara = cur._uid;
+    player._extendWithRadio(false);
+  }
   // Precargar la siguiente canción cuando falte poco
   const nxt = player.items[player.index + 1];
-  if (nxt && audio.duration && audio.currentTime > audio.duration * 0.6 && preloader.dataset.id !== String(nxt.id)) {
+  if (!nxt || !audio.duration) return;
+  if (esIOS) {
+    if (audio.currentTime > audio.duration * 0.35 && siguiente.id !== nxt.id) traerSiguiente(nxt.id);
+  } else if (audio.currentTime > audio.duration * 0.6 && preloader.dataset.id !== String(nxt.id)) {
     preloader.dataset.id = String(nxt.id);
     preloader.src = audioUrl(nxt.id);
     preloader.load();

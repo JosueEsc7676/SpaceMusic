@@ -19,6 +19,7 @@ import java.util.*;
 public class BibliotecaController {
 
     private final com.bpm.music.services.PerfilService perfiles;
+    private final com.bpm.music.services.GeneroService generos;
 
     private final BibliotecaService biblioteca;
     private final UsuarioService usuarios;
@@ -28,8 +29,9 @@ public class BibliotecaController {
 
     public BibliotecaController(BibliotecaService biblioteca, UsuarioService usuarios,
                                 RecomendacionService recomendaciones, PlaylistService playlists,
-                                EstadisticasService estadisticas, com.bpm.music.services.PerfilService perfiles) {
+                                EstadisticasService estadisticas, com.bpm.music.services.PerfilService perfiles, com.bpm.music.services.GeneroService generos) {
         this.perfiles = perfiles;
+        this.generos = generos;
         this.biblioteca = biblioteca;
         this.usuarios = usuarios;
         this.recomendaciones = recomendaciones;
@@ -69,6 +71,8 @@ public class BibliotecaController {
             r.put("generos", biblioteca.generos().stream()
                     .filter(g -> BibliotecaService.normalizar((String) g.get("nombre")).contains(nq)).limit(6).toList());
             r.put("usuarios", perfiles.buscar(q, uid));
+            Map<String, Object> estilo = generos.buscarPorEstilo(q);
+            if (estilo != null) r.put("estilo", estilo);
         } else {
             r.put("usuarios", List.of());
             r.put("playlists", List.of());

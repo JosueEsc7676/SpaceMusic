@@ -49,7 +49,7 @@ async function consultar() {
 }
 
 /** Panel de notificaciones (campana). */
-const ICONO = { ACTUALIZACION: 'sparkles', CANCIONES: 'note', PLAYLIST: 'library', COLABORADOR: 'star', SEGUIDOR: 'user', AMIGO: 'users' };
+const ICONO = { ACTUALIZACION: 'sparkles', AVISO: 'bell', CANCIONES: 'note', PLAYLIST: 'library', COLABORADOR: 'star', SEGUIDOR: 'user', AMIGO: 'users' };
 
 function filaNotif(n) {
   const fig = n.de ? avatarPersona(n.de) : `<span class="notif-ico t-${esc(n.tipo)}">${icon(ICONO[n.tipo] || 'bell', 'sm')}</span>`;
