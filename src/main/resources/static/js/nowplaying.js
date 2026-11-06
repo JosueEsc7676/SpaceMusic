@@ -450,9 +450,8 @@ export const np = {
     m.activa = i;
     const box = this.el.querySelector('[data-mini-lyr]');
     const fila = (k, cls) => (m.lines[k] ? `<span class="${cls}">${esc(m.lines[k].text)}</span>` : '');
-    box.innerHTML = i < 0
-      ? `<span class="act dim">♪</span>${fila(0, 'sig')}`
-      : `${fila(i, 'act')}${fila(i + 1, 'sig')}`;
+    // Solo la línea que se está cantando (antes de la primera, una nota)
+    box.innerHTML = i < 0 ? '<span class="act dim">♪</span>' : fila(i, 'act');
   },
 
   loop() {

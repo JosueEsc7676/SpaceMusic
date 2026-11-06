@@ -686,3 +686,8 @@ html.ios .volume, html.ios .np-vol, html.ios [data-eq] { display: none !importan
   .genre-bar { grid-template-columns: minmax(80px, 110px) 1fr auto; gap: 8px; }
   .gb-num small { display: none; }
 }
+
+/* Letra en miniatura: una sola línea, centrada en el espacio entre el artista y la barra */
+.np.no-panel .np-mini-lyr:not(.hidden) { align-self: stretch; justify-content: center; margin: 0; padding: 10px 0; min-height: 64px; }
+.np-mini-lyr .act { -webkit-line-clamp: 3; }
+.np-mini-lyr .sig { display: none; }
