@@ -1,7 +1,7 @@
 # Registro de cambios
 
 ## Versión 2.4 (app Android 1.3)
-- **Géneros automáticos:** cada artista se consulta una vez en MusicBrainz y su género pasa a las canciones que no lo tienen (tabla `artista_genero`, se revisa cada 30 min).
+- **Géneros automáticos:** cada artista se consulta una vez en MusicBrainz (y en Deezer si no aparece) y su género pasa a las canciones que no lo tienen (tabla `artista_genero`, se revisa cada 30 min). Con colaboraciones ("Bad Bunny, ABRA") se usa el artista principal. Resultado: 533 de 543 canciones con género.
 - **Radio más inteligente:** al terminar la lista sigue con canciones parecidas. Usa:
   - mismo artista y artistas con géneros parecidos;
   - "quienes escuchan a X también escuchan a Y", entre todos los usuarios;

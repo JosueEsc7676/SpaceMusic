@@ -62,7 +62,13 @@ public class GeneroService {
     }
 
     static String clave(String artista) {
-        return BibliotecaService.normalizar(MetadataService.primerArtista(artista == null ? "" : artista));
+        return BibliotecaService.normalizar(principal(artista));
+    }
+
+    /** Artista principal: "Bad Bunny, ABRA" → "Bad Bunny"; "Drake feat. X" → "Drake". */
+    static String principal(String artista) {
+        String a = MetadataService.primerArtista(artista == null ? "" : artista);
+        return a.split("(?i)\\s*(,|;|&| feat\\.? | ft\\.? | featuring | x | y | with )\\s*")[0].trim();
     }
 
     // ═══════════════════ Enriquecer la biblioteca ═══════════════════
@@ -78,7 +84,7 @@ public class GeneroService {
             String k = clave(c.getArtista());
             if (k.isEmpty()) continue;
             sinGenero.computeIfAbsent(k, x -> new ArrayList<>()).add(c);
-            nombres.putIfAbsent(k, MetadataService.primerArtista(c.getArtista()));
+            nombres.putIfAbsent(k, principal(c.getArtista()));
         }
         if (sinGenero.isEmpty()) return;
         int buscados = 0, actualizadas = 0;
@@ -93,6 +99,7 @@ public class GeneroService {
                 if (buscados >= 40) break; // no saturar MusicBrainz en una sola pasada
                 buscados++;
                 List<String> gen = buscarMusicBrainz(nombres.get(k));
+                if (gen.isEmpty()) gen = buscarDeezer(nombres.get(k)); // segunda fuente
                 a = guardado.orElseGet(() -> ArtistaGenero.builder().clave(k).build());
                 a.setNombre(nombres.get(k));
                 a.setGeneros(String.join(",", gen));
@@ -114,15 +121,19 @@ public class GeneroService {
 
     private List<String> buscarMusicBrainz(String artista) {
         try {
-            String q = URLEncoder.encode("artist:\"" + artista.replace("\"", "") + "\"", StandardCharsets.UTF_8);
-            JsonNode r = get("https://musicbrainz.org/ws/2/artist/?query=" + q + "&limit=3&fmt=json");
-            if (r == null || !r.path("artists").isArray() || r.path("artists").isEmpty()) return List.of();
-            // El primer resultado con nombre parecido y buena puntuación
             String objetivo = BibliotecaService.normalizar(artista);
             String id = null;
-            for (JsonNode a : r.path("artists")) {
-                String n = BibliotecaService.normalizar(a.path("name").asText());
-                if (a.path("score").asInt() >= 85 && (n.equals(objetivo) || n.contains(objetivo) || objetivo.contains(n))) { id = a.path("id").asText(); break; }
+            // Primero el nombre exacto; si no aparece, una búsqueda más flexible (acentos, mayúsculas…)
+            for (String consulta : List.of("artist:\"" + artista.replace("\"", "") + "\"", artista.replace("\"", ""))) {
+                JsonNode r = get("https://musicbrainz.org/ws/2/artist/?query=" + URLEncoder.encode(consulta, StandardCharsets.UTF_8) + "&limit=5&fmt=json");
+                if (r != null) {
+                    for (JsonNode a : r.path("artists")) {
+                        String n = BibliotecaService.normalizar(a.path("name").asText());
+                        if (a.path("score").asInt() >= 80 && (n.equals(objetivo) || n.contains(objetivo) || objetivo.contains(n))) { id = a.path("id").asText(); break; }
+                    }
+                }
+                if (id != null) break;
+                Thread.sleep(1100);
             }
             if (id == null) return List.of();
             Thread.sleep(1100);
@@ -140,6 +151,26 @@ public class GeneroService {
         }
     }
 
+    /** Deezer (sin clave): géneros del primer álbum que de verdad sea de ese artista. */
+    private List<String> buscarDeezer(String artista) {
+        try {
+            String objetivo = BibliotecaService.normalizar(artista);
+            JsonNode r = get("https://api.deezer.com/search/album?limit=8&q=" + URLEncoder.encode("artist:\"" + artista.replace("\"", "") + "\"", StandardCharsets.UTF_8));
+            if (r == null) return List.of();
+            for (JsonNode al : r.path("data")) {
+                if (!BibliotecaService.normalizar(al.path("artist").path("name").asText()).equals(objetivo)) continue;
+                JsonNode d = get("https://api.deezer.com/album/" + al.path("id").asText());
+                if (d == null) continue;
+                List<String> g = new ArrayList<>();
+                d.path("genres").path("data").forEach(x -> g.add(x.path("name").asText().toLowerCase(Locale.ROOT).trim()));
+                if (!g.isEmpty()) return g.stream().filter(x -> !x.isEmpty()).distinct().limit(5).toList();
+            }
+        } catch (Exception ex) {
+            log.debug("Deezer ({}): {}", artista, ex.getMessage());
+        }
+        return List.of();
+    }
+
     private JsonNode get(String url) throws Exception {
         HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(12))
                 .header("User-Agent", AGENTE).header("Accept", "application/json").GET().build();
@@ -153,7 +184,7 @@ public class GeneroService {
             Map.entry("reggaeton", "Reggaetón"), Map.entry("trap latino", "Trap latino"), Map.entry("latin trap", "Trap latino"),
             Map.entry("latin", "Latino"), Map.entry("latin pop", "Pop latino"), Map.entry("urbano latino", "Urbano latino"),
             Map.entry("hip hop", "Hip hop"), Map.entry("rap", "Rap"), Map.entry("trap", "Trap"), Map.entry("r&b", "R&B"),
-            Map.entry("contemporary r&b", "R&B"), Map.entry("pop", "Pop"), Map.entry("rock", "Rock"),
+            Map.entry("contemporary r&b", "R&B"), Map.entry("alternative r&b", "R&B alternativo"), Map.entry("pop", "Pop"), Map.entry("rock", "Rock"),
             Map.entry("electronic", "Electrónica"), Map.entry("electronica", "Electrónica"), Map.entry("edm", "EDM"),
             Map.entry("house", "House"), Map.entry("techno", "Techno"), Map.entry("dance", "Dance"),
             Map.entry("regional mexicano", "Regional mexicano"), Map.entry("regional mexican", "Regional mexicano"),
@@ -163,7 +194,9 @@ public class GeneroService {
             Map.entry("christian", "Cristiana"), Map.entry("christian music", "Cristiana"), Map.entry("worship", "Alabanza"),
             Map.entry("gospel", "Gospel"), Map.entry("soul", "Soul"), Map.entry("funk", "Funk"), Map.entry("jazz", "Jazz"),
             Map.entry("indie", "Indie"), Map.entry("alternative rock", "Rock alternativo"), Map.entry("dembow", "Dembow"),
-            Map.entry("uk garage", "UK garage"), Map.entry("ambient", "Ambient"), Map.entry("pop rap", "Pop rap"));
+            Map.entry("uk garage", "UK garage"), Map.entry("música mexicana", "Regional mexicano"), Map.entry("musica mexicana", "Regional mexicano"),
+            Map.entry("rap/hip hop", "Hip hop"), Map.entry("electro", "Electrónica"), Map.entry("rock latino", "Rock latino"),
+            Map.entry("r&b/soul", "R&B"), Map.entry("ambient", "Ambient"), Map.entry("pop rap", "Pop rap"));
 
     /** Nombre para mostrar de un género de MusicBrainz. */
     public static String mostrar(String g) {
@@ -178,7 +211,7 @@ public class GeneroService {
         String g = BibliotecaService.normalizar(genero);
         if (g.isEmpty() || g.equals("desconocido")) return "";
         if (g.matches(".*(reggaeton|reggaetón|dembow|trap latino|latin trap|urbano|perreo|latin hip hop).*")) return "urbano";
-        if (g.matches(".*(corrido|regional|banda|norteno|norteño|sierreno|mariachi|ranchera|grupero).*")) return "regional";
+        if (g.matches(".*(corrido|regional|mexican|banda|norteno|norteño|sierreno|mariachi|ranchera|grupero).*")) return "regional";
         if (g.matches(".*(salsa|cumbia|bachata|merengue|tropical|vallenato).*")) return "tropical";
         if (g.matches(".*(christian|cristian|worship|alabanza|gospel|adoracion).*")) return "cristiana";
         if (g.matches(".*(hip hop|rap|trap|drill|grime).*")) return "hiphop";
