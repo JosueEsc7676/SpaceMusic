@@ -92,6 +92,7 @@ public class PerfilService {
         p.put("esYo", yo);
         p.put("biografia", u.getBiografia());
         p.put("banner", u.getBanner());
+        p.put("bannerPos", u.getBannerPos() == null ? 50 : u.getBannerPos());
         p.put("desde", u.getFechaRegistro());
         p.put("seguidores", seguimientos.countBySeguidoId(u.getId()));
         p.put("siguiendo", seguimientos.countBySeguidorId(u.getId()));
@@ -296,8 +297,15 @@ public class PerfilService {
         Usuario u = usuarios.findById(uid).orElseThrow();
         String anterior = u.getBanner();
         u.setBanner(url);
+        u.setBannerPos(50);
         usuarios.save(u);
         return anterior;
+    }
+
+    public void posicionBanner(Long uid, int pos) {
+        Usuario u = usuarios.findById(uid).orElseThrow();
+        u.setBannerPos(Math.max(0, Math.min(100, pos)));
+        usuarios.save(u);
     }
 
     public Map<String, Object> guardarPrivacidad(Long uid, Map<String, Object> b) {

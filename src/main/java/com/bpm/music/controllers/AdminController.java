@@ -21,8 +21,11 @@ public class AdminController {
     private final EscanerService escaner;
     private final MailService mail;
     private final AuthService auth;
+    private final com.bpm.music.services.NotificacionesService notificaciones;
 
-    public AdminController(UsuarioRepository usuarios, EscanerService escaner, MailService mail, AuthService auth) {
+    public AdminController(UsuarioRepository usuarios, EscanerService escaner, MailService mail, AuthService auth,
+                           com.bpm.music.services.NotificacionesService notificaciones) {
+        this.notificaciones = notificaciones;
         this.auth = auth;
         this.usuarios = usuarios;
         this.escaner = escaner;
@@ -67,6 +70,8 @@ public class AdminController {
         u.setRespuestaAdmin(nota(b));
         usuarios.save(u);
         mail.solicitudResuelta(u.getEmail(), u.getNombreVisible(), true, u.getRespuestaAdmin());
+        notificaciones.crear(u.getId(), "COLABORADOR", CurrentUser.id(),
+                "¡Ya eres colaborador! Ahora puedes subir canciones, corregir datos y agregar letras.", "#/subir");
         return Map.of("ok", true, "usuario", toMap(u));
     }
 

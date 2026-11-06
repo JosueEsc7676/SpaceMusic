@@ -19,6 +19,7 @@ import { pintarCuerpo, ocultarSplash } from './splash.js';
 import { iniciarOffline } from './offline.js';
 import { perfilPublicoView } from './views/people.js';
 import { mensajesView } from './views/mensajes.js';
+import { novedadesView } from './views/novedades.js';
 import { iniciarAvisos } from './avisos.js';
 import { iniciarNativo, modoLigero } from './nativo.js';
 
@@ -124,6 +125,8 @@ route('/mix/:id', mixView);
 route('/perfil', profileView);
 route('/u/:username', perfilPublicoView);
 route('/mensajes', mensajesView);
+route('/novedades', novedadesView);
+route('/novedades/:version', novedadesView);
 route('/mensajes/:username', mensajesView);
 route('/estadisticas', statsView);
 route('/admin', adminView);
@@ -547,7 +550,7 @@ async function boot() {
   registrarServiceWorker();
   iniciarOffline({ toast });
   iniciarNativo();
-  mostrarNovedades();
+  // Las novedades de cada versión llegan como notificación (campana) y abren #/novedades
   avisarActividad();
   iniciarAvisos();
 }

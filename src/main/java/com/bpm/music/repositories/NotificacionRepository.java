@@ -11,9 +11,19 @@ import java.util.List;
 
 public interface NotificacionRepository extends JpaRepository<Notificacion, Long> {
 
-    List<Notificacion> findTop40ByUsuarioIdOrderByIdDesc(Long usuarioId);
+    List<Notificacion> findTop100ByUsuarioIdOrderByIdDesc(Long usuarioId);
 
     long countByUsuarioIdAndLeidaFalse(Long usuarioId);
+
+    boolean existsByUsuarioIdAndTipoAndRuta(Long usuarioId, String tipo, String ruta);
+
+    @Modifying
+    @Transactional
+    long deleteByUsuarioId(Long usuarioId);
+
+    @Modifying
+    @Transactional
+    long deleteByIdAndUsuarioId(Long id, Long usuarioId);
 
     Notificacion findFirstByUsuarioIdAndLeidaFalseOrderByIdDesc(Long usuarioId);
 

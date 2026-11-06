@@ -24,8 +24,11 @@ public class PlaylistService {
     private final BibliotecaService biblioteca;
     private final ImagenService imagenes;
 
+    private final NotificacionesService notificaciones;
+
     public PlaylistService(PlaylistRepository repo, UsuarioRepository usuarios,
-                           BibliotecaService biblioteca, ImagenService imagenes) {
+                           BibliotecaService biblioteca, ImagenService imagenes, NotificacionesService notificaciones) {
+        this.notificaciones = notificaciones;
         this.repo = repo;
         this.usuarios = usuarios;
         this.biblioteca = biblioteca;
@@ -85,9 +88,12 @@ public class PlaylistService {
         Playlist p = propia(id, userId);
         if (datos.containsKey("nombre")) p.setNombre(validarNombre(String.valueOf(datos.get("nombre"))));
         if (datos.containsKey("descripcion")) p.setDescripcion(recortar(Objects.toString(datos.get("descripcion"), ""), 500));
+        boolean eraPublica = p.isPublica();
         if (datos.containsKey("publica")) p.setPublica(Boolean.parseBoolean(String.valueOf(datos.get("publica"))));
         p.setFechaActualizacion(LocalDateTime.now());
-        return dto(repo.save(p), userId, false);
+        PlaylistDTO r = dto(repo.save(p), userId, false);
+        if (!eraPublica && p.isPublica() && r.getCancionesCount() > 0) notificaciones.playlistPublicada(userId, p.getId(), p.getNombre());
+        return r;
     }
 
     @Transactional
@@ -145,6 +151,8 @@ public class PlaylistService {
             } else repetidas++;
         }
         actualizarConteo(p);
+        // Una playlist pública que estaba vacía ya tiene canciones: ahora sí se avisa a los seguidores
+        if (p.isPublica() && agregadas > 0 && actuales.size() == agregadas) notificaciones.playlistPublicada(userId, p.getId(), p.getNombre());
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("agregadas", agregadas);
         r.put("repetidas", repetidas);

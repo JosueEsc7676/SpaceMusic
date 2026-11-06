@@ -71,10 +71,16 @@ export async function perfilPublicoView(el, { username }, _q, isStale) {
     const privado = !p.esYo && !p.topCanciones && !p.topGeneros && !p.vibras
       ? `<p class="muted p-private">${icon('lock', 'sm')} ${esc(p.nombre)} prefiere no mostrar lo que escucha.</p>` : '';
 
-    const banner = `<div class="p-banner ${p.banner ? 'has' : ''}" ${p.banner ? `style="--img:url('${esc(p.banner)}')"` : ''}>
-        ${p.banner ? `<img class="p-banner-img" src="${esc(p.banner)}" alt="" data-banner-img>` : ''}
-        ${p.esYo ? `<div class="p-banner-tools"><label class="btn glass sm">${icon('edit', 'sm')} ${p.banner ? 'Cambiar portada' : 'Poner foto de portada'}<input type="file" accept="image/*" data-banner hidden></label>
-          ${p.banner ? `<button class="btn glass sm" data-quitar-banner>${icon('trash', 'sm')}</button>` : ''}</div>` : ''}</div>`;
+    // Portada al estilo de las redes sociales: franja de altura fija; el usuario elige qué parte se ve
+    const pos = p.bannerPos ?? 50;
+    const banner = `<div class="p-banner ${p.banner ? 'has' : ''}" data-banner-box>
+        ${p.banner ? `<img class="p-banner-img" src="${esc(p.banner)}" alt="" draggable="false" style="object-position:50% ${pos}%" data-banner-img>` : ''}
+        ${p.esYo ? `<div class="p-banner-tools" data-tools>
+          <label class="btn glass sm">${icon('edit', 'sm')} ${p.banner ? 'Cambiar' : 'Poner foto de portada'}<input type="file" accept="image/*" data-banner hidden></label>
+          ${p.banner ? `<button class="btn glass sm" data-ajustar>${icon('drag', 'sm')} Ajustar</button>
+          <button class="btn glass sm" data-quitar-banner aria-label="Quitar portada">${icon('trash', 'sm')}</button>` : ''}</div>
+          <div class="p-banner-tools hidden" data-tools-ajuste><span class="p-hint">Arrastra la foto hacia arriba o abajo</span>
+            <button class="btn glass sm" data-cancelar-ajuste>Cancelar</button><button class="btn primary sm" data-guardar-ajuste>Listo</button></div>` : ''}</div>`;
     el.innerHTML = `${banner}
       <header class="p-head">
         ${avatarPersona(p, 'xl')}
@@ -103,16 +109,41 @@ export async function perfilPublicoView(el, { username }, _q, isStale) {
         draw();
       } catch (err) { errorToast(err); }
     });
-    // La portada se ve completa: su altura sigue la forma de la foto (con un límite)
+    // Ajustar qué parte de la portada se ve: arrastrar en vertical y "Listo"
+    const caja = el.querySelector('[data-banner-box]');
     const bImg = el.querySelector('[data-banner-img]');
-    const ajustar = () => {
-      const caja = bImg?.parentElement;
-      if (!caja || !bImg.naturalWidth) return;
-      const arriba = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) || 60;
-      const alto = Math.max(140, Math.min(caja.clientWidth * bImg.naturalHeight / bImg.naturalWidth, innerHeight * (innerWidth < 821 ? 0.34 : 0.42), 480));
-      caja.style.height = Math.round(alto + arriba + 78) + 'px';
+    let ajuste = null;
+    const modo = (activo) => {
+      caja?.classList.toggle('ajustando', activo);
+      el.querySelector('[data-tools]')?.classList.toggle('hidden', activo);
+      el.querySelector('[data-tools-ajuste]')?.classList.toggle('hidden', !activo);
     };
-    if (bImg) { bImg.complete ? ajustar() : bImg.addEventListener('load', ajustar); window.addEventListener('resize', ajustar); }
+    el.querySelector('[data-ajustar]')?.addEventListener('click', () => { ajuste = { pos: p.bannerPos ?? 50 }; modo(true); });
+    el.querySelector('[data-cancelar-ajuste]')?.addEventListener('click', () => {
+      ajuste = null; modo(false); if (bImg) bImg.style.objectPosition = `50% ${p.bannerPos ?? 50}%`;
+    });
+    el.querySelector('[data-guardar-ajuste]')?.addEventListener('click', async () => {
+      if (!ajuste) return;
+      const nueva = Math.round(ajuste.pos);
+      ajuste = null; modo(false);
+      try { await api('/api/perfiles/yo/banner/posicion', { method: 'PUT', body: { pos: nueva } }); p = { ...p, bannerPos: nueva }; toast('Portada ajustada'); }
+      catch (err) { errorToast(err); }
+    });
+    caja?.addEventListener('pointerdown', (e) => {
+      if (!ajuste || !bImg || e.target.closest('button, label')) return;
+      e.preventDefault();
+      const y0 = e.clientY, p0 = ajuste.pos;
+      // Cuánto se puede mover: la parte de la foto que no cabe en la franja
+      const escala = caja.clientWidth / (bImg.naturalWidth || 1);
+      const sobra = Math.max(1, bImg.naturalHeight * escala - caja.clientHeight);
+      const mover = (ev) => {
+        ajuste.pos = Math.max(0, Math.min(100, p0 - ((ev.clientY - y0) / sobra) * 100));
+        bImg.style.objectPosition = `50% ${ajuste.pos}%`;
+      };
+      const soltar = () => { document.removeEventListener('pointermove', mover); document.removeEventListener('pointerup', soltar); };
+      document.addEventListener('pointermove', mover);
+      document.addEventListener('pointerup', soltar);
+    });
     el.querySelector('[data-banner]')?.addEventListener('change', async (e) => {
       const f = e.target.files[0];
       if (!f) return;

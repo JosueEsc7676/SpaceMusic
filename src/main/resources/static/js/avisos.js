@@ -49,11 +49,21 @@ async function consultar() {
 }
 
 /** Panel de notificaciones (campana). */
+const ICONO = { ACTUALIZACION: 'sparkles', CANCIONES: 'note', PLAYLIST: 'library', COLABORADOR: 'star', SEGUIDOR: 'user', AMIGO: 'users' };
+
+function filaNotif(n) {
+  const fig = n.de ? avatarPersona(n.de) : `<span class="notif-ico t-${esc(n.tipo)}">${icon(ICONO[n.tipo] || 'bell', 'sm')}</span>`;
+  return `<div class="notif ${n.leida ? '' : 'unread'}" data-id="${n.id}">
+    <a class="notif-main" href="${esc(n.ruta || '#/')}">${fig}<span><p>${esc(n.texto)}</p><small>${esc(timeAgo(n.fecha))}</small></span></a>
+    <button class="icon-btn notif-x" data-borrar="${n.id}" aria-label="Borrar notificación" title="Borrar">${icon('close', 'sm')}</button></div>`;
+}
+
 async function abrirPanel(anchor) {
   cerrarPanel();
   const panel = document.createElement('div');
   panel.className = 'notif-panel';
-  panel.innerHTML = `<header><b>Notificaciones</b></header><div class="notif-list"><div class="muted" style="padding:16px">Cargando…</div></div>
+  panel.innerHTML = `<header><b>Notificaciones</b><button class="btn ghost sm" data-vaciar>${icon('trash', 'sm')} Vaciar</button></header>
+    <div class="notif-list"><div class="muted" style="padding:16px">Cargando…</div></div>
     ${'Notification' in window && !window.SpaceMusicApp && Notification.permission === 'default'
       ? `<button class="btn sm block" data-permiso>${icon('bell', 'sm')} Avisarme también con notificaciones del navegador</button>` : ''}`;
   document.body.appendChild(panel);
@@ -68,11 +78,31 @@ async function abrirPanel(anchor) {
   });
   const lista = await api('/api/notificaciones').catch(() => []);
   const box = panel.querySelector('.notif-list');
-  box.innerHTML = lista.length ? lista.map((n) => `<a class="notif ${n.leida ? '' : 'unread'}" href="${esc(n.ruta || '#/')}">
-      ${n.de ? avatarPersona(n.de) : `<span class="p-avatar ini">${icon('bell', 'sm')}</span>`}
-      <span><p>${esc(n.texto)}</p><small>${esc(timeAgo(n.fecha))}</small></span></a>`).join('')
-    : `<div class="notif-empty">${icon('bell')}<span>No tienes notificaciones</span></div>`;
-  box.addEventListener('click', (e) => { if (e.target.closest('a')) cerrarPanel(); });
+  const vacio = `<div class="notif-empty">${icon('bell')}<b>Todo al día</b><span>Aquí verás las actualizaciones de SpaceMusic, canciones nuevas, playlists de quienes sigues y nuevos seguidores.</span></div>`;
+  const nuevas = lista.filter((n) => !n.leida), vistas = lista.filter((n) => n.leida);
+  box.innerHTML = lista.length
+    ? (nuevas.length ? `<div class="notif-sec">Nuevas</div>${nuevas.map(filaNotif).join('')}` : '')
+      + (vistas.length ? `<div class="notif-sec">Anteriores</div>${vistas.map(filaNotif).join('')}` : '')
+    : vacio;
+  panel.querySelector('[data-vaciar]').classList.toggle('hidden', !lista.length);
+  box.addEventListener('click', async (e) => {
+    const x = e.target.closest('[data-borrar]');
+    if (x) {
+      e.preventDefault();
+      x.closest('.notif')?.remove();
+      api('/api/notificaciones/' + x.dataset.borrar, { method: 'DELETE' }).catch(() => { });
+      if (!box.querySelector('.notif')) { box.innerHTML = vacio; panel.querySelector('[data-vaciar]').classList.add('hidden'); }
+      return;
+    }
+    if (e.target.closest('a')) cerrarPanel();
+  });
+  panel.querySelector('[data-vaciar]').addEventListener('click', async () => {
+    try {
+      await api('/api/notificaciones', { method: 'DELETE' });
+      box.innerHTML = vacio;
+      panel.querySelector('[data-vaciar]').classList.add('hidden');
+    } catch (err) { toast('No se pudieron borrar'); }
+  });
   if (resumen.notificaciones) {
     api('/api/notificaciones/leidas', { method: 'POST' }).catch(() => { });
     resumen.notificaciones = 0;

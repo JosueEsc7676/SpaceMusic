@@ -90,6 +90,8 @@ public class Usuario {
     /** Foto de portada del perfil (URL pública). */
     @Column(length = 200)
     private String banner;
+    /** Qué parte vertical de la portada se ve (0 = arriba, 100 = abajo). */
+    private Integer bannerPos;
     private Boolean mostrarCanciones;
     private Boolean mostrarGeneros;
     private Boolean mostrarVibras;

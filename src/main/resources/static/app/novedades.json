@@ -1,12 +1,44 @@
 {
-  "version": "2.5",
-  "titulo": "Novedades: mensajes y notificaciones",
+  "version": "2.6",
+  "titulo": "Novedades: notificaciones y portada",
   "puntos": [
-    "Mensajes: si tú y otra persona se siguen, ya son amigos y pueden escribirse. Entra con el ícono de mensajes arriba o con el botón “Mensaje” en su perfil.",
-    "Comparte con un toque la canción que estás escuchando dentro del chat.",
-    "Notificaciones (campana arriba): te avisamos cuando alguien te sigue, cuando ya son amigos y cuando te escriben.",
-    "Ponle una foto de portada a tu perfil: entra a tu perfil y toca “Poner foto de portada”.",
-    "Cuando pones una canción desde el buscador o el inicio, después suena otra distinta del mismo estilo.",
-    "Nuevo diseño de “Lo que escuchan tus amigos”."
+    "La campana ahora guarda todo: actualizaciones de SpaceMusic, canciones nuevas en el servidor, playlists que publican las personas que sigues, nuevos seguidores y amigos.",
+    "Puedes borrar una notificación o vaciar todas con un toque.",
+    "Nueva portada del perfil: elige qué parte de la foto se ve con el botón “Ajustar”.",
+    "Los mensajes llegan al instante, sin recargar, y el chat del celular ocupa toda la pantalla."
+  ],
+  "anteriores": [
+    {
+      "version": "2.5",
+      "titulo": "Novedades: mensajes y notificaciones",
+      "puntos": [
+        "Mensajes: si tú y otra persona se siguen, ya son amigos y pueden escribirse. Entra con el ícono de mensajes arriba o con el botón “Mensaje” en su perfil.",
+        "Comparte con un toque la canción que estás escuchando dentro del chat.",
+        "Notificaciones (campana arriba): te avisamos cuando alguien te sigue, cuando ya son amigos y cuando te escriben.",
+        "Ponle una foto de portada a tu perfil: entra a tu perfil y toca “Poner foto de portada”.",
+        "Cuando pones una canción desde el buscador o el inicio, después suena otra distinta del mismo estilo.",
+        "Nuevo diseño de “Lo que escuchan tus amigos”."
+      ]
+    },
+    {
+      "version": "2.4",
+      "titulo": "Novedades: amigos y perfiles",
+      "puntos": [
+        "Perfiles públicos, seguir personas y amigos.",
+        "Lo que más escucha cada persona, sus géneros, vibras y su compatibilidad musical contigo.",
+        "Lo que escuchan tus amigos en Inicio.",
+        "Radio más inteligente y precarga de la siguiente canción."
+      ]
+    },
+    {
+      "version": "2.3",
+      "titulo": "Novedades de SpaceMusic",
+      "puntos": [
+        "Cada cuenta tiene su propia música e historial.",
+        "Biblioteca con tus playlists, álbumes guardados y descargas.",
+        "Descargas para escuchar sin conexión.",
+        "En iPhone la música sigue sonando con la pantalla bloqueada."
+      ]
+    }
   ]
 }

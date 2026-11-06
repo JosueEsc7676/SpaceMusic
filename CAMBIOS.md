@@ -1,5 +1,15 @@
 # Registro de cambios
 
+## Versión 2.6
+- **Notificaciones (campana)**, guardadas hasta que el usuario las borre (una por una o "Vaciar"):
+  - ACTUALIZACION: cada versión nueva, se envía al arrancar el servidor y abre `#/novedades`;
+  - CANCIONES: canciones nuevas en el servidor, una por escaneo;
+  - PLAYLIST: alguien que sigues publicó una playlist con canciones;
+  - SEGUIDOR, AMIGO y COLABORADOR (solicitud aprobada).
+  - Nuevo `NotificacionesService` y `DELETE /api/notificaciones[/{id}]`.
+- **Novedades:** pantalla con el historial de versiones (`#/novedades`, `app/novedades.json` con "anteriores"). La ventana emergente de novedades se reemplazó por la notificación.
+- **Portada del perfil:** franja de altura fija con la foto a lo ancho. El botón "Ajustar" permite arrastrar la foto para elegir qué parte se ve (`PUT /api/perfiles/yo/banner/posicion`).
+
 ## Versión 2.5.2
 - **Mensajes cargan rápido en PC:** el dominio público usa HTTP/1.1 (máximo 6 conexiones a la vez), y la música, las descargas en segundo plano y la conexión en vivo de cada pestaña las ocupaban. Ahora:
   - las descargas en segundo plano van de una en una;

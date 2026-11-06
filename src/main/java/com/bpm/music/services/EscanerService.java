@@ -60,9 +60,13 @@ public class EscanerService {
     /** Índice nombre-de-archivo → archivo, del último escaneo (para encontrar archivos movidos). */
     private volatile Map<String, File> indicePorNombre = Map.of();
 
+    private final NotificacionesService notificaciones;
+    private final List<String> artistasNuevos = new ArrayList<>();
+
     public EscanerService(CancionRepository repo, MetadataService metadata, BibliotecaService biblioteca,
-                          ImagenService imagenes,
+                          ImagenService imagenes, NotificacionesService notificaciones,
                           @Value("${music.path}") String rutaMusica) {
+        this.notificaciones = notificaciones;
         this.repo = repo;
         this.metadata = metadata;
         this.biblioteca = biblioteca;
@@ -183,6 +187,7 @@ public class EscanerService {
                                 continue;
                             }
                             duraciones.add(nueva.getDuracionSegundos());
+                            if (!artistasNuevos.contains(nueva.getArtista())) artistasNuevos.add(nueva.getArtista());
                             lote.add(nueva);
                             nuevas++;
                             if (lote.size() >= 25) {
@@ -203,6 +208,9 @@ public class EscanerService {
             }
 
             fase = "Completado";
+            // La primera carga de la biblioteca (servidor vacío) no avisa a nadie
+            if (nuevas > 0 && archivosEncontrados > nuevas) notificaciones.cancionesNuevas(nuevas, List.copyOf(artistasNuevos));
+            artistasNuevos.clear();
             if (nuevas > 0 || reubicadas > 0 || duplicadas > 0) {
                 log.info("Escaneo: {} archivos, {} nuevas, {} reubicadas, {} repetidas omitidas, {} errores",
                         archivosEncontrados, nuevas, reubicadas, duplicadas, errores);

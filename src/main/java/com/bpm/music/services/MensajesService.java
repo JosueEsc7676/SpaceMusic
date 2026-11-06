@@ -146,7 +146,7 @@ public class MensajesService {
     }
 
     public List<Map<String, Object>> notificaciones(Long yo) {
-        List<Notificacion> l = notificaciones.findTop40ByUsuarioIdOrderByIdDesc(yo);
+        List<Notificacion> l = notificaciones.findTop100ByUsuarioIdOrderByIdDesc(yo);
         Map<Long, Usuario> us = new HashMap<>();
         usuarios.findAllById(l.stream().map(Notificacion::getDeId).filter(Objects::nonNull).toList()).forEach(u -> us.put(u.getId(), u));
         return l.stream().map(n -> {
@@ -161,6 +161,14 @@ public class MensajesService {
             if (u != null) d.put("de", perfiles.mini(u, null));
             return d;
         }).toList();
+    }
+
+    public void vaciar(Long yo) {
+        notificaciones.deleteByUsuarioId(yo);
+    }
+
+    public void borrar(Long yo, Long id) {
+        notificaciones.deleteByIdAndUsuarioId(id, yo);
     }
 
     public void marcarLeidas(Long yo) {

@@ -76,6 +76,19 @@ public class MensajesController {
         return servicio.notificaciones(CurrentUser.id());
     }
 
+    /** Vaciar la bandeja de notificaciones. */
+    @DeleteMapping("/notificaciones")
+    public Map<String, Object> vaciar() {
+        servicio.vaciar(CurrentUser.id());
+        return Map.of("ok", true);
+    }
+
+    @DeleteMapping("/notificaciones/{id}")
+    public Map<String, Object> borrar(@PathVariable Long id) {
+        servicio.borrar(CurrentUser.id(), id);
+        return Map.of("ok", true);
+    }
+
     @PostMapping("/notificaciones/leidas")
     public Map<String, Object> leidas() {
         servicio.marcarLeidas(CurrentUser.id());

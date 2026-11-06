@@ -55,6 +55,12 @@ public class PerfilController {
         }
     }
 
+    @PutMapping("/perfiles/yo/banner/posicion")
+    public Map<String, Object> posicionBanner(@RequestBody Map<String, Object> b) {
+        perfiles.posicionBanner(CurrentUser.id(), ((Number) b.getOrDefault("pos", 50)).intValue());
+        return Map.of("ok", true);
+    }
+
     @DeleteMapping("/perfiles/yo/banner")
     public Map<String, Object> quitarBanner() {
         borrarBanner(perfiles.ponerBanner(CurrentUser.id(), null));
