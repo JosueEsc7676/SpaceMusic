@@ -114,8 +114,12 @@ function conectarEnVivo() {
 export function iniciarAvisos() {
   conectarEnVivo();
   document.addEventListener('visibilitychange', () => {
-    // Safari cierra la conexión al bloquear el teléfono: se reabre al volver
-    if (!document.hidden && (!fuente || fuente.readyState === 2)) conectarEnVivo();
+    // Pestaña oculta: se cierra la conexión en vivo (cada pestaña abierta ocupaba una conexión
+    // con el servidor y las demás peticiones esperaban). Al volver se reabre y se revisa lo nuevo.
+    // En la app de Android se mantiene, para que lleguen los avisos con la app en segundo plano.
+    if (document.hidden) {
+      if (!window.SpaceMusicApp) { try { fuente?.close(); } catch { } fuente = null; }
+    } else if (!fuente || fuente.readyState === 2) conectarEnVivo();
   });
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-notif-btn]');

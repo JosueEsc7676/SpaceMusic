@@ -52,13 +52,21 @@ export async function mensajesView(el, params, _q, isStale) {
   setTitle('Mensajes');
   setHero(null);
   const cargar = () => Promise.all([api('/api/mensajes').catch(() => []), api('/api/mensajes/amigos').catch(() => [])]);
-  const [convs, amigos] = await cargar();
-  if (isStale()) return;
+  pantallaChat(!!username);
 
+  // Se muestra al instante la última lista conocida; la actual llega en paralelo con el chat
   el.innerHTML = `<div class="dm ${username ? 'has-chat' : ''}">
-    <aside class="dm-list"><header><h1 class="page-title">Mensajes</h1></header><div class="dm-scroll" data-lista>${htmlLista(convs, amigos, username)}</div></aside>
+    <aside class="dm-list"><header><h1 class="page-title">Mensajes</h1></header><div class="dm-scroll" data-lista>${ultimaLista ? htmlLista(...ultimaLista, username) : '<div class="dm-loading">Cargando…</div>'}</div></aside>
     <section class="dm-chat" data-chat>${username ? '<div class="dm-loading">Cargando…</div>'
       : emptyState('send', 'Tus mensajes', 'Elige una conversación. Solo puedes escribir a tus amigos: personas que se siguen mutuamente.')}</section></div>`;
+  const pintarLista = async () => {
+    const datos = await cargar();
+    ultimaLista = datos;
+    const box = el.querySelector('[data-lista]');
+    if (box?.isConnected && !isStale()) box.innerHTML = htmlLista(...datos, username);
+  };
+  const tareas = [pintarLista()];
+
   // La lista de conversaciones se actualiza sola cuando llega o se envía un mensaje
   let pendiente = null;
   quitarEscuchas.push(bus.on('dm:mensaje', () => {
@@ -66,11 +74,36 @@ export async function mensajesView(el, params, _q, isStale) {
     pendiente = setTimeout(async () => {
       const box = el.querySelector('[data-lista]');
       if (!box?.isConnected) return;
-      const [c, a] = await cargar();
-      box.innerHTML = htmlLista(c, a, username);
+      await pintarLista();
     }, 400);
   }));
-  if (username) await abrirChat(el.querySelector('[data-chat]'), username, isStale);
+  if (username) tareas.push(abrirChat(el.querySelector('[data-chat]'), username, isStale));
+  await Promise.all(tareas);
+}
+
+let ultimaLista = null;
+
+// ── Celular: el chat ocupa toda la pantalla y se ajusta al teclado ──
+// Sin reproductor ni menú abajo, y con la altura del espacio visible (el teclado de iPhone
+// achica la pantalla visible pero no la página, por eso se usa visualViewport).
+function ajustarAlTeclado() {
+  const vv = window.visualViewport;
+  const r = document.documentElement.style;
+  r.setProperty('--vvh', (vv ? vv.height : innerHeight) + 'px');
+  r.setProperty('--vvt', (vv ? vv.offsetTop : 0) + 'px');
+  const msgs = document.querySelector('.dm-msgs');
+  if (msgs && document.activeElement?.matches?.('[data-text]')) msgs.scrollTop = msgs.scrollHeight;
+}
+let escuchandoTeclado = false;
+function pantallaChat(activa) {
+  document.body.classList.toggle('chat-abierto', activa);
+  if (!escuchandoTeclado) {
+    escuchandoTeclado = true;
+    window.visualViewport?.addEventListener('resize', ajustarAlTeclado);
+    window.visualViewport?.addEventListener('scroll', ajustarAlTeclado);
+    window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#/mensajes/')) document.body.classList.remove('chat-abierto'); });
+  }
+  ajustarAlTeclado();
 }
 
 async function abrirChat(box, username, isStale) {
@@ -113,6 +146,7 @@ async function abrirChat(box, username, isStale) {
     } catch (err) { errorToast(err); }
   };
   const form = box.querySelector('[data-form]');
+  form?.querySelector('[data-text]')?.addEventListener('focus', () => setTimeout(() => { ajustarAlTeclado(); bajar(); }, 250));
   form?.addEventListener('submit', (e) => {
     e.preventDefault();
     const inp = form.querySelector('[data-text]');

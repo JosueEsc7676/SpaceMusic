@@ -1,5 +1,14 @@
 # Registro de cambios
 
+## Versión 2.5.2
+- **Mensajes cargan rápido en PC:** el dominio público usa HTTP/1.1 (máximo 6 conexiones a la vez), y la música, las descargas en segundo plano y la conexión en vivo de cada pestaña las ocupaban. Ahora:
+  - las descargas en segundo plano van de una en una;
+  - la conexión en vivo se cierra en pestañas ocultas (en la app Android se mantiene);
+  - la lista y el chat se cargan a la vez, y la última lista se muestra al instante.
+- **Chat en el celular:** pantalla completa sin barra superior, reproductor ni menú; se ajusta al teclado (visualViewport).
+- **Buscador en el celular:** se ocultan los íconos de mensajes y notificaciones para dar espacio a la barra.
+- **Portada:** se ve completa en PC y celular, sin recortes. La altura sigue la forma de la foto, con un límite, y los lados se rellenan con la misma foto difuminada.
+
 ## Versión 2.5.1
 - **Mensajes en tiempo real:** conexión en vivo (`/api/eventos`, Server-Sent Events) que entrega al instante los mensajes nuevos, el "Visto" y las notificaciones. Se reabre sola al volver a la app. Si se corta, la app revisa cada 15 s.
 - **Mensajes en una sola sección:** sin ventanas flotantes. En el teléfono el chat ocupa toda la pantalla, con la barra para escribir fija abajo. La lista de conversaciones se actualiza sola.

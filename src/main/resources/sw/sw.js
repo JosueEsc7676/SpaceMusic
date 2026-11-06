@@ -30,11 +30,11 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('message', (e) => {
   const d = e.data;
   if (d === 'activar') { self.skipWaiting(); return; }
-  if (d?.tipo === 'guardar-audio') e.waitUntil(guardarAudio(d.url, d.clave));
+  if (d?.tipo === 'guardar-audio') e.waitUntil(enCola(() => guardarAudio(d.url, d.clave)));
   // Al cerrar sesión se borran los datos de la cuenta; las canciones descargadas se conservan
   // (cada cuenta solo ve su propia lista de descargas)
   if (d?.tipo === 'limpiar-usuario') e.waitUntil(caches.delete(API));
-  if (d?.tipo === 'descargar-audio') e.waitUntil(descargar(d.url, d.id).then((ok) => avisar({ tipo: 'descarga', id: d.id, ok })));
+  if (d?.tipo === 'descargar-audio') e.waitUntil(enCola(() => descargar(d.url, d.id)).then((ok) => avisar({ tipo: 'descarga', id: d.id, ok })));
   if (d?.tipo === 'quitar-descarga') e.waitUntil(caches.open(DESCARGAS).then((c) => c.delete(`/offline/audio/${d.id}`)));
   if (d?.tipo === 'estado-offline') e.waitUntil(contarAudio().then((n) => e.source?.postMessage({ tipo: 'estado-offline', canciones: n })));
 });
@@ -44,6 +44,15 @@ const claveAudio = (url) => {
   const m = /\/api\/canciones\/(\d+)\/audio/.exec(url);
   return m ? `/offline/audio/${m[1]}` : null;
 };
+
+// Las descargas en segundo plano van de una en una: así no ocupan las conexiones que necesita
+// la app (con HTTP/1.1 el navegador solo abre 6 a la vez con el servidor)
+let cola = Promise.resolve();
+function enCola(tarea) {
+  const p = cola.then(tarea, tarea);
+  cola = p.catch(() => { });
+  return p;
+}
 
 async function guardarAudio(url, clave) {
   clave = clave || claveAudio(url);

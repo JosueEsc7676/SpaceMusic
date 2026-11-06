@@ -71,7 +71,8 @@ export async function perfilPublicoView(el, { username }, _q, isStale) {
     const privado = !p.esYo && !p.topCanciones && !p.topGeneros && !p.vibras
       ? `<p class="muted p-private">${icon('lock', 'sm')} ${esc(p.nombre)} prefiere no mostrar lo que escucha.</p>` : '';
 
-    const banner = `<div class="p-banner ${p.banner ? 'has' : ''}" ${p.banner ? `style="background-image:url('${esc(p.banner)}')"` : ''}>
+    const banner = `<div class="p-banner ${p.banner ? 'has' : ''}" ${p.banner ? `style="--img:url('${esc(p.banner)}')"` : ''}>
+        ${p.banner ? `<img class="p-banner-img" src="${esc(p.banner)}" alt="" data-banner-img>` : ''}
         ${p.esYo ? `<div class="p-banner-tools"><label class="btn glass sm">${icon('edit', 'sm')} ${p.banner ? 'Cambiar portada' : 'Poner foto de portada'}<input type="file" accept="image/*" data-banner hidden></label>
           ${p.banner ? `<button class="btn glass sm" data-quitar-banner>${icon('trash', 'sm')}</button>` : ''}</div>` : ''}</div>`;
     el.innerHTML = `${banner}
@@ -102,6 +103,16 @@ export async function perfilPublicoView(el, { username }, _q, isStale) {
         draw();
       } catch (err) { errorToast(err); }
     });
+    // La portada se ve completa: su altura sigue la forma de la foto (con un límite)
+    const bImg = el.querySelector('[data-banner-img]');
+    const ajustar = () => {
+      const caja = bImg?.parentElement;
+      if (!caja || !bImg.naturalWidth) return;
+      const arriba = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) || 60;
+      const alto = Math.max(140, Math.min(caja.clientWidth * bImg.naturalHeight / bImg.naturalWidth, innerHeight * (innerWidth < 821 ? 0.34 : 0.42), 480));
+      caja.style.height = Math.round(alto + arriba + 78) + 'px';
+    };
+    if (bImg) { bImg.complete ? ajustar() : bImg.addEventListener('load', ajustar); window.addEventListener('resize', ajustar); }
     el.querySelector('[data-banner]')?.addEventListener('change', async (e) => {
       const f = e.target.files[0];
       if (!f) return;
