@@ -4,6 +4,7 @@ import { esc, cover, coverImg, mosaic, fmtTime } from '../util.js';
 import { icon } from '../icons.js';
 import { lib } from '../state.js';
 import { setHero } from '../router.js';
+import { actividadAmigos } from './people.js';
 import { cardSong, cardAlbum, cardArtist, cardPlaylist, cardMix, cardGenre, section, registerList, emptyState, playlistArt } from '../ui.js';
 
 function saludo() {
@@ -89,6 +90,7 @@ export async function homeView(el, _p, _q, isStale) {
       ${spotlight(mixes[0])}
       ${pins.length ? `<div class="pins">${pins.join('')}</div>` : ''}
     </div>
+    <div data-amigos></div>
     ${section('Continúa escuchando', songShelf(d.recientes, { type: 'historial', label: 'Escuchado recientemente' }), { more: '#/historial', eyebrow: 'Tu historial' })}
     ${section('Tus mezclas', shelf(mixes.map(cardMix).join('')), { eyebrow: 'Se actualizan con lo que escuchas' })}
     ${d.tendencias?.length ? section('Tendencias de la semana', ranking(d.tendencias, { type: 'tendencias', label: 'Tendencias' }), { eyebrow: 'Lo más escuchado por todos' }) : ''}
@@ -100,4 +102,6 @@ export async function homeView(el, _p, _q, isStale) {
     ${d.generos?.length ? section('Explora por género', `<div class="genre-grid">${d.generos.slice(0, 8).map(cardGenre).join('')}</div>`, { more: '#/buscar' }) : ''}
     ${!d.recientes?.length && d.top?.length ? section('Más reproducidas', songShelf(d.top, { type: 'top', label: 'Más reproducidas' })) : ''}
   `;
+  const amigos = el.querySelector('[data-amigos]');
+  if (amigos) actividadAmigos(amigos);
 }

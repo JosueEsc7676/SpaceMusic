@@ -40,4 +40,12 @@ public interface UsuarioReproduccionRepository extends JpaRepository<UsuarioRepr
     /** Reproducciones globales recientes por canción: [cancionId, veces]. */
     @Query("SELECT r.cancion.id, COUNT(r) FROM UsuarioReproduccion r WHERE r.fecha >= :desde GROUP BY r.cancion.id ORDER BY COUNT(r) DESC")
     List<Object[]> findTendencias(@Param("desde") LocalDateTime desde, org.springframework.data.domain.Pageable pageable);
+
+    /** Reproducciones de todos los usuarios por canción: [usuarioId, cancionId, veces] (para "quienes escuchan X también escuchan Y"). */
+    @Query("SELECT r.usuario.id, r.cancion.id, COUNT(r) FROM UsuarioReproduccion r WHERE r.fecha >= :desde GROUP BY r.usuario.id, r.cancion.id")
+    List<Object[]> findConteoGlobal(@Param("desde") LocalDateTime desde);
+
+    /** Última reproducción del usuario: [cancionId, fecha]. */
+    @Query("SELECT r.cancion.id, r.fecha FROM UsuarioReproduccion r WHERE r.usuario.id = :uid ORDER BY r.fecha DESC")
+    List<Object[]> findUltimas(@Param("uid") Long uid, org.springframework.data.domain.Pageable pageable);
 }

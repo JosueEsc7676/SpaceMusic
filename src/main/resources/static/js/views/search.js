@@ -1,5 +1,6 @@
 // Búsqueda
 import { api , deUsuario } from '../api.js';
+import { cardPersona } from './people.js';
 import { esc, store, coverImg, plural } from '../util.js';
 import { icon } from '../icons.js';
 import { setHero, setTitle } from '../router.js';
@@ -43,8 +44,8 @@ export async function searchView(el, _p, query, isStale) {
   if (isStale()) return;
   addRecentSearch(q);
 
-  const total = r.canciones.length + r.artistas.length + r.albumes.length + r.playlists.length;
-  const tabs = [['todo', 'Todo'], ['canciones', 'Canciones'], ['artistas', 'Artistas'], ['albumes', 'Álbumes'], ['playlists', 'Playlists']];
+  const total = r.canciones.length + r.artistas.length + r.albumes.length + r.playlists.length + (r.usuarios?.length || 0);
+  const tabs = [['todo', 'Todo'], ['canciones', 'Canciones'], ['artistas', 'Artistas'], ['albumes', 'Álbumes'], ['playlists', 'Playlists'], ['personas', 'Personas']];
   const chips = `<div class="chips">${tabs.map(([k, l]) =>
     `<a class="chip ${tab === k ? 'active' : ''}" href="#/buscar?q=${encodeURIComponent(q)}${k === 'todo' ? '' : '&tab=' + k}">${l}</a>`).join('')}</div>`;
 
@@ -79,6 +80,7 @@ export async function searchView(el, _p, query, isStale) {
     html += section('Artistas', r.artistas.length ? `<div class="grid">${r.artistas.slice(0, 6).map(cardArtist).join('')}</div>` : '');
     html += section('Álbumes', r.albumes.length ? `<div class="grid">${r.albumes.slice(0, 6).map(cardAlbum).join('')}</div>` : '');
     html += section('Playlists', r.playlists.length ? `<div class="grid">${r.playlists.slice(0, 6).map(cardPlaylist).join('')}</div>` : '');
+    html += section('Personas', r.usuarios?.length ? `<div class="grid people">${r.usuarios.slice(0, 6).map(cardPersona).join('')}</div>` : '');
     html += section('Géneros', r.generos?.length ? `<div class="genre-grid">${r.generos.map(cardGenre).join('')}</div>` : '');
   } else if (tab === 'canciones') {
     html += r.canciones.length ? trackList(r.canciones, { context: ctx }) : emptyState('note', 'No hay canciones');
@@ -88,6 +90,8 @@ export async function searchView(el, _p, query, isStale) {
     html += r.albumes.length ? `<div class="grid">${r.albumes.map(cardAlbum).join('')}</div>` : emptyState('disc', 'No hay álbumes');
   } else if (tab === 'playlists') {
     html += r.playlists.length ? `<div class="grid">${r.playlists.map(cardPlaylist).join('')}</div>` : emptyState('list', 'No hay playlists');
+  } else if (tab === 'personas') {
+    html += r.usuarios?.length ? `<div class="grid people">${r.usuarios.map(cardPersona).join('')}</div>` : emptyState('users', 'No encontramos a nadie con ese nombre');
   }
   el.innerHTML = html;
   void plural;

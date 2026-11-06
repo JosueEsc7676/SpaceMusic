@@ -84,6 +84,19 @@ public class Usuario {
     @Column(length = 64)
     private String aprobacionToken;
 
+    // ── Perfil público y privacidad (null = visible, así las cuentas anteriores quedan visibles) ──
+    @Column(length = 160)
+    private String biografia;
+    private Boolean mostrarCanciones;
+    private Boolean mostrarGeneros;
+    private Boolean mostrarVibras;
+    private Boolean mostrarActividad;
+
+    public boolean verCanciones() { return !Boolean.FALSE.equals(mostrarCanciones); }
+    public boolean verGeneros() { return !Boolean.FALSE.equals(mostrarGeneros); }
+    public boolean verVibras() { return !Boolean.FALSE.equals(mostrarVibras); }
+    public boolean verActividad() { return !Boolean.FALSE.equals(mostrarActividad); }
+
     public EstadoCuenta getEstadoCuenta() {
         return estadoCuenta != null ? estadoCuenta : EstadoCuenta.APROBADA;
     }

@@ -18,6 +18,8 @@ import java.util.*;
 @RequestMapping("/api")
 public class BibliotecaController {
 
+    private final com.bpm.music.services.PerfilService perfiles;
+
     private final BibliotecaService biblioteca;
     private final UsuarioService usuarios;
     private final RecomendacionService recomendaciones;
@@ -26,7 +28,8 @@ public class BibliotecaController {
 
     public BibliotecaController(BibliotecaService biblioteca, UsuarioService usuarios,
                                 RecomendacionService recomendaciones, PlaylistService playlists,
-                                EstadisticasService estadisticas) {
+                                EstadisticasService estadisticas, com.bpm.music.services.PerfilService perfiles) {
+        this.perfiles = perfiles;
         this.biblioteca = biblioteca;
         this.usuarios = usuarios;
         this.recomendaciones = recomendaciones;
@@ -65,7 +68,9 @@ public class BibliotecaController {
             r.put("playlists", pls);
             r.put("generos", biblioteca.generos().stream()
                     .filter(g -> BibliotecaService.normalizar((String) g.get("nombre")).contains(nq)).limit(6).toList());
+            r.put("usuarios", perfiles.buscar(q, uid));
         } else {
+            r.put("usuarios", List.of());
             r.put("playlists", List.of());
             r.put("generos", List.of());
         }
@@ -136,8 +141,12 @@ public class BibliotecaController {
     @GetMapping("/radio/{id}")
     public List<CancionDTO> radio(@PathVariable Long id,
                                   @RequestParam(defaultValue = "25") int cantidad,
-                                  @RequestParam(required = false) List<Long> excluir) {
-        return recomendaciones.radio(id, Math.min(Math.max(cantidad, 1), 100), CurrentUser.id(), excluir);
+                                  @RequestParam(required = false) List<Long> excluir,
+                                  @RequestParam(required = false) List<Long> anteriores) {
+        // "anteriores": las últimas canciones que sonaron, para que la radio siga el mismo estilo
+        List<Long> semillas = new ArrayList<>(List.of(id));
+        if (anteriores != null) anteriores.stream().filter(x -> !x.equals(id)).limit(3).forEach(semillas::add);
+        return recomendaciones.radio(semillas, Math.min(Math.max(cantidad, 1), 100), CurrentUser.id(), excluir);
     }
 
     @GetMapping("/mixes")

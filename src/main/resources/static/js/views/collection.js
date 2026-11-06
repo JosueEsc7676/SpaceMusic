@@ -199,7 +199,7 @@ export async function playlistView(el, { id }, _q, isStale) {
     el.innerHTML = head({
       kind: p.publica ? 'Playlist pública' : 'Playlist', title: p.nombre, art: playlistArt(p, 640), desc: p.descripcion,
       editable: p.propia,
-      meta: `<strong>${esc(autor)}</strong>${sep}${plural(canciones.length, 'canción', 'canciones')}${canciones.length ? `, <span class="muted">${fmtLong(p.duracionTotal)}</span>` : ''}`,
+      meta: `${p.autorUsername ? `<a href="#/u/${encodeURIComponent(p.autorUsername)}"><strong>${esc(autor)}</strong></a>` : `<strong>${esc(autor)}</strong>`}${sep}${plural(canciones.length, 'canción', 'canciones')}${canciones.length ? `, <span class="muted">${fmtLong(p.duracionTotal)}</span>` : ''}`,
     })
       + actions({ filter: canciones.length > 8, extra: p.propia ? '' : botonGuardar('playlist', p.id) })
       + (canciones.length

@@ -54,6 +54,15 @@ public class PlaylistService {
         return dto(p, userId, true);
     }
 
+    /** Playlists públicas de un usuario (para su perfil). Las privadas nunca se muestran. */
+    public List<PlaylistDTO> publicasDe(Long duenoId, Long viewerId) {
+        return repo.findByUsuarioIdOrderByFechaCreacionDesc(duenoId).stream()
+                .filter(Playlist::isPublica)
+                .map(p -> dto(p, viewerId, false))
+                .filter(p -> p.getCancionesCount() > 0)
+                .toList();
+    }
+
     // ═══════════════════════ Crear / editar ═══════════════════════
 
     @Transactional
@@ -213,9 +222,11 @@ public class PlaylistService {
                 && !p.getPortadaUrl().contains("singlecolorimage")) portada = p.getPortadaUrl();
 
         boolean propia = Objects.equals(p.getUsuarioId(), userId);
-        String autor = null;
+        String autor = null, autorUsername = null;
         if (!propia && p.getUsuarioId() != null) {
-            autor = usuarios.findById(p.getUsuarioId()).map(Usuario::getNombreVisible).orElse(null);
+            Optional<Usuario> u = usuarios.findById(p.getUsuarioId());
+            autor = u.map(Usuario::getNombreVisible).orElse(null);
+            autorUsername = u.map(Usuario::getUsername).orElse(null);
         }
         return PlaylistDTO.builder()
                 .id(p.getId())
@@ -228,6 +239,7 @@ public class PlaylistService {
                 .publica(p.isPublica())
                 .propia(propia)
                 .autor(autor)
+                .autorUsername(autorUsername)
                 .fechaCreacion(p.getFechaCreacion())
                 .fechaActualizacion(p.getFechaActualizacion())
                 .canciones(conCanciones ? canciones : null)

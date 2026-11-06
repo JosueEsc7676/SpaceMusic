@@ -1,5 +1,25 @@
 # Registro de cambios
 
+## Versión 2.4 (app Android 1.3)
+- **Géneros automáticos:** cada artista se consulta una vez en MusicBrainz y su género pasa a las canciones que no lo tienen (tabla `artista_genero`, se revisa cada 30 min).
+- **Radio más inteligente:** al terminar la lista sigue con canciones parecidas. Usa:
+  - mismo artista y artistas con géneros parecidos;
+  - "quienes escuchan a X también escuchan a Y", entre todos los usuarios;
+  - género o familia de género y época;
+  - tus gustos;
+  - las últimas canciones que sonaron, no solo la actual (`/api/radio/{id}?anteriores=`).
+- **Precarga:** a los 8 s de cada canción se baja la siguiente y su portada; con ahorro de datos solo el inicio.
+- **Perfiles públicos** (`#/u/usuario`):
+  - seguir, seguidores, siguiendo y amigos (cuando se siguen los dos);
+  - playlists públicas (las privadas nunca aparecen);
+  - lo más escuchado, géneros favoritos, vibras (Perreo, Noctámbulo, Explorador…);
+  - "escuchando ahora" y compatibilidad musical en %.
+- **Privacidad:** en *Perfil y ajustes → Tu perfil público* cada dato se puede mostrar u ocultar, y se puede escribir una frase sobre ti.
+- **Buscador:** nueva pestaña *Personas*.
+- **Inicio:** sección *Lo que escuchan tus amigos*.
+- **Playlists:** el nombre del autor de una playlist lleva a su perfil.
+- Nuevas tablas: `seguimiento` y `artista_genero`. Nuevas columnas en `usuario`: biografía y privacidad.
+
 ## Versión 2.3 (app Android 1.2)
 - **Cada cuenta por separado:**
   - lo que se escuchaba, la cola, las búsquedas recientes y la lista de descargas son de cada cuenta;

@@ -17,6 +17,7 @@ import { profileView, statsView, applyAccent, avatarHtml, openEqualizer } from '
 import { adminView, uploadView } from './views/admin.js';
 import { pintarCuerpo, ocultarSplash } from './splash.js';
 import { iniciarOffline } from './offline.js';
+import { perfilPublicoView } from './views/people.js';
 import { iniciarNativo, modoLigero } from './nativo.js';
 
 if (!session.valid()) {
@@ -116,6 +117,7 @@ route('/playlist/:id', playlistView);
 route('/genero/:nombre', genreView);
 route('/mix/:id', mixView);
 route('/perfil', profileView);
+route('/u/:username', perfilPublicoView);
 route('/estadisticas', statsView);
 route('/admin', adminView);
 route('/subir', uploadView);
@@ -531,6 +533,22 @@ async function boot() {
   iniciarOffline({ toast });
   iniciarNativo();
   mostrarNovedades();
+  avisarActividad();
+}
+
+/** Comparte con tus amigos lo que suena (si lo permites en tu perfil). */
+function avisarActividad() {
+  let ultimo = '';
+  const enviar = () => {
+    const s = player.current;
+    const clave = s ? s.id + ':' + player.playing : '';
+    if (clave === ultimo) return;
+    ultimo = clave;
+    api('/api/actividad', { method: 'POST', body: { cancionId: s?.id ?? null, sonando: !!s && player.playing } }).catch(() => { });
+  };
+  bus.on('player:song', enviar);
+  bus.on('player:state', () => setTimeout(enviar, 400));
+  setInterval(() => { if (player.playing) { ultimo = ''; enviar(); } }, 5 * 60 * 1000); // sigue "en vivo" mientras suena
 }
 
 /** Aviso de actualización: muestra una vez las novedades de cada versión. */

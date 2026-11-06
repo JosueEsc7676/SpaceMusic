@@ -221,7 +221,9 @@ export const player = {
     this._radioLoading = true;
     try {
       const excluir = this.items.slice(-60).map((s) => s.id).join(',');
-      const more = await api(`/api/radio/${this.current.id}?cantidad=20&excluir=${excluir}`);
+      // La radio sigue el estilo de las últimas canciones (no solo de la actual)
+      const anteriores = this.items.slice(Math.max(0, this.index - 3), this.index).map((x) => x.id).join(',');
+      const more = await api(`/api/radio/${this.current.id}?cantidad=20&excluir=${excluir}${anteriores ? '&anteriores=' + anteriores : ''}`);
       if (more?.length) {
         const wasEnd = this.index === this.items.length - 1;
         this.items.push(...more.map((s) => withUid(s)));

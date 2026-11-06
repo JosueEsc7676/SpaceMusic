@@ -341,3 +341,75 @@ html.ios .volume, html.ios .np-vol, html.ios [data-eq] { display: none !importan
 
 .novedades { margin: 0; padding-left: 20px; display: grid; gap: 10px; color: var(--text-2); line-height: 1.45; }
 .novedades li::marker { color: #b4a5ff; }
+
+/* =====================================================================
+   Perfiles públicos
+   ===================================================================== */
+.p-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; display: inline-grid; place-items: center; background: var(--bg-elev-3); }
+.p-avatar.ini { background: var(--aurora); color: #000; font-family: var(--font-display); font-weight: 800; font-size: 18px; }
+.p-avatar.sm { width: 26px; height: 26px; font-size: 12px; }
+.p-avatar.xl { width: clamp(120px, 16vw, 188px); height: clamp(120px, 16vw, 188px); font-size: clamp(48px, 6vw, 76px); box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.08); }
+.p-head { display: flex; align-items: flex-end; gap: 28px; margin: 18px 0 28px; }
+.p-info { min-width: 0; flex: 1; }
+.p-meta { color: var(--text-2); font-size: 14px; margin-top: 4px; }
+.p-bio { margin: 10px 0 0; color: var(--text); max-width: 60ch; }
+.p-counts { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; font-size: 14px; color: var(--text-2); }
+.p-counts button, .p-counts span { color: inherit; }
+.p-counts b { color: var(--text); font-weight: 800; }
+.p-counts button:hover { color: var(--text); text-decoration: underline; }
+.p-actions { display: flex; gap: 10px; align-items: center; margin-top: 16px; }
+.p-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 40px; }
+.p-now, .p-compat { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 20px; background: rgba(255,255,255,.045); border: 1px solid var(--line); }
+.p-now { cursor: pointer; transition: background .2s; }
+.p-now:hover { background: rgba(255,255,255,.08); }
+.p-now:hover .pin-play { opacity: 1; transform: none; }
+.p-now-art { width: 64px; height: 64px; border-radius: 12px; overflow: hidden; flex-shrink: 0; background: var(--bg-elev-3); }
+.p-now-art img { width: 100%; height: 100%; object-fit: cover; }
+.p-now-tt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.p-now-tt small { color: var(--text-3); font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+.p-now.live .p-now-tt small { color: #cfc6ff; }
+.p-now-tt b { font-size: 15px; margin-top: 2px; }
+.p-now-tt span { color: var(--text-2); font-size: 13px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #b4a5ff; display: inline-block; box-shadow: 0 0 0 0 rgba(180,165,255,.7); animation: latido 1.6s infinite; }
+@keyframes latido { 0% { box-shadow: 0 0 0 0 rgba(180,165,255,.6); } 70% { box-shadow: 0 0 0 9px rgba(180,165,255,0); } 100% { box-shadow: 0 0 0 0 rgba(180,165,255,0); } }
+.p-compat .ring { --p: calc(var(--pct) * 1%); width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center;
+  background: conic-gradient(#b4a5ff 0, #7cc8ff calc(var(--p) * .5), #ffa3c8 var(--p), rgba(255,255,255,.1) var(--p)); }
+.p-compat .ring span { width: 52px; height: 52px; border-radius: 50%; background: #111115; display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 16px; }
+.p-compat b { display: block; }
+.p-compat small { color: var(--text-2); font-size: 13px; }
+.p-private { display: flex; align-items: center; gap: 8px; margin: 0 0 30px; }
+
+.vibes { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.vibe { padding: 16px; border-radius: 18px; background: var(--aurora-soft); border: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column; gap: 4px; }
+.vibe .icon { width: 22px; height: 22px; color: #fff; margin-bottom: 6px; }
+.vibe b { font-family: var(--font-display); font-size: 18px; letter-spacing: -.3px; }
+.vibe small { color: var(--text-2); font-size: 13px; line-height: 1.35; }
+
+.g-bars { display: grid; gap: 10px; max-width: 640px; }
+.g-bar { display: grid; grid-template-columns: 150px 1fr 48px; align-items: center; gap: 12px; font-weight: 600; font-size: 14px; }
+.g-bar:hover { text-decoration: none; }
+.g-bar i { height: 8px; border-radius: 8px; background: rgba(255,255,255,.08); position: relative; overflow: hidden; }
+.g-bar i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); border-radius: 8px; background: var(--aurora); }
+.g-bar em { font-style: normal; color: var(--text-2); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+
+.card.person .art { border-radius: 50%; display: grid; place-items: center; background: var(--bg-elev-3); }
+.card.person .p-avatar { width: 100%; height: 100%; font-size: 48px; border-radius: 50%; }
+.card.person .t, .card.person .s { text-align: center; }
+.grid.people { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+
+.friend-card { cursor: pointer; min-width: 0; }
+.friend-card .art { position: relative; aspect-ratio: 1; border-radius: 16px; overflow: hidden; margin-bottom: 10px; background: var(--bg-elev-3); box-shadow: 0 14px 34px rgba(0,0,0,.5); transition: transform .3s var(--ease); }
+.friend-card:hover .art { transform: translateY(-4px); }
+.friend-card .art img { width: 100%; height: 100%; object-fit: cover; }
+.friend-card .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.55), transparent 40%); pointer-events: none; }
+.friend-who { position: absolute; z-index: 1; left: 8px; top: 8px; right: 8px; display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700; color: #fff; }
+.friend-who:hover { text-decoration: none; }
+.live-tag { position: absolute; z-index: 1; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; background: rgba(0,0,0,.65); font-size: 11px; font-weight: 800; color: #fff; }
+.friend-card .t { font-weight: 700; font-size: 14.5px; }
+.friend-card .s { color: var(--text-2); font-size: 13px; }
+
+@media (max-width: 820px) {
+  .p-head { flex-direction: column; align-items: flex-start; gap: 16px; margin-top: 8px; }
+  .g-bar { grid-template-columns: 110px 1fr 40px; }
+  .vibes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

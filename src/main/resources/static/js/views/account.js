@@ -68,6 +68,19 @@ export async function profileView(el, _p, _q, isStale) {
         <button class="btn primary sm" data-save-pass>Cambiar contraseña</button>
       </div>
 
+      <div class="panel" data-perfil-publico><h3>${icon('users')} Tu perfil público</h3>
+        <p class="muted" style="margin-top:0">Otras personas pueden seguirte y ver tus playlists públicas. Tú decides qué más ven.</p>
+        <div class="field"><label>Sobre ti</label><input data-bio maxlength="160" placeholder="Una frase sobre tu música (opcional)"></div>
+        ${[['canciones', 'Lo que más escuchas', 'Tus canciones y artistas favoritos'],
+           ['generos', 'Géneros favoritos', 'Los géneros que más escuchas y la compatibilidad'],
+           ['vibras', 'Vibras', 'Tu estilo: Perreo, Noctámbulo, Explorador…'],
+           ['actividad', 'Escuchando ahora', 'Tus amigos ven qué canción suena']].map(([k, t, d]) => `
+          <div class="setting-row"><div><div class="t">${t}</div><div class="s">${d}</div></div>
+            <label class="switch"><input type="checkbox" data-priv="${k}" checked><span></span></label></div>`).join('')}
+        <div class="row wrap" style="margin-top:12px"><a class="btn sm" href="#/u/${encodeURIComponent(u.username)}">${icon('user', 'sm')} Ver mi perfil público</a>
+          <span class="muted" data-seg style="font-size:13px"></span></div>
+      </div>
+
       <div class="panel"><h3>${icon('sliders')} Reproducción</h3>
         <div class="setting-row"><div><div class="t">Radio automática</div><div class="s">Al terminar una lista, sigue con canciones parecidas</div></div>
           <label class="switch"><input type="checkbox" data-pref="autoRadio" ${prefs.autoRadio ? 'checked' : ''}><span></span></label></div>
@@ -166,6 +179,20 @@ export async function profileView(el, _p, _q, isStale) {
   $('[data-eq]').onclick = () => openEqualizer().then(() => profileView(el, {}, {}, () => false));
   $('[data-keys]').onclick = () => bus.emit('shortcuts');
   $('[data-intro]').onchange = (e) => store.set('sm_intro_sound', e.target.checked);
+  // Perfil público: privacidad, biografía y seguidores
+  api('/api/perfiles/' + encodeURIComponent(u.username)).then((pp) => {
+    if (!el.isConnected) return;
+    Object.entries(pp.privacidad || {}).forEach(([k, v]) => { const c = el.querySelector(`[data-priv="${k}"]`); if (c) c.checked = v; });
+    const bio = el.querySelector('[data-bio]');
+    if (bio) bio.value = pp.biografia || '';
+    const seg = el.querySelector('[data-seg]');
+    if (seg) seg.textContent = `${pp.seguidores} ${pp.seguidores === 1 ? 'seguidor' : 'seguidores'} · ${pp.siguiendo} siguiendo`;
+  }).catch(() => { });
+  el.querySelectorAll('[data-priv]').forEach((c) => c.addEventListener('change', () =>
+    api('/api/perfiles/yo/privacidad', { method: 'PUT', body: { [c.dataset.priv]: c.checked } })
+      .then(() => toast(c.checked ? 'Ahora se muestra en tu perfil' : 'Ya no se muestra en tu perfil')).catch(errorToast)));
+  el.querySelector('[data-bio]')?.addEventListener('change', (e) =>
+    api('/api/perfiles/yo/privacidad', { method: 'PUT', body: { biografia: e.target.value } }).then(() => toast('Guardado')).catch(errorToast));
   cancionesGuardadas().then((n) => {
     const t = $('[data-offline]');
     if (t && n) t.textContent = plural(n, 'canción guardada', 'canciones guardadas') + ' para escuchar sin conexión';

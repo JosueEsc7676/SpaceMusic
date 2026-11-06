@@ -26,6 +26,8 @@ public class PlaylistDTO {
     /** true si la playlist es del usuario que la pide. */
     private boolean propia;
     private String autor;
+    /** Usuario dueño (para enlazar a su perfil). */
+    private String autorUsername;
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
     /** Solo se incluye en el detalle. */
