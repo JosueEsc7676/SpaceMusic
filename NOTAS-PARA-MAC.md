@@ -43,7 +43,7 @@ Detalles importantes:
 - **Configuración con contraseñas:** vive solo en el servidor. Nunca subirla a git.
 - **Publicar una versión nueva (desde la Mac, con tu llave SSH):**
   ```bash
-  ./mvnw -q clean package -DskipTests   # o mvn
+  mvn -q clean package -DskipTests   # Maven en la Mac: brew install maven (preguntar antes de instalar)
   scp target/spacemusic.jar USUARIO@192.168.10.165:~/spacemusic/spacemusic.jar.new
   ssh USUARIO@192.168.10.165 'cd ~/spacemusic && cp spacemusic.jar spacemusic.jar.anterior && mv spacemusic.jar.new spacemusic.jar && sudo systemctl restart spacemusic'
   ```
