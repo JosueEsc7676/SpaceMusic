@@ -1,6 +1,6 @@
 // Notificaciones y mensajes nuevos: contadores, panel de avisos y avisos del sistema
 // (notificación del navegador o de Android). Se consulta el servidor cada 20 s.
-import { api, deUsuario } from './api.js';
+import { api, deUsuario, session } from './api.js';
 import { $, $$, esc, timeAgo, bus, store } from './util.js';
 import { icon } from './icons.js';
 import { toast } from './ui.js';
@@ -85,7 +85,38 @@ function cerrarPanel() {
   document.removeEventListener('pointerdown', fuera, true);
 }
 
+// ── En vivo: el servidor envía mensajes, "visto" y notificaciones al instante ──
+let fuente = null;
+function conectarEnVivo() {
+  if (!('EventSource' in window) || !session.token) return;
+  try { fuente?.close(); } catch { }
+  fuente = new EventSource('/api/eventos?t=' + encodeURIComponent(session.token));
+  fuente.addEventListener('mensaje', (e) => {
+    let d;
+    try { d = JSON.parse(e.data); } catch { return; }
+    bus.emit('dm:mensaje', d);
+    if (d.mensaje.mio) return;
+    const ruta = '#/mensajes/' + encodeURIComponent(d.con);
+    if (location.hash.startsWith(ruta)) return; // ya lo está viendo
+    const vistos = store.get(deUsuario('sm_avisos_vistos'), { m: 0, n: 0 });
+    vistos.m = Math.max(vistos.m, d.mensaje.id);
+    store.set(deUsuario('sm_avisos_vistos'), vistos);
+    resumen.mensajes = (resumen.mensajes || 0) + 1;
+    pintarContadores();
+    const texto = d.mensaje.cancion && d.mensaje.texto === '🎵' ? 'Te compartió una canción' : d.mensaje.texto;
+    toast(`${d.nombre}: ${texto}`, { ms: 6000, action: { label: 'Ver', fn: () => { location.hash = ruta; } } });
+    avisoSistema(d.nombre, texto, ruta);
+  });
+  fuente.addEventListener('visto', (e) => { try { bus.emit('dm:visto', JSON.parse(e.data)); } catch { } });
+  fuente.addEventListener('notificacion', () => consultar());
+}
+
 export function iniciarAvisos() {
+  conectarEnVivo();
+  document.addEventListener('visibilitychange', () => {
+    // Safari cierra la conexión al bloquear el teléfono: se reabre al volver
+    if (!document.hidden && (!fuente || fuente.readyState === 2)) conectarEnVivo();
+  });
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-notif-btn]');
     if (!b) return;

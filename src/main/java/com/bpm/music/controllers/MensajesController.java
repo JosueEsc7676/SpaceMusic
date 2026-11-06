@@ -24,9 +24,11 @@ import java.util.Map;
 public class MensajesController {
 
     private final MensajesService servicio;
+    private final com.bpm.music.services.EventosService eventosService;
 
-    public MensajesController(MensajesService servicio) {
+    public MensajesController(MensajesService servicio, com.bpm.music.services.EventosService eventosService) {
         this.servicio = servicio;
+        this.eventosService = eventosService;
     }
 
     @GetMapping("/mensajes")
@@ -55,6 +57,18 @@ public class MensajesController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    @PostMapping("/mensajes/{username}/leidos")
+    public Map<String, Object> leidos(@PathVariable String username) {
+        servicio.marcarLeidos(CurrentUser.id(), username);
+        return Map.of("ok", true);
+    }
+
+    /** Conexión en vivo: mensajes, "visto" y notificaciones llegan sin recargar. */
+    @GetMapping(value = "/eventos", produces = "text/event-stream")
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter eventos() {
+        return eventosService.conectar(CurrentUser.id());
     }
 
     @GetMapping("/notificaciones")

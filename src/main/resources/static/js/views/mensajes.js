@@ -30,13 +30,7 @@ function burbuja(m) {
   return `<div class="bubble ${m.mio ? 'mine' : ''}" data-id="${m.id}">${cancion}${texto}<time>${esc(hora(m.fecha))}${m.mio ? (m.leido ? ' · Visto' : '') : ''}</time></div>`;
 }
 
-export async function mensajesView(el, params, _q, isStale) {
-  clearInterval(sondeo);
-  const username = params.username || null;
-  setTitle('Mensajes');
-  setHero(null);
-  const [convs, amigos] = await Promise.all([api('/api/mensajes').catch(() => []), api('/api/mensajes/amigos').catch(() => [])]);
-  if (isStale()) return;
+function htmlLista(convs, amigos, username) {
   const conConv = new Set(convs.map((c) => c.usuario.username));
   const nuevos = amigos.filter((a) => !conConv.has(a.username));
 
@@ -45,11 +39,37 @@ export async function mensajesView(el, params, _q, isStale) {
       ${nuevos.length ? `<div class="conv-label">Amigos</div>${nuevos.map((u) => `<a class="conv ${u.username === username ? 'active' : ''}" href="#/mensajes/${encodeURIComponent(u.username)}">${avatarPersona(u)}
         <span class="conv-tt"><b class="ellipsis">${esc(u.nombre)}</b><span>Escríbele</span></span></a>`).join('')}` : ''}`
     : `<div class="conv-empty">${icon('users')}<b>Aún no tienes amigos</b><span>Sigue a alguien y, cuando te siga también, podrán escribirse.</span><a class="btn sm" href="#/buscar?q=&tab=personas">Buscar personas</a></div>`;
+  return lista;
+}
+
+let quitarEscuchas = [];
+
+export async function mensajesView(el, params, _q, isStale) {
+  clearInterval(sondeo);
+  quitarEscuchas.forEach((f) => f());
+  quitarEscuchas = [];
+  const username = params.username || null;
+  setTitle('Mensajes');
+  setHero(null);
+  const cargar = () => Promise.all([api('/api/mensajes').catch(() => []), api('/api/mensajes/amigos').catch(() => [])]);
+  const [convs, amigos] = await cargar();
+  if (isStale()) return;
 
   el.innerHTML = `<div class="dm ${username ? 'has-chat' : ''}">
-    <aside class="dm-list"><header><div class="eyebrow">Amigos</div><h1 class="page-title">Mensajes</h1></header><div class="dm-scroll">${lista}</div></aside>
+    <aside class="dm-list"><header><h1 class="page-title">Mensajes</h1></header><div class="dm-scroll" data-lista>${htmlLista(convs, amigos, username)}</div></aside>
     <section class="dm-chat" data-chat>${username ? '<div class="dm-loading">Cargando…</div>'
       : emptyState('send', 'Tus mensajes', 'Elige una conversación. Solo puedes escribir a tus amigos: personas que se siguen mutuamente.')}</section></div>`;
+  // La lista de conversaciones se actualiza sola cuando llega o se envía un mensaje
+  let pendiente = null;
+  quitarEscuchas.push(bus.on('dm:mensaje', () => {
+    clearTimeout(pendiente);
+    pendiente = setTimeout(async () => {
+      const box = el.querySelector('[data-lista]');
+      if (!box?.isConnected) return;
+      const [c, a] = await cargar();
+      box.innerHTML = htmlLista(c, a, username);
+    }, 400);
+  }));
   if (username) await abrirChat(el.querySelector('[data-chat]'), username, isStale);
 }
 
@@ -77,6 +97,7 @@ async function abrirChat(box, username, isStale) {
   let ultimo = d.mensajes.at(-1)?.id || 0;
 
   const pintar = (nuevos) => {
+    nuevos = nuevos.filter((m) => m.id > ultimo);
     if (!nuevos.length) return;
     msgs.querySelector('.dm-hello')?.remove();
     const abajo = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 80;
@@ -105,7 +126,18 @@ async function abrirChat(box, username, isStale) {
     enviar('', player.current.id);
   });
 
-  // Mensajes nuevos mientras la conversación está abierta
+  // En vivo: los mensajes de esta conversación aparecen al instante, sin recargar
+  quitarEscuchas.push(bus.on('dm:mensaje', (d) => {
+    if (!box.isConnected || d.con !== u.username || d.mensaje.id <= ultimo) return;
+    pintar([d.mensaje]);
+    if (!d.mensaje.mio) api('/api/mensajes/' + encodeURIComponent(u.username) + '/leidos', { method: 'POST' }).then(() => bus.emit('mensajes:leidos')).catch(() => { });
+  }));
+  quitarEscuchas.push(bus.on('dm:visto', (d) => {
+    if (!box.isConnected || d.por !== u.username) return;
+    msgs.querySelectorAll('.bubble.mine time').forEach((t) => { if (!t.textContent.includes('Visto')) t.textContent += ' · Visto'; });
+  }));
+
+  // Respaldo por si la conexión en vivo se corta (cada 15 s)
   clearInterval(sondeo);
   sondeo = setInterval(async () => {
     if (!box.isConnected) { clearInterval(sondeo); return; }
@@ -120,5 +152,5 @@ async function abrirChat(box, username, isStale) {
         if (t && !t.textContent.includes('Visto')) t.textContent += ' · Visto';
       });
     } catch { /* sin conexión */ }
-  }, 4000);
+  }, 15000);
 }

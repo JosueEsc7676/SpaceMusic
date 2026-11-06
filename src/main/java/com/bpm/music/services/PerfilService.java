@@ -31,6 +31,7 @@ public class PerfilService {
     private final BibliotecaService biblioteca;
     private final UsuarioReproduccionRepository repros;
     private final com.bpm.music.repositories.NotificacionRepository notificaciones;
+    private final EventosService eventos;
     private final CacheTemporal<Long, Map<String, Object>> cacheStats = new CacheTemporal<>(120_000, 500);
 
     /** Lo que suena ahora en cada cuenta (se avisa desde el reproductor). */
@@ -39,8 +40,9 @@ public class PerfilService {
 
     public PerfilService(UsuarioRepository usuarios, SeguimientoRepository seguimientos, UsuarioService usuarioService,
                          PlaylistService playlists, BibliotecaService biblioteca, UsuarioReproduccionRepository repros,
-                         com.bpm.music.repositories.NotificacionRepository notificaciones) {
+                         com.bpm.music.repositories.NotificacionRepository notificaciones, EventosService eventos) {
         this.notificaciones = notificaciones;
+        this.eventos = eventos;
         this.usuarios = usuarios;
         this.seguimientos = seguimientos;
         this.usuarioService = usuarioService;
@@ -238,6 +240,7 @@ public class PerfilService {
                         .texto(amigos ? me.getNombreVisible() + " te siguió también: ahora son amigos y pueden enviarse mensajes"
                                 : me.getNombreVisible() + " empezó a seguirte")
                         .ruta("#/u/" + me.getUsername()).build());
+                eventos.enviar(u.getId(), "notificacion", Map.of("ok", true));
             });
         }
         return mini(u, yo);

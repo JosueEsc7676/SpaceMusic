@@ -26,9 +26,11 @@ public class MensajesService {
     private final UsuarioRepository usuarios;
     private final PerfilService perfiles;
     private final BibliotecaService biblioteca;
+    private final EventosService eventos;
 
-    public MensajesService(MensajeRepository mensajes, NotificacionRepository notificaciones, SeguimientoRepository seguimientos,
+    public MensajesService(EventosService eventos, MensajeRepository mensajes, NotificacionRepository notificaciones, SeguimientoRepository seguimientos,
                            UsuarioRepository usuarios, PerfilService perfiles, BibliotecaService biblioteca) {
+        this.eventos = eventos;
         this.mensajes = mensajes;
         this.notificaciones = notificaciones;
         this.seguimientos = seguimientos;
@@ -102,7 +104,7 @@ public class MensajesService {
     public Map<String, Object> conversacion(Long yo, String username, Long antes) {
         Usuario otro = porUsername(username);
         List<Mensaje> lista = mensajes.conversacion(yo, otro.getId(), antes == null ? Long.MAX_VALUE : antes, PageRequest.of(0, 50));
-        mensajes.marcarLeidos(yo, otro.getId());
+        if (mensajes.marcarLeidos(yo, otro.getId()) > 0) avisarVisto(yo, otro.getId());
         List<Map<String, Object>> ms = new ArrayList<>(lista.stream().map(m -> dto(m, yo)).toList());
         Collections.reverse(ms); // del más viejo al más nuevo
         return Map.of("usuario", perfiles.mini(otro, yo), "mensajes", ms,
@@ -120,7 +122,21 @@ public class MensajesService {
         if (cancionId != null && biblioteca.porId(cancionId).isEmpty()) cancionId = null;
         Mensaje m = mensajes.save(Mensaje.builder().deId(yo).paraId(otro.getId())
                 .texto(t.isEmpty() ? "🎵" : t).cancionId(cancionId).build());
+        // Al instante: a quien lo recibe y a los otros dispositivos de quien lo envía
+        Usuario yoU = usuarios.findById(yo).orElseThrow();
+        eventos.enviar(otro.getId(), "mensaje", Map.of("con", yoU.getUsername(), "nombre", yoU.getNombreVisible(), "mensaje", dto(m, otro.getId())));
+        eventos.enviar(yo, "mensaje", Map.of("con", otro.getUsername(), "nombre", otro.getNombreVisible(), "mensaje", dto(m, yo)));
         return dto(m, yo);
+    }
+
+    /** Marca como leídos los mensajes de una conversación (cuando llegan con el chat abierto). */
+    public void marcarLeidos(Long yo, String username) {
+        Usuario otro = porUsername(username);
+        if (mensajes.marcarLeidos(yo, otro.getId()) > 0) avisarVisto(yo, otro.getId());
+    }
+
+    private void avisarVisto(Long yo, Long otro) {
+        usuarios.findById(yo).ifPresent(u -> eventos.enviar(otro, "visto", Map.of("por", u.getUsername())));
     }
 
     // ═══════════════════ Notificaciones ═══════════════════

@@ -504,3 +504,27 @@ html.ios .volume, html.ios .np-vol, html.ios [data-eq] { display: none !importan
   .dm-back { display: grid; }
   .dm-list, .dm-chat { border-radius: 18px; }
 }
+
+/* ── Mensajes: una sola sección, sin ventanas flotantes ── */
+.dm { gap: 0; border-top: 1px solid var(--line); margin: 0 -24px -40px; height: calc(100dvh - var(--player-h) - var(--topbar-h) - 28px); }
+.dm-list, .dm-chat { background: transparent; border: 0; border-radius: 0; }
+.dm-list { border-right: 1px solid var(--line); }
+.dm-list header { padding: 18px 20px 10px; }
+.dm-list .page-title { font-size: 28px; }
+.dm-scroll { padding: 4px 10px 16px; }
+.dm-head { padding: 12px 20px; background: rgba(11,11,14,.6); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+.dm-msgs { padding: 20px; }
+.dm-send { padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: var(--bg-elev); }
+.dm-send input { height: 46px; font-size: 16px; }
+
+@media (max-width: 820px) {
+  .dm { margin: 0 -14px -28px; border-top: 0; height: calc(100dvh - var(--player-h) - var(--mobile-nav-h) - var(--topbar-h) - 6px - env(safe-area-inset-bottom)); }
+  .dm-list { border-right: 0; }
+  .dm-list header { padding: 8px 16px 8px; }
+  .dm-head { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  .dm-msgs { padding: 14px 12px; }
+  .dm-send { padding: 8px 10px; border-top: 1px solid var(--line); }
+  .bubble { max-width: 82%; }
+  /* Dentro de un chat no hace falta el título de la vista ni el relleno superior */
+  .view-inner:has(.dm.has-chat) { padding-bottom: 0; }
+}

@@ -592,10 +592,15 @@ function registrarServiceWorker() {
     recargando = true;
     location.reload();
   });
-  const avisar = (worker) => toast('Hay una versión nueva de SpaceMusic', {
-    ms: 15000,
-    action: { label: 'Actualizar', fn: () => worker.postMessage('activar') },
-  });
+  // Si no está sonando música, la versión nueva se aplica sola (así nunca se mezclan archivos viejos y nuevos);
+  // si está sonando, se ofrece actualizar para no cortar la canción.
+  const avisar = (worker) => {
+    if (!player.playing) { worker.postMessage('activar'); return; }
+    toast('Hay una versión nueva de SpaceMusic', {
+      ms: 15000,
+      action: { label: 'Actualizar', fn: () => worker.postMessage('activar') },
+    });
+  };
   navigator.serviceWorker.register('/sw.js').then((reg) => {
     if (reg.waiting && navigator.serviceWorker.controller) avisar(reg.waiting);
     reg.addEventListener('updatefound', () => {

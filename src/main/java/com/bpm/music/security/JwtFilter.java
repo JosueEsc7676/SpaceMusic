@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 public class JwtFilter extends OncePerRequestFilter {
 
     private static final Pattern RUTAS_CON_TOKEN_EN_URL =
-            Pattern.compile("^/api/canciones/\\d+/(audio|descargar)$");
+            Pattern.compile("^/api/canciones/\\d+/(audio|descargar)$|^/api/eventos$"); // eventos en vivo: EventSource no envía cabeceras
 
     private final JwtUtil jwtUtil;
 

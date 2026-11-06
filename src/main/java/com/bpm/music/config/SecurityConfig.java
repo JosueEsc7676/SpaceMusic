@@ -46,6 +46,8 @@ public class SecurityConfig {
                 .frameOptions(f -> f.sameOrigin())
                 .referrerPolicy(r -> r.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.SAME_ORIGIN)))
             .authorizeHttpRequests(auth -> auth
+                // Continuaciones internas de respuestas largas (eventos en vivo) y páginas de error
+                .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC, jakarta.servlet.DispatcherType.ERROR).permitAll()
                 // ── Perfil propio: requiere sesión ──
                 .requestMatchers("/api/auth/me", "/api/auth/me/**", "/api/auth/refresh").authenticated()
                 // ── Registro, login, recuperación ──

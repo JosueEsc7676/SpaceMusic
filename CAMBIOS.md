@@ -1,5 +1,13 @@
 # Registro de cambios
 
+## Versión 2.5.1
+- **Mensajes en tiempo real:** conexión en vivo (`/api/eventos`, Server-Sent Events) que entrega al instante los mensajes nuevos, el "Visto" y las notificaciones. Se reabre sola al volver a la app. Si se corta, la app revisa cada 15 s.
+- **Mensajes en una sola sección:** sin ventanas flotantes. En el teléfono el chat ocupa toda la pantalla, con la barra para escribir fija abajo. La lista de conversaciones se actualiza sola.
+- **Archivos viejos en el iPhone:**
+  - la interfaz se sirve con `Cache-Control: no-cache` (el navegador siempre comprueba si cambió);
+  - las actualizaciones se aplican solas cuando no está sonando música.
+  - Esto corrige los íconos que salían como notas musicales.
+
 ## Versión 2.5 (app Android 1.4)
 - **Mensajes entre amigos** (solo si se siguen los dos):
   - lista de conversaciones y chat con "Visto";
