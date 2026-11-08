@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Optional;
 import java.util.List;
 import java.util.Map;
 
@@ -25,8 +26,11 @@ public class MensajesController {
 
     private final MensajesService servicio;
     private final com.bpm.music.services.EventosService eventosService;
+    private final com.bpm.music.services.NotificacionesService notificaciones;
 
-    public MensajesController(MensajesService servicio, com.bpm.music.services.EventosService eventosService) {
+    public MensajesController(MensajesService servicio, com.bpm.music.services.EventosService eventosService,
+                              com.bpm.music.services.NotificacionesService notificaciones) {
+        this.notificaciones = notificaciones;
         this.servicio = servicio;
         this.eventosService = eventosService;
     }
@@ -86,6 +90,15 @@ public class MensajesController {
     @DeleteMapping("/notificaciones/{id}")
     public Map<String, Object> borrar(@PathVariable Long id) {
         servicio.borrar(CurrentUser.id(), id);
+        return Map.of("ok", true);
+    }
+
+    /** Resumen de una subida de canciones terminada: queda en la campana de quien subió (solo para sí mismo). */
+    @PostMapping("/notificaciones/subida")
+    public Map<String, Object> subida(@RequestBody Map<String, String> b) {
+        String texto = Optional.ofNullable(b.get("texto")).orElse("").trim();
+        if (texto.isEmpty()) return Map.of("ok", false);
+        notificaciones.crear(CurrentUser.id(), "SUBIDA", null, texto.length() > 280 ? texto.substring(0, 280) : texto, "#/subir");
         return Map.of("ok", true);
     }
 

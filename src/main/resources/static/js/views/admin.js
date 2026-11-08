@@ -6,6 +6,7 @@ import { setHero, setTitle } from '../router.js';
 import { toast, errorToast, confirmDialog, promptDialog, emptyState, trackList, cardArtist, modal, genreColor } from '../ui.js';
 import { bus } from '../util.js';
 import { avatarHtml } from './account.js';
+import { EXT, agregar, items, resumenLote, limpiar, tamano } from '../subidas.js';
 
 let poll = null;
 bus.on('route', () => { clearInterval(poll); poll = null; });
@@ -217,7 +218,6 @@ async function solicitudesTab(el) {
 
 // ═══════════════════ Subir canciones ═══════════════════
 
-const EXT = ['mp3', 'flac', 'm4a', 'ogg', 'oga', 'opus', 'wav'];
 
 export async function uploadView(el) {
   if (!session.canEdit) { el.innerHTML = emptyState('lock', 'Solo para colaboradores', 'Pide ser colaborador desde tu perfil.', '<a class="btn primary" href="#/perfil">Ir al perfil</a>'); return; }
@@ -227,60 +227,48 @@ export async function uploadView(el) {
     <label class="dropzone" data-drop>${icon('upload')}<div style="font-size:17px;font-weight:700;color:var(--text)">${isMobile() ? 'Toca para elegir canciones' : 'Arrastra canciones aquí o haz clic para elegir'}</div>
       <div>Puedes elegir varias a la vez</div><small>MP3, FLAC, M4A, OGG, OPUS o WAV · hasta 200 MB por archivo</small>
       <input type="file" multiple accept="${EXT.map((e) => '.' + e).join(',')}" hidden data-file></label>
-    <p class="muted" style="font-size:13px;margin-top:14px">Se guardan en la carpeta <strong>Subidas</strong> y aparecen al instante. El título, artista, álbum y portada se leen del archivo. Si una canción ya existe, no se repite.</p>
+    <p class="muted" style="font-size:13px;margin-top:14px">Se guardan en la carpeta <strong>Subidas</strong> y aparecen al instante. Puedes cambiar de pantalla mientras se suben: al terminar te avisamos.</p>
     <div class="upload-sum hidden" data-sum></div>
     <div data-items></div>`;
-  const items = el.querySelector('[data-items]');
+  const box = el.querySelector('[data-items]');
+  const sum = el.querySelector('[data-sum]');
   const drop = el.querySelector('[data-drop]');
   const input = el.querySelector('[data-file]');
-  const carriles = [Promise.resolve(), Promise.resolve()];
-  let total = 0, hechas = 0, fallidas = 0;
-  const sum = el.querySelector('[data-sum]');
-  const pintarResumen = () => {
-    sum.classList.remove('hidden');
-    sum.innerHTML = `<span>${hechas} de ${total} ${total === 1 ? 'canción' : 'canciones'}${fallidas ? ` · <span style="color:var(--danger)">${fallidas} con error</span>` : ''}</span>${hechas === total ? `<span class="badge accent">${icon('check', 'sm')} Terminado</span>` : '<span class="muted">Subiendo…</span>'}`;
-  };
 
-  const add = (files) => {
-    for (const f of files) {
-      const ext = f.name.split('.').pop().toLowerCase();
-      const it = document.createElement('div');
-      it.className = 'upload-item';
-      it.innerHTML = `${icon('note')}<div class="tt"><div class="ellipsis"><strong>${esc(f.name)}</strong></div><div class="progress-line"><i style="width:0"></i></div><div class="muted st" style="font-size:12px">En espera…</div></div>`;
-      items.prepend(it);
-      const st = it.querySelector('.st'), bar = it.querySelector('.progress-line i');
-      if (!EXT.includes(ext)) { st.textContent = 'Formato no soportado'; st.style.color = 'var(--danger)'; continue; }
-      if (f.size > 200 * 1024 * 1024) { st.textContent = 'Demasiado grande (máx. 200 MB)'; st.style.color = 'var(--danger)'; continue; }
-      total++;
-      pintarResumen();
-      // Dos a la vez: más rápido sin saturar la conexión
-      const turno = carriles[total % 2];
-      carriles[total % 2] = turno.then(async () => {
-        const fd = new FormData();
-        fd.append('files', f);
-        st.textContent = 'Subiendo…';
-        try {
-          const [r] = await upload('/api/canciones/subir', fd, (p) => { bar.style.width = Math.round(p * 100) + '%'; st.textContent = `Subiendo… ${Math.round(p * 100)}%`; });
-          if (!r.ok) throw new Error(r.error);
-          bar.style.width = '100%';
-          const c = r.cancion;
-          st.innerHTML = c ? `Lista: <a href="#/artista/${encodeURIComponent(c.artista)}">${esc(c.artista)}</a> — ${esc(c.nombre)}` : 'Lista';
-          st.style.color = 'var(--accent)';
-          bus.emit('library:changed');
-        } catch (e) {
-          st.textContent = e.message || 'Error';
-          st.style.color = 'var(--danger)';
-          fallidas++;
-        }
-        hechas++;
-        pintarResumen();
-      });
-    }
+  const fila = (it) => {
+    const color = it.estado === 'error' ? 'var(--danger)' : it.estado === 'lista' ? 'var(--accent)' : '';
+    const c = it.cancion;
+    const msg = it.estado === 'lista'
+      ? (c ? `Lista: <a href="#/artista/${encodeURIComponent(c.artista)}">${esc(c.artista)}</a> — ${esc(c.nombre)}${c.genero && c.genero !== 'Desconocido' ? ` · ${esc(c.genero)}` : ''}` : 'Lista')
+      : esc(it.mensaje);
+    return `<div class="upload-item" data-it="${it.id}">${icon(it.estado === 'lista' ? 'check' : 'note')}<div class="tt">
+      <div class="ellipsis"><strong>${esc(it.nombre)}</strong> <small class="muted">${tamano(it.tamano)}</small></div>
+      <div class="progress-line"><i style="width:${Math.round(it.progreso * 100)}%"></i></div>
+      <div class="muted st" style="font-size:12px${color ? `;color:${color}` : ''}">${msg}</div></div></div>`;
   };
-  input.onchange = () => { add(input.files); input.value = ''; };
+  const pintar = () => {
+    const l = resumenLote();
+    if (l && l.total) {
+      const fin = l.hechas === l.total;
+      sum.classList.remove('hidden');
+      sum.innerHTML = `<span>${l.hechas} de ${l.total} ${l.total === 1 ? 'canción' : 'canciones'} · ${tamano(l.bytes)}${l.fallidas ? ` · <span style="color:var(--danger)">${l.fallidas} con error</span>` : ''}</span>
+        ${fin ? `<span class="row" style="gap:8px"><span class="badge accent">${icon('check', 'sm')} Terminado</span><button class="btn sm ghost" data-limpiar>Limpiar</button></span>` : '<span class="muted">Subiendo…</span>'}`;
+      sum.querySelector('[data-limpiar]')?.addEventListener('click', limpiar);
+    } else sum.classList.add('hidden');
+    box.innerHTML = items.map(fila).join('');
+  };
+  pintar();
+  // La pantalla aparece un instante después; se deja de escuchar cuando ya se salió de ella
+  let visible = false;
+  const quitar = bus.on('subidas', () => {
+    if (el.isConnected) visible = true;
+    else if (visible) { quitar?.(); return; }
+    pintar();
+  });
+  input.onchange = () => { agregar(input.files); input.value = ''; };
   drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
   drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); add(e.dataTransfer.files); });
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); agregar(e.dataTransfer.files); });
 }
 
 // ═══════════════════ Soporte técnico ═══════════════════

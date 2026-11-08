@@ -3,7 +3,12 @@ package com.bpm.spacemusic;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.webkit.WebResourceResponse;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -44,6 +49,11 @@ public class MainActivity extends Activity {
     private WebView web;
     private SharedPreferences prefs;
     private boolean errorMostrado = false;
+    /** Ya se intentó abrir la copia guardada de la web (sin conexión con el servidor). */
+    private boolean probandoCopia = false;
+    /** Se está mostrando la pantalla de respaldo con las canciones del teléfono. */
+    private boolean enSinConexion = false;
+    private ConnectivityManager.NetworkCallback vigilaRed;
     private ValueCallback<Uri[]> archivoPendiente;
 
     @Override
@@ -98,11 +108,28 @@ public class MainActivity extends Activity {
             }
 
             @Override
-            public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
-                if (req.isForMainFrame() && !errorMostrado) {
-                    errorMostrado = true;
-                    dialogoError(err.getDescription() != null ? err.getDescription().toString() : "Error de red");
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
+                // Audio de la pantalla sin conexión: se lee del teléfono, nunca sale a internet
+                if (SinConexion.HOST.equals(req.getUrl().getHost())) {
+                    return SinConexion.audio(MainActivity.this, req.getUrl(), req.getRequestHeaders());
                 }
+                return null;
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
+                if (!req.isForMainFrame() || errorMostrado || enSinConexion) return;
+                if (!probandoCopia) {
+                    // Sin conexión con el servidor: abrir la copia de SpaceMusic guardada en el teléfono
+                    // (ahí funcionan el modo sin conexión y las canciones descargadas en la app)
+                    probandoCopia = true;
+                    view.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+                    view.post(() -> web.loadUrl(servidor() + "/"));
+                    return;
+                }
+                // Ni siquiera hay copia guardada: pantalla de respaldo con la música del teléfono
+                errorMostrado = true;
+                mostrarSinConexion();
             }
         });
 
@@ -114,6 +141,7 @@ public class MainActivity extends Activity {
         if (savedInstanceState != null) web.restoreState(savedInstanceState);
         else cargar();
         pedirPermisoNotificaciones();
+        vigilarRed();
         // Si la app se abrió desde una notificación, ir a esa pantalla cuando cargue
         final Intent inicio = getIntent();
         web.postDelayed(() -> abrirRuta(inicio), 4000);
@@ -153,7 +181,66 @@ public class MainActivity extends Activity {
 
     private void cargar() {
         errorMostrado = false;
+        enSinConexion = false;
+        // Sin internet se abre directamente la copia guardada (no hay que esperar a que falle)
+        probandoCopia = !hayInternet();
+        web.getSettings().setCacheMode(probandoCopia ? WebSettings.LOAD_CACHE_ELSE_NETWORK : WebSettings.LOAD_DEFAULT);
         web.loadUrl(servidor() + "/");
+    }
+
+    private boolean hayInternet() {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            Network n = cm.getActiveNetwork();
+            NetworkCapabilities c = n == null ? null : cm.getNetworkCapabilities(n);
+            return c != null && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    /** Cuando vuelve la conexión: la web vuelve a pedir lo nuevo y, si estaba la pantalla de respaldo, se abre SpaceMusic. */
+    private void vigilarRed() {
+        if (Build.VERSION.SDK_INT < 24) return;
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        vigilaRed = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onAvailable(Network network) {
+                runOnUiThread(() -> {
+                    if (web == null) return;
+                    // Volvió internet: lo nuevo se pide otra vez al servidor (las respuestas de la API nunca se guardan,
+                    // así que mientras tanto la copia solo sirvió la interfaz)
+                    web.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+                    if (enSinConexion) cargar();
+                });
+            }
+        };
+        try { cm.registerDefaultNetworkCallback(vigilaRed); } catch (Exception ignored) { vigilaRed = null; }
+    }
+
+    private boolean permisoMusica() {
+        String p = Build.VERSION.SDK_INT >= 33 ? "android.permission.READ_MEDIA_AUDIO" : Manifest.permission.READ_EXTERNAL_STORAGE;
+        return Build.VERSION.SDK_INT < 23 || checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void pedirPermisoMusica() {
+        String p = Build.VERSION.SDK_INT >= 33 ? "android.permission.READ_MEDIA_AUDIO" : Manifest.permission.READ_EXTERNAL_STORAGE;
+        requestPermissions(new String[]{p}, 8);
+    }
+
+    /** Pantalla de respaldo: canciones descargadas en Música/SpaceMusic, para escuchar sin conexión. */
+    void mostrarSinConexion() {
+        enSinConexion = true;
+        boolean permiso = permisoMusica();
+        String html = SinConexion.pagina(this, permiso ? SinConexion.canciones(this) : new java.util.ArrayList<SinConexion.Cancion>(), !permiso);
+        web.loadDataWithBaseURL(SinConexion.BASE, html, "text/html", "UTF-8", null);
+        if (!permiso) pedirPermisoMusica();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int req, String[] permisos, int[] resultados) {
+        super.onRequestPermissionsResult(req, permisos, resultados);
+        if (req == 8 && enSinConexion && permisoMusica()) mostrarSinConexion();
     }
 
     private void pedirPermisoNotificaciones() {
@@ -300,6 +387,18 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> Avisos.mostrar(MainActivity.this, titulo, texto, ruta));
         }
 
+        /** Pantalla sin conexión: volver a intentar abrir el servidor. */
+        @JavascriptInterface
+        public void reintentar() {
+            runOnUiThread(MainActivity.this::cargar);
+        }
+
+        /** Pantalla sin conexión: pedir permiso para ver la música del teléfono. */
+        @JavascriptInterface
+        public void permisoMusica() {
+            runOnUiThread(MainActivity.this::pedirPermisoMusica);
+        }
+
         /** Descarga e instala la versión nueva de la app. */
         @JavascriptInterface
         public void actualizar(String url) {
@@ -327,6 +426,9 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (vigilaRed != null && Build.VERSION.SDK_INT >= 24) {
+            try { ((ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE)).unregisterNetworkCallback(vigilaRed); } catch (Exception ignored) { }
+        }
         stopService(new Intent(this, ReproductorService.class));
         if (web != null) {
             web.destroy();

@@ -15,7 +15,7 @@ function pintarContadores() {
 }
 
 /** Aviso del sistema: en la app de Android, notificación nativa; en el navegador, si se dio permiso. */
-function avisoSistema(titulo, texto, ruta) {
+export function avisoSistema(titulo, texto, ruta) {
   const app = window.SpaceMusicApp;
   if (app?.notificar) { try { app.notificar(titulo, texto, ruta || ''); } catch { } return; }
   if (!document.hidden || !('Notification' in window) || Notification.permission !== 'granted') return;
@@ -23,6 +23,25 @@ function avisoSistema(titulo, texto, ruta) {
     const n = new Notification(titulo, { body: texto, icon: '/img/icon-192.png', tag: 'sm-' + (ruta || titulo) });
     n.onclick = () => { window.focus(); if (ruta) location.hash = ruta; n.close(); };
   } catch { }
+}
+
+// Lista de notificaciones guardada en el dispositivo: el panel se abre al instante con ella
+// y se actualiza en segundo plano (con datos móviles la lista podía tardar en llegar).
+const claveLista = () => deUsuario('sm_notifs');
+let trayendo = null;
+function traerLista() {
+  if (trayendo) return trayendo;
+  trayendo = (async () => {
+    for (const espera of [8000, 15000]) {
+      try {
+        const l = await api('/api/notificaciones', { timeout: espera });
+        try { store.set(claveLista(), l.slice(0, 60)); } catch { }
+        return l;
+      } catch { /* se reintenta */ }
+    }
+    return null;
+  })().finally(() => { trayendo = null; });
+  return trayendo;
 }
 
 async function consultar() {
@@ -46,10 +65,13 @@ async function consultar() {
   store.set(deUsuario('sm_avisos_vistos'), vistos);
   resumen = r;
   pintarContadores();
+  // Si hay algo nuevo (o aún no hay copia), se trae la lista ya, para que el panel abra al instante
+  const copia = store.get(claveLista(), null);
+  if (!copia || (r.ultimaNotificacion && copia[0]?.id !== r.ultimaNotificacion.id)) traerLista();
 }
 
 /** Panel de notificaciones (campana). */
-const ICONO = { ACTUALIZACION: 'sparkles', AVISO: 'bell', CANCIONES: 'note', PLAYLIST: 'library', COLABORADOR: 'star', SEGUIDOR: 'user', AMIGO: 'users' };
+const ICONO = { ACTUALIZACION: 'sparkles', AVISO: 'bell', SUBIDA: 'upload', CANCIONES: 'note', PLAYLIST: 'library', COLABORADOR: 'star', SEGUIDOR: 'user', AMIGO: 'users' };
 
 function filaNotif(n) {
   const fig = n.de ? avatarPersona(n.de) : `<span class="notif-ico t-${esc(n.tipo)}">${icon(ICONO[n.tipo] || 'bell', 'sm')}</span>`;
@@ -76,21 +98,33 @@ async function abrirPanel(anchor) {
     e.target.remove();
     toast(p === 'granted' ? 'Listo: te avisaremos aunque tengas otra pestaña abierta' : 'No se activaron las notificaciones del navegador');
   });
-  const lista = await api('/api/notificaciones').catch(() => []);
   const box = panel.querySelector('.notif-list');
   const vacio = `<div class="notif-empty">${icon('bell')}<b>Todo al día</b><span>Aquí verás las actualizaciones de SpaceMusic, canciones nuevas, playlists de quienes sigues y nuevos seguidores.</span></div>`;
-  const nuevas = lista.filter((n) => !n.leida), vistas = lista.filter((n) => n.leida);
-  box.innerHTML = lista.length
-    ? (nuevas.length ? `<div class="notif-sec">Nuevas</div>${nuevas.map(filaNotif).join('')}` : '')
-      + (vistas.length ? `<div class="notif-sec">Anteriores</div>${vistas.map(filaNotif).join('')}` : '')
-    : vacio;
-  panel.querySelector('[data-vaciar]').classList.toggle('hidden', !lista.length);
+  const pintar = (lista) => {
+    const nuevas = lista.filter((n) => !n.leida), vistas = lista.filter((n) => n.leida);
+    box.innerHTML = lista.length
+      ? (nuevas.length ? `<div class="notif-sec">Nuevas</div>${nuevas.map(filaNotif).join('')}` : '')
+        + (vistas.length ? `<div class="notif-sec">Anteriores</div>${vistas.map(filaNotif).join('')}` : '')
+      : vacio;
+    panel.querySelector('[data-vaciar]').classList.toggle('hidden', !lista.length);
+  };
+  // Primero la copia guardada (al instante); luego la del servidor
+  const copia = store.get(claveLista(), null);
+  if (copia) pintar(copia);
+  traerLista().then((l) => {
+    if (!panel.isConnected) return;
+    if (l) pintar(l);
+    else if (!copia) box.innerHTML = `<div class="notif-empty">${icon('info')}<b>No se pudieron cargar</b><span>Revisa tu conexión e inténtalo otra vez.</span></div>`;
+    // Ya se vieron: la copia queda marcada como leída
+    if (l) try { store.set(claveLista(), l.slice(0, 60).map((n) => ({ ...n, leida: true }))); } catch { }
+  });
   box.addEventListener('click', async (e) => {
     const x = e.target.closest('[data-borrar]');
     if (x) {
       e.preventDefault();
       x.closest('.notif')?.remove();
       api('/api/notificaciones/' + x.dataset.borrar, { method: 'DELETE' }).catch(() => { });
+      try { store.set(claveLista(), (store.get(claveLista(), []) || []).filter((n) => String(n.id) !== x.dataset.borrar)); } catch { }
       if (!box.querySelector('.notif')) { box.innerHTML = vacio; panel.querySelector('[data-vaciar]').classList.add('hidden'); }
       return;
     }
@@ -99,6 +133,7 @@ async function abrirPanel(anchor) {
   panel.querySelector('[data-vaciar]').addEventListener('click', async () => {
     try {
       await api('/api/notificaciones', { method: 'DELETE' });
+      try { store.set(claveLista(), []); } catch { }
       box.innerHTML = vacio;
       panel.querySelector('[data-vaciar]').classList.add('hidden');
     } catch (err) { toast('No se pudieron borrar'); }

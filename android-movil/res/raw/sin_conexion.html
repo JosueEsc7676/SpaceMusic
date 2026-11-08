@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SpaceMusic sin conexión</title>
+<style>
+  :root { color-scheme: dark; --fondo: #0b0b0d; --panel: #17171b; --texto: #f4f4f6; --texto2: #a1a1aa; --acento: #b4a5ff; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--fondo); color: var(--texto); font-family: system-ui, -apple-system, Roboto, sans-serif; }
+  body { padding: 20px 16px 150px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 18px; }
+  h1 { font-size: 26px; margin: 0; letter-spacing: -.02em; }
+  .aviso { display: flex; gap: 10px; align-items: center; background: rgba(245,165,36,.12); border: 1px solid rgba(245,165,36,.35);
+    color: #f5c46b; border-radius: 14px; padding: 12px 14px; font-size: 14px; line-height: 1.35; margin-bottom: 18px; }
+  .acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  .btn { background: #fff; color: #000; font-weight: 700; border-radius: 999px; padding: 10px 18px; font-size: 15px; }
+  .btn.sec { background: var(--panel); color: var(--texto); }
+  .sub { color: var(--texto2); font-size: 13px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; margin: 6px 0 8px; }
+  .fila { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 12px; text-align: left; }
+  .fila:active, .fila.sonando { background: rgba(255,255,255,.06); }
+  .fila.sonando b { color: var(--acento); }
+  .nota { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0;
+    background: linear-gradient(135deg, #2a2440, #17171b); color: var(--acento); font-size: 20px; }
+  .tt { display: grid; min-width: 0; flex: 1; gap: 2px; }
+  .tt b, .tt small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tt b { font-size: 15px; font-weight: 600; }
+  small { color: var(--texto2); font-size: 13px; }
+  .dur { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .vacio { display: grid; gap: 8px; justify-items: center; text-align: center; padding: 40px 16px; color: var(--texto2); }
+  .vacio b { color: var(--texto); font-size: 17px; }
+  .vacio button { margin-top: 8px; background: #fff; color: #000; font-weight: 700; border-radius: 999px; padding: 10px 18px; }
+  .barra { position: fixed; left: 8px; right: 8px; bottom: 10px; background: #1f1f25; border-radius: 16px; padding: 10px 12px 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.6); display: none; }
+  .barra.ver { display: block; }
+  .barra .info { display: flex; align-items: center; gap: 10px; }
+  .barra .tt b { font-size: 14px; }
+  .ctrl { display: flex; align-items: center; gap: 4px; }
+  .ctrl button { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; }
+  .ctrl .play { background: #fff; color: #000; }
+  svg { width: 22px; height: 22px; fill: currentColor; }
+  .prog { margin-top: 10px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.12); position: relative; }
+  .prog i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--acento); border-radius: 4px; width: 0; }
+</style>
+</head>
+<body>
+<header><h1>SpaceMusic</h1><small><!--CANTIDAD--></small></header>
+<div class="aviso">Sin conexión con el servidor. Aquí están las canciones descargadas en tu teléfono.</div>
+<div class="acciones">
+  <button class="btn" onclick="SpaceMusicApp.reintentar()">Reintentar conexión</button>
+  <button class="btn sec" id="aleatorio">Aleatorio</button>
+  <button class="btn sec" onclick="SpaceMusicApp.openSettings()">Servidor</button>
+</div>
+<div class="sub">Descargadas</div>
+<div id="lista"><!--LISTA--></div>
+
+<div class="barra" id="barra">
+  <div class="info">
+    <span class="nota">♪</span>
+    <span class="tt"><b id="b-t"></b><small id="b-a"></small></span>
+    <div class="ctrl">
+      <button id="ant" aria-label="Anterior"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zM9.5 12 18 6v12z"/></svg></button>
+      <button id="tocar" class="play" aria-label="Reproducir"><svg viewBox="0 0 24 24" id="ico"><path d="M8 5v14l11-7z"/></svg></button>
+      <button id="sig" aria-label="Siguiente"><svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg></button>
+    </div>
+  </div>
+  <div class="prog"><i id="prog"></i></div>
+</div>
+
+<script>
+(function () {
+  var app = window.SpaceMusicApp;
+  var filas = Array.prototype.slice.call(document.querySelectorAll('.fila'));
+  var orden = filas.map(function (f, i) { return i; });
+  var pos = -1;
+  var audio = new Audio();
+  var $ = function (id) { return document.getElementById(id); };
+  var PLAY = '<path d="M8 5v14l11-7z"/>', PAUSA = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+
+  function actual() { return pos >= 0 ? filas[orden[pos]] : null; }
+  function avisar() {
+    var f = actual();
+    if (!app) return;
+    if (!f) { app.detener(); return; }
+    app.estado(!audio.paused, f.dataset.t, f.dataset.a, '', '', Math.round(audio.duration || +f.dataset.d || 0), Math.round(audio.currentTime || 0));
+  }
+  function tocar(p) {
+    if (!filas.length) return;
+    pos = (p + orden.length) % orden.length;
+    var f = actual();
+    filas.forEach(function (x) { x.classList.toggle('sonando', x === f); });
+    audio.src = '/cancion/' + f.dataset.id;
+    audio.play().catch(function () {});
+    $('b-t').textContent = f.dataset.t;
+    $('b-a').textContent = f.dataset.a;
+    $('barra').classList.add('ver');
+  }
+  filas.forEach(function (f, i) {
+    f.addEventListener('click', function () { orden = filas.map(function (x, k) { return k; }); tocar(i); });
+  });
+  $('aleatorio').addEventListener('click', function () {
+    orden = filas.map(function (x, k) { return k; });
+    for (var i = orden.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = orden[i]; orden[i] = orden[j]; orden[j] = t; }
+    tocar(0);
+  });
+  $('tocar').addEventListener('click', function () { if (audio.paused) audio.play(); else audio.pause(); });
+  $('sig').addEventListener('click', function () { tocar(pos + 1); });
+  $('ant').addEventListener('click', function () { if (audio.currentTime > 3) audio.currentTime = 0; else tocar(pos - 1); });
+  audio.addEventListener('ended', function () { tocar(pos + 1); });
+  audio.addEventListener('play', function () { $('ico').innerHTML = PAUSA; avisar(); });
+  audio.addEventListener('pause', function () { $('ico').innerHTML = PLAY; avisar(); });
+  audio.addEventListener('error', function () { if (filas.length > 1) setTimeout(function () { tocar(pos + 1); }, 800); });
+  var ultimo = 0;
+  audio.addEventListener('timeupdate', function () {
+    if (audio.duration) $('prog').style.width = (audio.currentTime / audio.duration * 100) + '%';
+    if (Date.now() - ultimo > 5000) { ultimo = Date.now(); avisar(); }
+  });
+  // Botones de la notificación, la pantalla de bloqueo y los auriculares
+  window.smRemote = function (accion, valor) {
+    if (accion === 'play') audio.play();
+    else if (accion === 'pause') audio.pause();
+    else if (accion === 'toggle') { if (audio.paused) audio.play(); else audio.pause(); }
+    else if (accion === 'next') tocar(pos + 1);
+    else if (accion === 'prev') tocar(pos - 1);
+    else if (accion === 'seek') audio.currentTime = Number(valor) || 0;
+  };
+})();
+</script>
+</body>
+</html>

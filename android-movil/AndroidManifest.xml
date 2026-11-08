@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Guardar canciones en Música (solo hace falta en Android 9 o anterior) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <!-- Escuchar sin conexión las canciones guardadas en Música/SpaceMusic -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <!-- Instalar las actualizaciones de la app -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 

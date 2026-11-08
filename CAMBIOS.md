@@ -1,5 +1,17 @@
 # Registro de cambios
 
+## Versión 2.8 (app Android 1.6)
+- **App Android sin internet:**
+  - sin conexión abre la copia guardada de SpaceMusic (caché `LOAD_CACHE_ELSE_NETWORK`), con el modo sin conexión y las descargas de la app;
+  - si tampoco hay copia, muestra una pantalla de respaldo con las canciones de Música/SpaceMusic (`SinConexion.java`, `res/raw/sin_conexion.html`). El audio se lee del teléfono con soporte para adelantar y se controla desde la notificación;
+  - al volver internet se reconecta sola;
+  - nuevo permiso READ_MEDIA_AUDIO.
+- **Subidas en segundo plano** (`js/subidas.js`):
+  - siguen aunque cambies de pantalla, con el indicador "Subiendo N de M";
+  - al terminar llega una notificación a la campana y al teléfono con cuántas se subieron, el tamaño total y los géneros (`POST /api/notificaciones/subida`);
+  - si el artista ya se conoce, el género se pone al subir; si no, se busca enseguida.
+- **Notificaciones al instante:** el panel muestra la última lista guardada y se actualiza en segundo plano; la lista se trae antes, cuando llega algo nuevo.
+
 ## Versión 2.7 (app Android 1.5)
 - **Buscar por género o ánimo:** "banda", "bachata", "reggaetón", "música relajante", "para el gym"… muestran esa música lista para escuchar (`GeneroService.buscarPorEstilo`, campo `estilo` en `/api/buscar`).
 - **Letra en miniatura** en el reproductor del celular, debajo del artista (línea actual y siguiente). Al tocarla se abre la letra completa.

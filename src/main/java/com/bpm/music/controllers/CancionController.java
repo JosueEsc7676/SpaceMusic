@@ -29,8 +29,12 @@ public class CancionController {
     private final LetrasService letras;
     private final boolean permitirDescargas;
 
+    private final com.bpm.music.services.GeneroService generos;
+
     public CancionController(BibliotecaService biblioteca, CancionService canciones, UsuarioService usuarios,
-                             LetrasService letras, @Value("${app.allow-downloads:true}") boolean permitirDescargas) {
+                             LetrasService letras, com.bpm.music.services.GeneroService generos,
+                             @Value("${app.allow-downloads:true}") boolean permitirDescargas) {
+        this.generos = generos;
         this.biblioteca = biblioteca;
         this.canciones = canciones;
         this.usuarios = usuarios;
@@ -165,7 +169,11 @@ public class CancionController {
     public List<Map<String, Object>> subir(@RequestParam("files") List<MultipartFile> files) {
         if (files == null || files.isEmpty()) throw new IllegalArgumentException("No se recibió ningún archivo");
         if (files.size() > 50) throw new IllegalArgumentException("Máximo 50 archivos a la vez");
-        return canciones.subir(files);
+        List<Map<String, Object>> r = canciones.subir(files);
+        // Género al momento si el artista ya se conoce (para el resumen de la subida)
+        generos.completarSubidas(r.stream().map(m -> m.get("cancion")).filter(CancionDTO.class::isInstance)
+                .map(CancionDTO.class::cast).toList());
+        return r;
     }
 
     static String mime(String nombre) {

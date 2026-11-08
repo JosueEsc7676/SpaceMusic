@@ -1,16 +1,26 @@
 {
-  "version": "2.7",
-  "titulo": "Novedades: busca por género y letra en el reproductor",
+  "version": "2.8",
+  "titulo": "Novedades: app Android sin internet y subidas en segundo plano",
   "puntos": [
-    "Busca por género o por ánimo: escribe “banda”, “bachata”, “reggaetón” o “música relajante” y te aparece esa música lista para escuchar.",
-    "La letra sincronizada aparece en pequeño en el reproductor, debajo del artista. Tócala para verla completa.",
-    "Mensajes abre al instante, también con datos móviles, y muestra la última conversación aunque la señal sea mala.",
-    "En iPhone la siguiente canción ya se prepara antes, para que siga sonando con la pantalla apagada.",
-    "Subir canciones: nuevo diseño y puedes subir varias a la vez.",
-    "Arreglos de diseño: notificaciones en el celular, color de la barra de arriba al cerrar el reproductor y portadas sin bordes cortados.",
-    "Más seguridad: si cambias tu contraseña se cierra la sesión en tus otros dispositivos."
+    "App de Android 1.6: ahora abre sin internet y puedes escuchar tus canciones descargadas. Actualízala desde el aviso dentro de la app.",
+    "Si no hay conexión con el servidor, la app muestra las canciones guardadas en Música/SpaceMusic, listas para reproducir (también con la pantalla apagada).",
+    "Subir canciones: la subida sigue aunque cambies de pantalla. Al terminar te avisamos cuántas se subieron, el tamaño total y sus géneros.",
+    "Las notificaciones abren al instante."
   ],
   "anteriores": [
+    {
+      "version": "2.7",
+      "titulo": "Novedades: busca por género y letra en el reproductor",
+      "puntos": [
+        "Busca por género o por ánimo: escribe “banda”, “bachata”, “reggaetón” o “música relajante” y te aparece esa música lista para escuchar.",
+        "La letra sincronizada aparece en pequeño en el reproductor, debajo del artista. Tócala para verla completa.",
+        "Mensajes abre al instante, también con datos móviles, y muestra la última conversación aunque la señal sea mala.",
+        "En iPhone la siguiente canción ya se prepara antes, para que siga sonando con la pantalla apagada.",
+        "Subir canciones: nuevo diseño y puedes subir varias a la vez.",
+        "Arreglos de diseño: notificaciones en el celular, color de la barra de arriba al cerrar el reproductor y portadas sin bordes cortados.",
+        "Más seguridad: si cambias tu contraseña se cierra la sesión en tus otros dispositivos."
+      ]
+    },
     {
       "version": "2.6",
       "titulo": "Novedades: notificaciones y portada",

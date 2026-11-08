@@ -139,6 +139,24 @@ public class GeneroService {
         return r;
     }
 
+    /** Canciones recién subidas: si ya se conoce el género del artista se pone al momento; si no, se busca ya. */
+    public void completarSubidas(List<CancionDTO> nuevas) {
+        boolean faltan = false, cambio = false;
+        for (CancionDTO c : nuevas) {
+            if (c == null) continue;
+            String g = c.getGenero();
+            if (g != null && !g.isBlank() && !"Desconocido".equalsIgnoreCase(g)) continue;
+            String conocido = repo.findByClave(clave(c.getArtista())).map(ArtistaGenero::getPrincipal)
+                    .filter(p -> p != null && !p.isBlank()).orElse(null);
+            if (conocido == null) { faltan = true; continue; }
+            canciones.ponerGenero(List.of(c.getId()), conocido);
+            c.setGenero(conocido);
+            cambio = true;
+        }
+        if (cambio) biblioteca.invalidar();
+        if (faltan) buscarEnSegundoPlano();
+    }
+
     /** Administración: fija a mano el género de un artista (y de todas sus canciones). */
     public int fijarGenero(String artista, String genero) {
         String k = clave(artista);

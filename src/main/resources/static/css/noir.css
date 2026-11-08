@@ -691,3 +691,10 @@ html.ios .volume, html.ios .np-vol, html.ios [data-eq] { display: none !importan
 .np.no-panel .np-mini-lyr:not(.hidden) { align-self: stretch; justify-content: center; margin: 0; padding: 10px 0; min-height: 64px; }
 .np-mini-lyr .act { -webkit-line-clamp: 3; }
 .np-mini-lyr .sig { display: none; }
+
+/* Subidas en segundo plano: indicador visible en cualquier pantalla */
+.subidas-pill { position: fixed; z-index: 60; right: 16px; bottom: calc(var(--player-h, 90px) + 16px); display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px; border-radius: 999px; background: #1f1f25; color: var(--text); font-size: 13px; font-weight: 700;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5); overflow: hidden; }
+.subidas-pill i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--aurora, #b4a5ff); transition: width .3s; }
+@media (max-width: 820px) { .subidas-pill { right: 12px; bottom: calc(var(--mobile-nav-h, 64px) + 84px + env(safe-area-inset-bottom)); } }
