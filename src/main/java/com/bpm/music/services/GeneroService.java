@@ -308,6 +308,16 @@ public class GeneroService {
         return Character.toUpperCase(g.charAt(0)) + g.substring(1);
     }
 
+    /**
+     * Familias "aparte": solo se recomiendan a quien ya las escucha (música cristiana, infantil).
+     * A los demás no les aparecen mezcladas en el inicio, las mezclas ni la radio; siguen en el buscador y en Géneros.
+     */
+    public static final Set<String> APARTE = Set.of("cristiana", "infantil");
+
+    public static boolean esAparte(String genero) {
+        return APARTE.contains(familia(genero));
+    }
+
     /** Familia amplia de un género (para comparar canciones aunque el género exacto no coincida). */
     public static String familia(String genero) {
         String g = BibliotecaService.normalizar(genero);
@@ -316,6 +326,7 @@ public class GeneroService {
         if (g.matches(".*(corrido|regional|mexican|banda|norteno|norteño|sierreno|mariachi|ranchera|grupero).*")) return "regional";
         if (g.matches(".*(salsa|cumbia|bachata|merengue|tropical|vallenato).*")) return "tropical";
         if (g.matches(".*(christian|cristian|worship|alabanza|gospel|adoracion).*")) return "cristiana";
+        if (g.matches(".*(children|infantil|kids|nursery|ninos|lullab|cancion de cuna).*")) return "infantil";
         if (g.matches(".*(hip hop|rap|trap|drill|grime).*")) return "hiphop";
         if (g.matches(".*(r b|rnb|soul|funk).*")) return "rnb";
         if (g.matches(".*(electr|house|techno|edm|garage|dance|trance|dubstep|ambient|drum and bass).*")) return "electronica";

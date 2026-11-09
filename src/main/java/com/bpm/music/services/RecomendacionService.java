@@ -58,6 +58,9 @@ public class RecomendacionService {
                 .flatMap(Optional::stream).toList();
         if (semillas.isEmpty()) throw new NoSuchElementException("Canción no encontrada");
         CancionDTO principal = semillas.get(0);
+        // Si suena algo normal, la radio no cambia a música aparte (cristiana, infantil) que la persona no escucha
+        var permitidasRadio = semillas.stream().anyMatch(x -> GeneroService.esAparte(x.getGenero()))
+                ? (java.util.function.Predicate<CancionDTO>) x -> true : permitidas(userId);
         Set<Long> excluir = new HashSet<>(recientesSesion(userId, 25));
         semillas.forEach(x -> excluir.add(x.getId()));
         if (excluirExtra != null) excluir.addAll(excluirExtra);
@@ -73,6 +76,7 @@ public class RecomendacionService {
         List<Cand> cands = new ArrayList<>();
         for (CancionDTO c : biblioteca.todas()) {
             if (excluir.contains(c.getId())) continue;
+            if (!permitidasRadio.test(c)) continue;
             String a = normalizar(MetadataService.primerArtista(c.getArtista()));
             String g = normalizar(c.getGenero());
             double s = 0;
@@ -108,7 +112,7 @@ public class RecomendacionService {
             Set<Long> ya = cands.stream().map(x -> x.c().getId()).collect(Collectors.toSet());
             for (CancionDTO c : resto) {
                 if (cands.size() >= cantidad * 2) break;
-                if (!excluir.contains(c.getId()) && ya.add(c.getId())) cands.add(new Cand(c, rnd.nextDouble()));
+                if (!excluir.contains(c.getId()) && permitidasRadio.test(c) && ya.add(c.getId())) cands.add(new Cand(c, rnd.nextDouble()));
             }
         }
         cands.sort(Comparator.comparingDouble(Cand::score).reversed());
@@ -188,6 +192,45 @@ public class RecomendacionService {
         return separarArtistas(sinDuplicados(out), null);
     }
 
+    // ═══════════════════════ Música "aparte" (cristiana, infantil) ═══════════════════════
+
+    private final CacheTemporal<Long, Set<String>> cacheAparte = new CacheTemporal<>(5 * 60_000, 500);
+
+    /** Familias aparte que esta persona sí escucha (3 o más canciones, o el 10 % de lo que escucha y le gusta). */
+    public Set<String> apartesQueLeGustan(Long userId) {
+        if (userId == null) return Set.of();
+        return cacheAparte.obtener(userId, () -> {
+            List<CancionDTO> suyas = new ArrayList<>(usuarios.masEscuchadas(userId, 365, 300));
+            suyas.addAll(usuarios.favoritos(userId));
+            Map<String, Integer> n = new HashMap<>();
+            for (CancionDTO c : suyas) {
+                String f = GeneroService.familia(c.getGenero());
+                if (GeneroService.APARTE.contains(f)) n.merge(f, 1, Integer::sum);
+            }
+            int total = Math.max(1, suyas.size());
+            Set<String> r = new HashSet<>();
+            n.forEach((f, k) -> { if (k >= 3 || k * 10 >= total) r.add(f); });
+            return r;
+        });
+    }
+
+    /** ¿Se le puede recomendar esta canción a esta persona? */
+    public java.util.function.Predicate<CancionDTO> permitidas(Long userId) {
+        Set<String> ok = apartesQueLeGustan(userId);
+        return c -> {
+            String f = GeneroService.familia(c.getGenero());
+            return !GeneroService.APARTE.contains(f) || ok.contains(f);
+        };
+    }
+
+    /** Un artista es "aparte" si la mayoría de sus canciones lo son. */
+    public boolean artistaPermitido(String artista, java.util.function.Predicate<CancionDTO> permitidas) {
+        List<CancionDTO> suyas = biblioteca.cancionesDeArtista(artista);
+        if (suyas.isEmpty()) return true;
+        long no = suyas.stream().filter(permitidas.negate()).count();
+        return no * 2 < suyas.size();
+    }
+
     /** Mix del día: cambia cada día y es distinto para cada usuario. */
     public List<CancionDTO> mixDiario(Long userId, int cantidad) {
         long semilla = LocalDate.now().toEpochDay() * 31 + (userId == null ? 0 : userId * 7919);
@@ -195,6 +238,7 @@ public class RecomendacionService {
         List<CancionDTO> todas = biblioteca.todas();
         if (todas.isEmpty()) return List.of();
         if (userId == null) return separarArtistas(ponderado(todas, rnd, cantidad), null);
+        todas = todas.stream().filter(permitidas(userId)).toList();
 
         Map<String, Long> gustos = usuarios.pesosArtistas(userId);
         Set<String> generos = usuarios.generosPreferidos(userId);
@@ -223,7 +267,8 @@ public class RecomendacionService {
         Set<String> generos = usuarios.generosPreferidos(userId);
         long semilla = LocalDate.now().toEpochDay() / 7 * 13 + userId;
         Random rnd = new Random(semilla);
-        List<CancionDTO> nuevas = biblioteca.todas().stream().filter(c -> !escuchadas.contains(c.getId())).collect(Collectors.toList());
+        List<CancionDTO> nuevas = biblioteca.todas().stream().filter(c -> !escuchadas.contains(c.getId()))
+                .filter(permitidas(userId)).collect(Collectors.toList());
         List<CancionDTO> afines = nuevas.stream().filter(c -> generos.contains(normalizar(c.getGenero()))).collect(Collectors.toList());
         Collections.shuffle(afines, rnd);
         Collections.shuffle(nuevas, rnd);
@@ -254,8 +299,10 @@ public class RecomendacionService {
         List<String> topArtistas = gustos.entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                 .map(Map.Entry::getKey).limit(3).toList();
+        var permitidas = permitidas(userId);
         if (topArtistas.isEmpty()) {
             topArtistas = biblioteca.artistas().stream().filter(a -> a.totalCanciones() >= 3)
+                    .filter(a -> artistaPermitido(a.nombre(), permitidas))
                     .limit(3).map(a -> normalizar(a.nombre())).toList();
         }
         for (String clave : topArtistas) {
@@ -265,7 +312,10 @@ public class RecomendacionService {
             if (m.size() >= 4) mixes.add(mix("artista:" + a.get().nombre(), "Mix de " + a.get().nombre(),
                     "Con artistas parecidos", m));
         }
-        for (Map<String, Object> g : biblioteca.generos().stream().limit(4).toList()) {
+        Set<String> apartesOk = apartesQueLeGustan(userId);
+        for (Map<String, Object> g : biblioteca.generos().stream()
+                .filter(x -> !GeneroService.esAparte((String) x.get("nombre")) || apartesOk.contains(GeneroService.familia((String) x.get("nombre"))))
+                .limit(4).toList()) {
             String nombre = (String) g.get("nombre");
             List<CancionDTO> m = mixAleatorio(25, nombre, null);
             if (m.size() >= 4) mixes.add(mix("genero:" + nombre, "Mix de " + nombre, "Lo mejor de " + nombre, m));

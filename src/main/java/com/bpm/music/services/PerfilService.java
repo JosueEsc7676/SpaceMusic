@@ -134,8 +134,25 @@ public class PerfilService {
 
     public void avisarReproduccion(Long uid, Long cancionId, boolean sonando) {
         if (uid == null) return;
-        if (cancionId == null) { presencia.remove(uid); return; }
-        presencia.put(uid, new Presencia(cancionId, sonando, System.currentTimeMillis()));
+        Presencia antes = presencia.get(uid);
+        if (cancionId == null) presencia.remove(uid);
+        else presencia.put(uid, new Presencia(cancionId, sonando, System.currentTimeMillis()));
+        // Solo si cambió la canción o si empezó/paró (no en cada "sigo escuchando")
+        boolean cambio = antes == null ? cancionId != null
+                : !java.util.Objects.equals(antes.cancionId(), cancionId) || antes.sonando() != sonando;
+        if (cambio) avisarSeguidores(uid);
+    }
+
+    /** En vivo: a quienes siguen a esta persona (y la tienen abierta) se les avisa que cambió lo que escucha. */
+    private void avisarSeguidores(Long uid) {
+        Map<Long, Integer> conectados = eventos.conectados();
+        if (conectados.isEmpty()) return;
+        Usuario u = usuarios.findById(uid).orElse(null);
+        if (u == null || !u.verActividad()) return;
+        Map<String, Object> d = Map.of("username", u.getUsername());
+        for (Long seguidor : seguimientos.seguidores(uid)) {
+            if (conectados.containsKey(seguidor)) eventos.enviar(seguidor, "actividad", d);
+        }
     }
 
     // ═══════════════════ Vibras ═══════════════════

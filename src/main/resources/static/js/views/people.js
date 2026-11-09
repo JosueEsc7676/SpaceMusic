@@ -1,6 +1,6 @@
 // Perfiles públicos: seguir, amigos, playlists públicas, lo más escuchado, géneros, vibras y compatibilidad
 import { api, session, upload } from '../api.js';
-import { esc, plural, timeAgo, cover, coverImg, fmtNum } from '../util.js';
+import { esc, plural, timeAgo, cover, coverImg, fmtNum, bus } from '../util.js';
 import { icon } from '../icons.js';
 import { setHero, setTitle } from '../router.js';
 import { trackList, cardPlaylist, cardArtist, section, emptyState, toast, errorToast, modal, registerList } from '../ui.js';
@@ -167,6 +167,17 @@ export async function perfilPublicoView(el, { username }, _q, isStale) {
     });
   };
   draw();
+  // En vivo: si esta persona cambia de canción, se actualiza "Escuchando ahora" sin recargar
+  perfilAbierto = {
+    username: p.username,
+    actualizar: async () => {
+      if (!el.isConnected) { perfilAbierto = null; return; }
+      const n = await api('/api/perfiles/' + encodeURIComponent(p.username)).catch(() => null);
+      if (!n || !el.isConnected || isStale()) return;
+      p = { ...p, actividad: n.actividad };
+      draw();
+    },
+  };
 }
 
 async function verLista(p, tipo) {
@@ -180,8 +191,28 @@ async function verLista(p, tipo) {
   });
 }
 
+let perfilAbierto = null;
+let cajaAmigos = null;
+let pendienteAmigos = 0;
+bus.on('amigo:actividad', (d) => {
+  if (perfilAbierto && d?.username === perfilAbierto.username) perfilAbierto.actualizar();
+  // Inicio: "Lo que escuchan tus amigos" se vuelve a pedir (agrupando avisos seguidos)
+  if (cajaAmigos?.isConnected) {
+    clearTimeout(pendienteAmigos);
+    pendienteAmigos = setTimeout(() => { if (cajaAmigos?.isConnected) actividadAmigos(cajaAmigos); }, 800);
+  }
+});
+
+// Al volver a la app (la conexión en vivo se pausa en segundo plano) se actualiza también
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  perfilAbierto?.actualizar();
+  if (cajaAmigos?.isConnected) actividadAmigos(cajaAmigos);
+});
+
 /** Sección "Lo que escuchan tus amigos" (inicio). */
 export async function actividadAmigos(box) {
+  cajaAmigos = box;
   const lista = await api('/api/amigos/actividad').catch(() => []);
   if (!lista.length || !box.isConnected) return;
   const lid = registerList(lista.map((x) => x.cancion), { type: 'amigos', label: 'Lo que escuchan tus amigos' });

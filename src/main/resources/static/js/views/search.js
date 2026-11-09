@@ -1,7 +1,8 @@
 // Búsqueda
 import { api , deUsuario } from '../api.js';
 import { cardPersona } from './people.js';
-import { esc, store, coverImg, plural } from '../util.js';
+import { esc, store, coverImg, plural, norm } from '../util.js';
+import { descargadas, colecciones, sinConexion } from '../offline.js';
 import { icon } from '../icons.js';
 import { setHero, setTitle } from '../router.js';
 import { trackList, cardAlbum, cardArtist, cardPlaylist, cardGenre, cardSong, section, emptyState, registerList, getList } from '../ui.js';
@@ -41,8 +42,21 @@ export async function searchView(el, _p, query, isStale) {
     return;
   }
 
-  const r = await api('/api/buscar?q=' + encodeURIComponent(q));
+  // Sin conexión: se busca entre lo descargado en este dispositivo
+  const local = () => {
+    const nq = norm(q);
+    const canciones = descargadas().filter((s) => norm(`${s.nombre} ${s.artista} ${s.album || ''}`).includes(nq));
+    const cols = colecciones().filter((c) => c.tipo !== 'favoritos' && norm(c.datos.nombre || '').includes(nq));
+    el.innerHTML = `<div class="offline-banner">${icon('download', 'sm')} Sin conexión · resultados de tus descargas</div>
+      ${cols.length ? section('Playlists y álbumes', `<div class="grid">${cols.map((c) => (c.tipo === 'album' ? cardAlbum(c.datos) : cardPlaylist({ ...c.datos, cancionesCount: c.canciones.length }))).join('')}</div>`) : ''}
+      ${canciones.length ? section('Canciones', trackList(canciones, { context: { type: 'busqueda', label: q, route: '#/buscar?q=' + encodeURIComponent(q) } })) : ''}
+      ${!cols.length && !canciones.length ? emptyState('search', 'Nada descargado coincide', 'Sin conexión solo se busca entre tus descargas.') : ''}`;
+  };
+  if (sinConexion()) return local();
+  let r;
+  try { r = await api('/api/buscar?q=' + encodeURIComponent(q)); } catch (e) { if (!isStale()) local(); return; }
   if (isStale()) return;
+  if (sinConexion()) return local();
   addRecentSearch(q);
 
   const estilo = r.estilo?.canciones?.length ? r.estilo : null;

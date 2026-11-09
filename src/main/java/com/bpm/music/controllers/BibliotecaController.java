@@ -48,13 +48,27 @@ public class BibliotecaController {
         r.put("recientes", usuarios.recientes(uid, 12));
         r.put("mixes", recomendaciones.mixesPara(uid));
         r.put("tusFavoritas", usuarios.masEscuchadas(uid, 30, 12));
-        r.put("tendencias", estadisticas.tendencias(7, 12));
-        r.put("top", biblioteca.top(12));
-        r.put("recienAgregadas", biblioteca.recienAgregadas(12));
-        r.put("albumesRecientes", biblioteca.albumesRecientes(12));
-        r.put("artistas", biblioteca.artistas().stream().limit(12).toList());
-        r.put("generos", biblioteca.generos().stream().limit(16).toList());
-        r.put("playlistsPublicas", playlists.publicas(uid).stream().limit(12).toList());
+        // Música aparte (cristiana, infantil): solo para quien la escucha; a los demás no se les mezcla
+        var ok = recomendaciones.permitidas(uid);
+        Set<String> apartesOk = recomendaciones.apartesQueLeGustan(uid);
+        r.put("tendencias", estadisticas.tendencias(7, 40).stream().filter(ok).limit(12).toList());
+        r.put("top", biblioteca.top(60).stream().filter(ok).limit(12).toList());
+        r.put("recienAgregadas", biblioteca.recienAgregadas(60).stream().filter(ok).limit(12).toList());
+        r.put("albumesRecientes", biblioteca.albumesRecientes(40).stream()
+                .filter(a -> recomendaciones.artistaPermitido(a.artista(), ok)).limit(12).toList());
+        r.put("artistas", biblioteca.artistas().stream()
+                .filter(a -> recomendaciones.artistaPermitido(a.nombre(), ok)).limit(12).toList());
+        // En "Explora por género" siguen todos, pero los aparte van al final
+        r.put("generos", biblioteca.generos().stream()
+                .sorted(Comparator.comparing((Map<String, Object> g) -> {
+                    String n = (String) g.get("nombre");
+                    return GeneroService.esAparte(n) && !apartesOk.contains(GeneroService.familia(n));
+                })).limit(16).toList());
+        r.put("playlistsPublicas", playlists.publicas(uid).stream().filter(p -> {
+            List<CancionDTO> cs = biblioteca.porIds(playlists.idsCanciones(p.getId()));
+            long no = cs.stream().filter(ok.negate()).count();
+            return no * 2 < Math.max(1, cs.size());
+        }).limit(12).toList());
         return r;
     }
 

@@ -5,6 +5,7 @@ import { icon } from '../icons.js';
 import { lib } from '../state.js';
 import { setHero } from '../router.js';
 import { actividadAmigos } from './people.js';
+import { descargadas, colecciones, sinConexion } from '../offline.js';
 import { cardSong, cardAlbum, cardArtist, cardPlaylist, cardMix, cardGenre, section, registerList, emptyState, playlistArt } from '../ui.js';
 
 function saludo() {
@@ -56,13 +57,33 @@ function ranking(songs, ctx) {
     </li>`).join('')}</ol>`;
 }
 
-export async function homeView(el, _p, _q, isStale) {
-  const d = await api('/api/inicio');
-  if (isStale()) return;
-  setHero(null);
+/** Inicio sin conexión (como Spotify): solo lo que está descargado en este dispositivo. */
+function inicioSinConexion(el, head) {
+  const cols = colecciones();
+  const pins = cols.map((c) => {
+    if (c.tipo === 'favoritos') return `<a class="pin" href="#/favoritos"><span class="pin-art art-liked">${icon('heartFill')}</span><span class="pin-t ellipsis">Me gusta</span></a>`;
+    if (c.tipo === 'playlist') return `<a class="pin" href="#/playlist/${c.datos.id}"><span class="pin-art">${playlistArt(c.datos, 160)}</span><span class="pin-t ellipsis">${esc(c.datos.nombre)}</span></a>`;
+    if (c.tipo === 'album') return `<a class="pin" href="#/album/${encodeURIComponent(c.datos.nombre)}"><span class="pin-art">${coverImg(c.datos.portadaUrl, 160, c.datos.nombre)}</span><span class="pin-t ellipsis">${esc(c.datos.nombre)}</span></a>`;
+    return '';
+  }).join('');
+  const sueltas = descargadas();
+  el.innerHTML = `${head}
+    <div class="offline-banner">${icon('download', 'sm')} Sin conexión · escucha lo que descargaste en este dispositivo</div>
+    ${pins ? section('Tus descargas', `<div class="pins">${pins}</div>`, { eyebrow: 'Playlists, álbumes y Me gusta' }) : ''}
+    ${sueltas.length ? section('Canciones descargadas', songShelf(sueltas.slice(0, 40), { type: 'descargadas', label: 'Descargadas', route: '#/biblioteca?tab=descargadas' }), { more: '#/biblioteca?tab=descargadas' }) : ''}
+    ${!pins && !sueltas.length ? emptyState('download', 'No tienes descargas en este dispositivo', 'Cuando tengas conexión, descarga una playlist, un álbum o tu Me gusta con el botón de descarga. Lo que escuchas también se guarda solo.', '<a class="btn" href="#/biblioteca?tab=descargadas">Ver la biblioteca</a>') : ''}`;
+}
 
+export async function homeView(el, _p, _q, isStale) {
   const nombre = session.user?.nombreDisplay ? ', ' + esc(session.user.nombreDisplay.split(' ')[0]) : '';
   const head = `<header class="home-head"><div class="eyebrow">${esc(fechaHoy())}</div><h1 class="greeting">${saludo()}${nombre}</h1></header>`;
+  setHero(null);
+  if (sinConexion()) return inicioSinConexion(el, head);
+  let d;
+  try { d = await api('/api/inicio'); } catch (e) { if (isStale()) return; return inicioSinConexion(el, head); }
+  if (isStale()) return;
+  // La respuesta vino de la copia guardada: no hay conexión
+  if (sinConexion()) return inicioSinConexion(el, head);
 
   if (!d.totalCanciones) {
     el.innerHTML = head + emptyState('folder', 'Tu biblioteca está vacía',

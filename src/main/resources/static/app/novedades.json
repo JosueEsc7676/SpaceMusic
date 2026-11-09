@@ -1,13 +1,27 @@
 {
-  "version": "2.9",
-  "titulo": "Novedades: la app de Android abre sin internet",
+  "version": "3.0",
+  "titulo": "Novedades: modo sin conexión como Spotify",
   "puntos": [
-    "App de Android 1.7: ya no se queda en negro sin internet. Abre SpaceMusic con lo guardado y puedes escuchar tus descargas. Actualízala desde el aviso dentro de la app.",
-    "Si la app no puede arrancar sin conexión, muestra las canciones guardadas en el teléfono, listas para escuchar.",
-    "Subir canciones: las que ya están en el servidor no se vuelven a subir, aunque el archivo tenga otro nombre.",
-    "Portadas del buscador con buen tamaño en teléfonos angostos."
+    "Descarga playlists, álbumes y tu Me gusta con el botón de descarga. Sin conexión cada uno se abre tal cual, solo con sus canciones, y con la letra (también la sincronizada).",
+    "Si descargas Me gusta, las canciones que marques después también se descargan solas.",
+    "Sin conexión, el inicio, la biblioteca y el buscador muestran solo lo descargado. Lo demás se ve apagado y el reproductor lo salta.",
+    "Nueva portada difuminada en el reproductor: se funde con el fondo. Puedes apagarla en Perfil → Reproducción.",
+    "Lo que escuchan tus amigos se actualiza en vivo en su perfil y en el inicio.",
+    "Botón “Ver mi perfil” arriba en tu perfil y en el menú de tu foto.",
+    "El menú de cada canción ya no se cierra al desplazarte dentro de él.",
+    "Inicio más ordenado: la música cristiana e infantil solo se recomienda a quien la escucha."
   ],
   "anteriores": [
+    {
+      "version": "2.9",
+      "titulo": "Novedades: la app de Android abre sin internet",
+      "puntos": [
+        "App de Android 1.7: ya no se queda en negro sin internet. Abre SpaceMusic con lo guardado y puedes escuchar tus descargas. Actualízala desde el aviso dentro de la app.",
+        "Si la app no puede arrancar sin conexión, muestra las canciones guardadas en el teléfono, listas para escuchar.",
+        "Subir canciones: las que ya están en el servidor no se vuelven a subir, aunque el archivo tenga otro nombre.",
+        "Portadas del buscador con buen tamaño en teléfonos angostos."
+      ]
+    },
     {
       "version": "2.8",
       "titulo": "Novedades: app Android sin internet y subidas en segundo plano",

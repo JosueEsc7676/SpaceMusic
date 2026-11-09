@@ -1,6 +1,6 @@
 // Páginas de álbum, artista, playlist, género, mezcla, Me gusta e historial
 import { api, session } from '../api.js';
-import { descargar } from '../offline.js';
+import { descargar, coleccion, estaColeccion, descargarColeccion, quitarColeccion, sincronizarColeccion, sinConexion, disponible } from '../offline.js';
 import { esc, $, cover, coverImg, mosaic, dominantColor, fmtLong, plural, norm, bus, copyText } from '../util.js';
 import { icon } from '../icons.js';
 import { lib } from '../state.js';
@@ -41,12 +41,34 @@ function conectarGuardar(el, tipo, clave) {
   });
 }
 
-function actions({ playId = 'play', extra = '', filter = false, liked = null }) {
+/** Aviso arriba de una colección cuando no hay conexión. */
+const avisoSinRed = (n, total) => sinConexion()
+  ? `<div class="offline-banner">${icon('download', 'sm')} Sin conexión · ${n ? `${n} de ${total} canciones descargadas` : 'nada de esta lista está descargado'}</div>` : '';
+
+/** Canciones que se muestran: sin conexión, solo las que están en el dispositivo (en su orden). */
+const visibles = (songs) => (sinConexion() ? songs.filter((s) => disponible(s.id)) : songs);
+
+/** Datos de una colección: del servidor o, sin conexión, de su descarga. */
+async function cargarColeccion(clave, pedir) {
+  const c = coleccion(clave);
+  if (c && sinConexion()) return { ...c.datos, canciones: c.canciones, _copia: true };
+  try {
+    const d = await pedir();
+    if (c && !sinConexion()) sincronizarColeccion(clave, d, d.canciones || []);
+    return d;
+  } catch (e) {
+    if (c) return { ...c.datos, canciones: c.canciones, _copia: true };
+    throw e;
+  }
+}
+
+function actions({ playId = 'play', extra = '', filter = false, liked = null, col = null }) {
   return `<div class="actions-bar">
     <button class="play-fab" data-${playId} aria-label="Reproducir">${icon('play')}</button>
     <button class="icon-btn" data-shuffle-play aria-label="Reproducir en aleatorio" title="Aleatorio">${icon('shuffle')}</button>
     ${liked !== null ? `<button class="icon-btn ${liked ? 'liked' : ''}" data-like-all aria-label="Me gusta" title="${liked ? 'Quitar todas de Me gusta' : 'Agregar todas a Me gusta'}">${icon(liked ? 'heartFill' : 'heart')}</button>` : ''}
-    <button class="icon-btn" data-download-all aria-label="Descargar todo" title="Descargar para escuchar sin conexión">${icon('download')}</button>
+    <button class="icon-btn ${col && estaColeccion(col) ? 'descargado' : ''}" data-download-all aria-label="Descargar"
+      title="${col && estaColeccion(col) ? 'Descargada · toca para quitar la descarga' : 'Descargar para escuchar sin conexión'}">${icon('download')}</button>
     <button class="icon-btn" data-more aria-label="Más opciones" title="Más opciones">${icon('more')}</button>
     ${extra}
     <div class="spacer"></div>
@@ -55,7 +77,7 @@ function actions({ playId = 'play', extra = '', filter = false, liked = null }) 
 }
 
 /** Conecta los botones de reproducir/aleatorio/menú de una página de colección. */
-function wire(el, getSongs, context, menuItems = () => []) {
+function wire(el, getSongs, context, menuItems = () => [], col = null) {
   const playAll = (shuffle) => {
     const songs = getSongs();
     if (!songs.length) return toast('No hay canciones');
@@ -67,12 +89,24 @@ function wire(el, getSongs, context, menuItems = () => []) {
     playAll(player.shuffle);
   });
   el.querySelector('[data-shuffle-play]')?.addEventListener('click', () => playAll(true));
-  el.querySelector('[data-download-all]')?.addEventListener('click', (e) => {
+  el.querySelector('[data-download-all]')?.addEventListener('click', async (e) => {
+    const b = e.currentTarget;
     const songs = getSongs();
+    if (col && estaColeccion(col.clave)) {
+      if (!(await confirmDialog('Se quitarán de este dispositivo las canciones de esta lista. Las que estén en otra descarga se conservan.',
+        { title: 'Quitar descarga', ok: 'Quitar', danger: true }))) return;
+      quitarColeccion(col.clave);
+      b.classList.remove('descargado');
+      b.title = 'Descargar para escuchar sin conexión';
+      toast('Descarga quitada');
+      return;
+    }
     if (!songs.length) return toast('No hay canciones');
-    descargar(songs);
-    e.currentTarget.classList.add('liked');
-    toast(`Descargando ${plural(songs.length, 'canción', 'canciones')}…`);
+    if (sinConexion()) return toast('Sin conexión: conéctate para descargar');
+    if (col) descargarColeccion(col.clave, col.tipo, col.datos(), songs); else descargar(songs);
+    b.classList.add('descargado');
+    b.title = 'Descargada · toca para quitar la descarga';
+    toast(`Descargando ${plural(songs.length, 'canción', 'canciones')}: quedarán disponibles sin conexión, con su letra`);
   });
   el.querySelector('[data-more]')?.addEventListener('click', (e) => {
     const songs = getSongs();
@@ -121,13 +155,16 @@ async function heroColor(url) {
 // ═══════════════════ Álbum ═══════════════════
 
 export async function albumView(el, { nombre }, _q, isStale) {
-  const a = await api('/api/albumes/detalle?nombre=' + encodeURIComponent(nombre));
+  const clave = 'album:' + nombre;
+  const a = await cargarColeccion(clave, () => api('/api/albumes/detalle?nombre=' + encodeURIComponent(nombre)));
   if (isStale()) return;
+  const todas = a.canciones;
+  a.canciones = visibles(todas);
   setTitle(a.nombre);
   heroColor(a.portadaUrl);
   const route = '#/album/' + encodeURIComponent(a.nombre);
   const ctx = { type: 'album', label: a.nombre, route };
-  const masDelArtista = a.artista !== 'Varios artistas'
+  const masDelArtista = a.artista !== 'Varios artistas' && !sinConexion()
     ? await api('/api/artistas/' + encodeURIComponent(a.artista)).catch(() => null) : null;
   if (isStale()) return;
   const otros = (masDelArtista?.albumes || []).filter((x) => norm(x.nombre) !== norm(a.nombre));
@@ -138,14 +175,15 @@ export async function albumView(el, { nombre }, _q, isStale) {
     kind: 'Álbum', title: a.nombre, art: coverImg(a.portadaUrl, 640, a.nombre),
     meta: `${artistLink}${a.anio ? sep + a.anio : ''}${sep}${plural(a.totalCanciones, 'canción', 'canciones')}, <span class="muted">${fmtLong(a.duracionTotal)}</span>`,
   })
-    + actions({ liked: a.canciones.every((s) => lib.isFav(s.id)), extra: botonGuardar('album', a.nombre) })
+    + avisoSinRed(a.canciones.length, todas.length)
+    + actions({ liked: a.canciones.every((s) => lib.isFav(s.id)), extra: botonGuardar('album', a.nombre), col: clave })
     + trackList(a.canciones, { context: ctx, showAlbum: false, showCover: a.artista === 'Varios artistas', numbers: 'track' })
     + (otros.length ? `<div style="height:36px"></div>` + section('Más de ' + a.artista, `<div class="grid">${otros.slice(0, 6).map(cardAlbum).join('')}</div>`, { more: '#/artista/' + encodeURIComponent(a.artista) }) : '');
   conectarGuardar(el, 'album', a.nombre);
   wire(el, () => a.canciones, ctx, () => [
     a.artista !== 'Varios artistas' ? { label: 'Ir al artista', icon: 'user', fn: () => go('/artista/' + encodeURIComponent(a.artista)) } : null,
     { label: 'Crear playlist con este álbum', icon: 'plus', fn: () => editPlaylist(null, a.canciones).then((p) => p && go('/playlist/' + p.id)) },
-  ]);
+  ], { clave, tipo: 'album', datos: () => a });
 }
 
 // ═══════════════════ Artista ═══════════════════
@@ -186,12 +224,14 @@ export async function artistView(el, { nombre }, _q, isStale) {
 // ═══════════════════ Playlist ═══════════════════
 
 export async function playlistView(el, { id }, _q, isStale) {
-  let p = await api('/api/playlists/' + id);
+  const clave = 'playlist:' + id;
+  let p = await cargarColeccion(clave, () => api('/api/playlists/' + id));
   if (isStale()) return;
   setTitle(p.nombre);
   const route = '#/playlist/' + p.id;
   const ctx = { type: 'playlist', label: p.nombre, route };
-  let canciones = p.canciones;
+  const todasPl = p.canciones;
+  let canciones = visibles(p.canciones);
 
   const draw = () => {
     heroColor(p.portadaUrl || p.portadas?.[0]);
@@ -201,7 +241,8 @@ export async function playlistView(el, { id }, _q, isStale) {
       editable: p.propia,
       meta: `${p.autorUsername ? `<a href="#/u/${encodeURIComponent(p.autorUsername)}"><strong>${esc(autor)}</strong></a>` : `<strong>${esc(autor)}</strong>`}${sep}${plural(canciones.length, 'canción', 'canciones')}${canciones.length ? `, <span class="muted">${fmtLong(p.duracionTotal)}</span>` : ''}`,
     })
-      + actions({ filter: canciones.length > 8, extra: p.propia ? '' : botonGuardar('playlist', p.id) })
+      + avisoSinRed(canciones.length, todasPl.length)
+      + actions({ filter: canciones.length > 8, extra: p.propia ? '' : botonGuardar('playlist', p.id), col: clave })
       + (canciones.length
         ? `<div id="pltracks">${trackList(canciones, { context: ctx, playlist: p.propia ? p.id : null })}</div>`
         : emptyState('note', 'Esta playlist está vacía', 'Busca canciones y usa “Agregar a playlist” en su menú.', `<a class="btn primary" href="#/buscar">Buscar canciones</a>`))
@@ -217,7 +258,7 @@ export async function playlistView(el, { id }, _q, isStale) {
       { label: 'Eliminar playlist', icon: 'trash', danger: true, fn: borrar },
     ] : [
       { label: 'Guardar una copia en mi biblioteca', icon: 'copy', fn: duplicar },
-    ]);
+    ], { clave, tipo: 'playlist', datos: () => p });
     el.querySelector('[data-edit-cover]')?.addEventListener('click', edit);
     if (!p.propia) conectarGuardar(el, 'playlist', p.id);
 
@@ -233,7 +274,7 @@ export async function playlistView(el, { id }, _q, isStale) {
         catch (e) { errorToast(e); }
       });
     }
-    if (p.propia) loadRecs();
+    if (p.propia && !sinConexion()) loadRecs();
   };
 
   const loadRecs = async () => {
@@ -332,8 +373,10 @@ export async function playlistView(el, { id }, _q, isStale) {
 // ═══════════════════ Me gusta ═══════════════════
 
 export async function likedView(el, _p, _q, isStale) {
-  let songs = await api('/api/usuario/favoritos');
+  const d = await cargarColeccion('favoritos', async () => ({ titulo: 'Me gusta', canciones: await api('/api/usuario/favoritos') }));
   if (isStale()) return;
+  const todasFav = d.canciones;
+  let songs = visibles(d.canciones);
   setTitle('Me gusta');
   setHero([80, 56, 200]);
   const ctx = { type: 'favoritos', label: 'Me gusta', route: '#/favoritos' };
@@ -343,10 +386,11 @@ export async function likedView(el, _p, _q, isStale) {
       art: `<div class="art-liked" style="width:100%;height:100%">${icon('heartFill', 'xl')}</div>`,
       meta: `<strong>${esc(session.user?.nombreDisplay || '')}</strong>${sep}${plural(songs.length, 'canción', 'canciones')}`,
     })
-      + actions({ filter: songs.length > 8 })
+      + avisoSinRed(songs.length, todasFav.length)
+      + actions({ filter: songs.length > 8, col: 'favoritos' })
       + (songs.length ? trackList(songs, { context: ctx })
         : emptyState('heart', 'Las canciones que te gusten aparecerán aquí', 'Toca el corazón en cualquier canción para guardarla.', '<a class="btn primary" href="#/buscar">Buscar canciones</a>'));
-    wire(el, () => songs, ctx);
+    wire(el, () => songs, ctx, () => [], { clave: 'favoritos', tipo: 'favoritos', datos: () => ({ titulo: 'Me gusta' }) });
   };
   draw();
   // Quitar filas al desmarcar sin recargar toda la página
@@ -356,7 +400,7 @@ export async function likedView(el, _p, _q, isStale) {
       songs = songs.filter((s) => s.id !== ev.id);
       el.querySelector(`.track[data-song="${ev.id}"]`)?.remove();
     } else if (ev?.fav) {
-      songs = await api('/api/usuario/favoritos');
+      songs = visibles(await api('/api/usuario/favoritos').catch(() => songs));
       if (el.isConnected) draw();
     }
   });

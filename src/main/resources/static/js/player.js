@@ -11,6 +11,7 @@ const strip = ({ _uid, _user, ...s }) => s;
 
 export const prefs = {
   autoRadio: true,
+  portadaDifuminada: true, // portada sin marco que se funde con el fondo en el reproductor
   normalizeTitles: false,
   eqEnabled: false,
   eq: [0, 0, 0, 0, 0],
@@ -76,6 +77,13 @@ export const player = {
   /** Reproduce una lista empezando en `start` (o al azar si shuffle y start < 0). */
   play(songs, start = 0, context = null, opts = {}) {
     if (!songs?.length) return;
+    // Sin conexión: la lista queda solo con lo descargado (en su mismo orden)
+    if (!songs.every((x) => this.disponible(x))) {
+      const elegida = start >= 0 ? songs[start] : null;
+      songs = songs.filter((x) => this.disponible(x));
+      if (!songs.length) { bus.emit('toast', { msg: 'Sin conexión: esta canción no está descargada' }); return; }
+      start = start < 0 ? -1 : Math.max(0, songs.indexOf(elegida));
+    }
     if (opts.shuffle !== undefined) this.shuffle = !!opts.shuffle;
     let list = songs.map((s) => withUid(s));
     this.original = this.shuffle ? [...list] : null;
@@ -162,9 +170,16 @@ export const player = {
 
   pause() { audio.pause(); },
 
+  /** ¿Se puede escuchar ahora? (sin conexión, solo lo que está en el dispositivo; lo define offline.js) */
+  disponible: () => true,
+
   next(auto = false) {
     if (!this.items.length) return;
-    if (this.index < this.items.length - 1) return this._load(this.index + 1, true);
+    // Sin conexión se saltan las canciones que no están descargadas
+    let j = this.index + 1;
+    while (j < this.items.length && !this.disponible(this.items[j])) j++;
+    if (j < this.items.length) return this._load(j, true);
+    if (this.index < this.items.length - 1 && auto) { audio.pause(); bus.emit('player:state'); bus.emit('toast', { msg: 'Sin conexión: no hay más canciones descargadas en esta lista' }); return; }
     if (this.repeat === 'all') return this._load(0, true);
     if (prefs.autoRadio && this.current) return this._extendWithRadio(true);
     if (auto) { audio.pause(); audio.currentTime = 0; bus.emit('player:state'); }

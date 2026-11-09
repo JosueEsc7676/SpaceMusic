@@ -190,6 +190,11 @@ public class PlaylistService {
                 .orElseThrow(() -> new NoSuchElementException("Playlist no encontrada"));
     }
 
+    /** Ids de las canciones de una playlist (para saber de qué estilo es). */
+    public List<Long> idsCanciones(Long playlistId) {
+        return ids(playlistId);
+    }
+
     private List<Long> ids(Long playlistId) {
         return repo.findCancionIds(playlistId).stream().map(Number::longValue).toList();
     }

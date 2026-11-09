@@ -1,5 +1,5 @@
 // Comunicación con el servidor y sesión del usuario
-import { store } from './util.js';
+import { store, bus } from './util.js';
 
 const TOKEN = 'sm_token';
 const USER = 'sm_user';
@@ -71,6 +71,7 @@ export async function api(path, { method = 'GET', body, form, signal, timeout } 
   } catch (e) {
     if (signal?.reason === 'tiempo') throw new ApiError('La conexión está lenta. Inténtalo de nuevo.', 0);
     if (e.name === 'AbortError') throw e;
+    bus.emit('red', false);
     throw new ApiError('No hay conexión con el servidor', 0);
   } finally {
     clearTimeout(reloj);
@@ -79,6 +80,8 @@ export async function api(path, { method = 'GET', body, form, signal, timeout } 
     logout('expirada');
     throw new ApiError('Tu sesión expiró', 401);
   }
+  // El service worker marca con X-SM-Copia lo que respondió desde la copia guardada (sin conexión)
+  bus.emit('red', !res.headers.get('X-SM-Copia') && res.status !== 503);
   if (res.status === 204) return null;
   const type = res.headers.get('content-type') || '';
   const data = type.includes('json') ? await res.json().catch(() => null) : await res.text();

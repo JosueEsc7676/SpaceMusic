@@ -1,5 +1,18 @@
 # Registro de cambios
 
+## Versión 3.0
+- **Modo sin conexión como Spotify** (`offline.js`):
+  - se descargan colecciones completas (`sm_colecciones`: playlist, álbum o Me gusta), con portadas y letra, incluida la sincronizada;
+  - sin conexión cada colección se abre desde su copia, solo con sus canciones;
+  - el inicio, la biblioteca y el buscador muestran solo lo descargado; lo demás se ve apagado y el reproductor lo salta;
+  - Me gusta descargado baja solo lo que marques después; quitar una descarga conserva lo que esté en otra.
+- **Detectar sin conexión:** el service worker marca con `X-SM-Copia` las respuestas que vienen de la copia guardada y avisa qué canciones tiene (`ids-audio`).
+- **Portada difuminada** en el reproductor: sin marco, se funde con el fondo. Se puede apagar en Ajustes → Reproducción (`prefs.portadaDifuminada`). En PC, la portada se achica si no cabe con la letra en miniatura.
+- **Amigos en vivo:** al cambiar de canción, el servidor avisa a los seguidores conectados (evento `actividad`) y se actualizan su perfil y "Lo que escuchan tus amigos".
+- **Música aparte** (cristiana e infantil, `GeneroService.APARTE`): solo se recomienda a quien la escucha (3 canciones o el 10 % de lo que escucha y le gusta). Aplica al inicio, las mezclas, Descubrir y la radio; sigue en el buscador y en Géneros, al final.
+- **"Ver mi perfil"** arriba en Perfil y en el menú de la foto.
+- **Menú de canción:** ya no se cierra al desplazarse dentro de él ni cuando la barra del navegador cambia de tamaño.
+
 ## Versión 2.9 (app Android 1.7)
 - **Pantalla negra sin internet (Android):** la hoja de estilos de Google Fonts en el HTML bloqueaba el código de la app mientras la petición quedaba colgada sin red. Ahora se carga desde `js/fuentes.js`, sin bloquear y solo con conexión (`index.html` y `tv.html`).
 - **Causa principal, en el service worker:** el servidor responde con `Vary: Origin` y los módulos JS se piden con Origin, así que `caches.match` no encontraba el código guardado y, sin internet, la app quedaba en negro. Ahora busca con `ignoreVary: true`. Probado en un Android real con el Wi-Fi apagado: abre el inicio completo y reproduce las canciones descargadas.

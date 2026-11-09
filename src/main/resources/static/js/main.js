@@ -147,7 +147,8 @@ paintUser();
 $('[data-user-menu]').addEventListener('click', (e) => {
   const u = session.user;
   showMenu(e.currentTarget, [
-    { label: 'Perfil y ajustes', icon: 'user', fn: () => go('/perfil') },
+    { label: 'Ver mi perfil', icon: 'user', fn: () => go('/u/' + encodeURIComponent(u.username)) },
+    { label: 'Ajustes de la cuenta', icon: 'sliders', fn: () => go('/perfil') },
     { label: 'Tus estadísticas', icon: 'chart', fn: () => go('/estadisticas') },
     { label: 'Escuchado recientemente', icon: 'history', fn: () => go('/historial') },
     { label: 'Ecualizador', icon: 'sliders', fn: () => openEqualizer() },
@@ -489,6 +490,11 @@ bus.on('np:open', () => { paintVolume(); $('[data-c="np"]').classList.add('activ
 bus.on('np:close', () => { $('[data-c="np"]').classList.remove('active'); $('[data-c="lyrics"]').classList.remove('active'); });
 bus.on('library:changed', () => invalidateLibraryCache());
 bus.on('song:updated', () => { invalidateLibraryCache(); render(); });
+// Al perder o recuperar la conexión, las pantallas de música se vuelven a pintar (sin conexión: solo lo descargado)
+bus.on('conexion', () => {
+  const h = location.hash || '#/';
+  if (/^#\/(|biblioteca.*|favoritos|playlist\/.*|album\/.*|buscar.*)$/.test(h)) render();
+});
 
 // ═══════════════════ Atajos de teclado ═══════════════════
 

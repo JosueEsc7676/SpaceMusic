@@ -108,6 +108,9 @@ function colorBarra(el) {
   meta.setAttribute('content', c ? `rgb(${c})` : '#000000');
 }
 
+// Ajuste "Portada difuminada": se aplica al momento si cambia mientras el reproductor está abierto
+bus.on('prefs', (p) => document.querySelector('.np')?.classList.toggle('difuminada', p.portadaDifuminada !== false));
+
 export const np = {
   el: null,
   isOpen: false,
@@ -211,6 +214,7 @@ export const np = {
     this.isOpen = true;
     this.el.classList.add('open');
     colorBarra(this.el);
+    this.el.classList.toggle('difuminada', prefs.portadaDifuminada !== false);
     this.el.setAttribute('aria-hidden', 'false');
     this.sync(true);
     this.loop();

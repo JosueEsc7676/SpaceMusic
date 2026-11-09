@@ -37,6 +37,8 @@ self.addEventListener('message', (e) => {
   if (d?.tipo === 'descargar-audio') e.waitUntil(enCola(() => descargar(d.url, d.id)).then((ok) => avisar({ tipo: 'descarga', id: d.id, ok })));
   if (d?.tipo === 'quitar-descarga') e.waitUntil(caches.open(DESCARGAS).then((c) => c.delete(`/offline/audio/${d.id}`)));
   if (d?.tipo === 'estado-offline') e.waitUntil(contarAudio().then((n) => e.source?.postMessage({ tipo: 'estado-offline', canciones: n })));
+  // Qué canciones se pueden escuchar sin conexión (descargadas y guardadas al escuchar)
+  if (d?.tipo === 'ids-audio') e.waitUntil(idsAudio().then((ids) => e.source?.postMessage({ tipo: 'ids-audio', ids })));
 });
 
 // La clave de una canción no incluye el token (?t=), que cambia con cada sesión
@@ -94,6 +96,24 @@ async function recortar(c, max) {
   for (let i = 0; i < ks.length - max; i++) await c.delete(ks[i]);
 }
 
+async function idsAudio() {
+  const ids = new Set();
+  for (const nombre of [AUDIO, DESCARGAS]) {
+    for (const r of await (await caches.open(nombre)).keys()) {
+      const m = /\/offline\/audio\/(\d+)/.exec(r.url);
+      if (m) ids.add(Number(m[1]));
+    }
+  }
+  return [...ids];
+}
+
+/** Copia guardada marcada como tal: así la app sabe que está sin conexión. */
+function comoCopia(r) {
+  const h = new Headers(r.headers);
+  h.set('X-SM-Copia', '1');
+  return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
+}
+
 async function contarAudio() {
   return (await (await caches.open(AUDIO)).keys()).length;
 }
@@ -130,12 +150,12 @@ async function redPrimero(req) {
     if (r.ok) c.put(req, r.clone());
     return r;
   });
-  const respaldo = new Promise((res) => setTimeout(() => c.match(req, { ignoreVary: true }).then((g) => g && res(g)), ESPERA_RED_MS));
+  const respaldo = new Promise((res) => setTimeout(() => c.match(req, { ignoreVary: true }).then((g) => g && res(comoCopia(g))), ESPERA_RED_MS));
   try {
     return await Promise.race([red, respaldo]);
   } catch {
     const g = await c.match(req, { ignoreVary: true });
-    if (g) return g;
+    if (g) return comoCopia(g);
     return new Response(JSON.stringify({ error: 'Sin conexión', offline: true }),
       { status: 503, headers: { 'Content-Type': 'application/json' } });
   }

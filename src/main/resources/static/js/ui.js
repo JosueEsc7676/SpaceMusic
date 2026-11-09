@@ -1,6 +1,6 @@
 // Componentes de interfaz: avisos, menús, diálogos, tarjetas y listas
 import { icon } from './icons.js';
-import { descargar, quitarDescarga, estaDescargada } from './offline.js';
+import { descargar, quitarDescarga, estaDescargada, sinConexion, disponible } from './offline.js';
 import { esc, $, $$, bus, fmtTime, fmtNum, plural, cover, coverImg, mosaic, isMobile, norm } from './util.js';
 import { api, session, downloadUrl, upload } from './api.js';
 import { lib } from './state.js';
@@ -85,8 +85,18 @@ document.addEventListener('pointerdown', (e) => {
   if (openMenu && !openMenu.contains(e.target) && !e.target.closest('.menu-backdrop')) closeMenu();
 }, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
-window.addEventListener('resize', closeMenu);
-document.addEventListener('scroll', closeMenu, true);
+// Se cierra al desplazar la página (en PC el menú queda flotando junto al botón), pero no al
+// desplazarse dentro del propio menú. En el celular el menú es una hoja fija: no se cierra al desplazar.
+let anchoVentana = innerWidth;
+window.addEventListener('resize', () => {
+  // En el celular la barra del navegador cambia la altura al desplazar: solo cuenta el cambio de ancho
+  if (innerWidth !== anchoVentana) { anchoVentana = innerWidth; closeMenu(); }
+});
+document.addEventListener('scroll', (e) => {
+  if (!openMenu || isMobile()) return;
+  if (e.target instanceof Node && openMenu.contains(e.target)) return;
+  closeMenu();
+}, true);
 
 // ═══════════════════ Diálogos ═══════════════════
 
@@ -261,7 +271,9 @@ export function trackList(songs, opts = {}) {
   const rows = songs.map((s, i) => {
     const n = numbers === 'track' && s.numeroPista ? s.numeroPista : i + 1;
     const fav = lib.isFav(s.id);
-    return `<div class="track ${cur === s.id ? 'playing' : ''} ${player.playing ? '' : 'paused'}" data-act="play-list" data-list="${id}" data-i="${i}" data-song="${s.id}" tabindex="0" role="row">
+    const desc = estaDescargada(s.id);
+    const noDisp = sinConexion() && !disponible(s.id);
+    return `<div class="track ${cur === s.id ? 'playing' : ''} ${player.playing ? '' : 'paused'} ${desc ? 'descargada' : ''} ${noDisp ? 'no-disp' : ''}" data-act="play-list" data-list="${id}" data-i="${i}" data-song="${s.id}" tabindex="0" role="row">
       <div class="num">${playlist ? `<span class="drag" data-drag aria-label="Mover">${icon('drag', 'sm')}</span>` : ''}<span class="n">${n}</span><span class="play-ico">${icon('play', 'sm')}</span><span class="eq-anim"><i></i><i></i><i></i></span></div>
       <div class="main-col">${showCover ? coverImg(s.portadaUrl, 64, '') : ''}
         <div class="tt"><div class="name ellipsis">${esc(s.nombre)}${s.letraSincronizada ? '<span class="lrc-tag" title="Letra sincronizada">LRC</span>' : ''}</div>
@@ -269,6 +281,7 @@ export function trackList(songs, opts = {}) {
       ${showAlbum ? `<div class="album ellipsis">${s.album && s.album !== 'Single' ? `<a href="#/album/${encodeURIComponent(s.album)}" data-stop>${esc(s.album)}</a>` : '<span class="dim">Sencillo</span>'}</div>` : ''}
       <div class="end">
         <button class="icon-btn fav-btn ${fav ? 'liked' : ''}" data-act="fav" data-id="${s.id}" aria-label="${fav ? 'Quitar de Me gusta' : 'Me gusta'}">${icon(fav ? 'heartFill' : 'heart')}</button>
+        ${desc ? `<span class="dl-ok" title="Descargada: se escucha sin conexión">${icon('download', 'sm')}</span>` : ''}
         <span class="dur">${fmtTime(s.duracionSegundos)}</span>
         <button class="icon-btn" data-act="song-menu" data-list="${id}" data-i="${i}" ${playlist ? `data-pl="${playlist}"` : ''} aria-label="Más opciones">${icon('more')}</button>
       </div>

@@ -174,6 +174,7 @@ function conectarEnVivo() {
   });
   fuente.addEventListener('visto', (e) => { try { bus.emit('dm:visto', JSON.parse(e.data)); } catch { } });
   fuente.addEventListener('notificacion', () => consultar());
+  fuente.addEventListener('actividad', (e) => { try { bus.emit('amigo:actividad', JSON.parse(e.data)); } catch { } });
 }
 
 export function iniciarAvisos() {
