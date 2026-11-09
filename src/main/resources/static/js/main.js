@@ -514,6 +514,8 @@ bus.on('disponibles', () => {
 });
 bus.on('conexion', (hay) => {
   if (hay && document.querySelector('[data-sin-red]')) return render();
+  // Ajustes: se quita el aviso al volver la conexión (salvo si se está escribiendo)
+  if (/^#\/perfil/.test(location.hash) && !document.activeElement?.matches?.('input, textarea')) return render();
   if (!hay && SOLO_EN_LINEA.some(([re]) => re.test((location.hash || '#/').slice(1)))) return render();
   const h = location.hash || '#/';
   if (/^#\/(|biblioteca.*|favoritos|playlist\/.*|album\/.*|buscar.*)$/.test(h)) render();

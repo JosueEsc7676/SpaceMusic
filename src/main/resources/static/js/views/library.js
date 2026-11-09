@@ -93,8 +93,13 @@ export async function libraryView(el, _p, query, isStale) {
           ${lib.favs.size && !offline ? `<button class="play-fab" data-act="play-liked" aria-label="Reproducir">${icon('play')}</button>` : ''}</a>` : ''}
         ${offline ? '' : `<a class="feature-tile art-history" href="#/historial">${icon('history', 'xl')}<div><b>Escuchado recientemente</b><small>Tu historial</small></div></a>`}
       </div>`;
+      // En vista de lista, Me gusta y el historial también se muestran como filas
+      const fijosLista = q ? '' : `<div class="lib-list">
+        ${verMeGusta ? fila({ href: '#/favoritos', art: `<span class="art-liked lib-fijo">${icon('heartFill')}</span>`, t: 'Me gusta', s: offline ? 'Descargada' : 'Playlist · ' + plural(lib.favs.size, 'canción', 'canciones') }) : ''}
+        ${offline ? '' : fila({ href: '#/historial', art: `<span class="art-history lib-fijo">${icon('history')}</span>`, t: 'Escuchado recientemente', s: 'Tu historial' })}
+      </div>`;
       const pls = by(misPlaylists, (p) => p.nombre, (p) => p.cancionesCount, (p) => p.fechaActualizacion || p.fechaCreacion);
-      html = fijos + pinta(pls, cardPlaylist,
+      html = (v === 'list' ? fijosLista : fijos) + pinta(pls, cardPlaylist,
         (p) => fila({ href: '#/playlist/' + p.id, art: playlistArt(p, 160), t: p.nombre, s: (p.propia === false ? `Pública${p.autor ? ' · de ' + esc(p.autor) : ''}` : 'Playlist') + ' · ' + plural(p.cancionesCount, 'canción', 'canciones') }),
         q ? emptyState('search', 'Ninguna playlist coincide') : offline ? emptyState('download', 'No hay playlists descargadas', 'Con conexión, abre una playlist y toca el botón de descarga.') : emptyState('library', 'Crea tu primera playlist', 'Guarda tus canciones en listas. Las playlists públicas que encuentres en el buscador también se pueden guardar aquí.'));
     } else if (tab === 'artistas') {
