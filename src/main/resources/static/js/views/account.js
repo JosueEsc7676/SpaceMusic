@@ -86,8 +86,6 @@ export async function profileView(el, _p, _q, isStale) {
       <div class="panel"><h3>${icon('sliders')} Reproducción</h3>
         <div class="setting-row"><div><div class="t">Radio automática</div><div class="s">Al terminar una lista, sigue con canciones parecidas</div></div>
           <label class="switch"><input type="checkbox" data-pref="autoRadio" ${prefs.autoRadio ? 'checked' : ''}><span></span></label></div>
-        <div class="setting-row"><div><div class="t">Portada difuminada</div><div class="s">En el reproductor la portada se ve sin marco y se funde con el fondo</div></div>
-          <label class="switch"><input type="checkbox" data-pref="portadaDifuminada" ${prefs.portadaDifuminada !== false ? 'checked' : ''}><span></span></label></div>
         <div class="setting-row"><div><div class="t">Visualizador</div><div class="s">Barras animadas en “Reproduciendo ahora”</div></div>
           <label class="switch"><input type="checkbox" data-pref="visualizer" ${prefs.visualizer ? 'checked' : ''}><span></span></label></div>
         <div class="setting-row"><div><div class="t">Ecualizador</div><div class="s">${prefs.eqEnabled ? 'Activado' : 'Desactivado'}</div></div>

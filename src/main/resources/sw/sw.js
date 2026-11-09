@@ -84,7 +84,24 @@ async function descargar(url, id) {
   for (let intento = 1; intento <= 3; intento++) {
     try {
       const r = await fetch(url, { credentials: 'same-origin' });
-      if (r.ok && r.status === 200) { await c.put(clave, r); return true; }
+      if (!r.ok || r.status !== 200 || !r.body) throw new Error('respuesta');
+      // Se lee por partes para avisar el progreso (círculo en la canción) y comprobar que llegó completa
+      const total = Number(r.headers.get('Content-Length')) || 0;
+      const lector = r.body.getReader();
+      const partes = [];
+      let n = 0, ultimo = 0;
+      for (;;) {
+        const { done, value } = await lector.read();
+        if (done) break;
+        partes.push(value);
+        n += value.length;
+        if (total && Date.now() - ultimo > 350) { ultimo = Date.now(); avisar({ tipo: 'progreso', id, pct: n / total }); }
+      }
+      if (!n || (total && n < total)) throw new Error('incompleta');
+      const tipo = r.headers.get('Content-Type') || 'audio/mpeg';
+      const blob = new Blob(partes, { type: tipo });
+      await c.put(clave, new Response(blob, { headers: { 'Content-Type': tipo, 'Content-Length': String(blob.size) } }));
+      return true;
     } catch { /* se reintenta */ }
     await new Promise((res) => setTimeout(res, intento * 2000));
   }

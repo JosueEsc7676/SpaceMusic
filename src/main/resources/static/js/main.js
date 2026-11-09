@@ -491,6 +491,13 @@ bus.on('np:close', () => { $('[data-c="np"]').classList.remove('active'); $('[da
 bus.on('library:changed', () => invalidateLibraryCache());
 bus.on('song:updated', () => { invalidateLibraryCache(); render(); });
 // Al perder o recuperar la conexión, las pantallas de música se vuelven a pintar (sin conexión: solo lo descargado)
+// Sin conexión, cuando se sabe qué canciones hay en el dispositivo, se repinta para mostrarlas disponibles
+let repintarDisp = 0;
+bus.on('disponibles', () => {
+  if (!document.documentElement.classList.contains('sin-red')) return;
+  clearTimeout(repintarDisp);
+  repintarDisp = setTimeout(() => bus.emit('conexion', false), 300);
+});
 bus.on('conexion', () => {
   const h = location.hash || '#/';
   if (/^#\/(|biblioteca.*|favoritos|playlist\/.*|album\/.*|buscar.*)$/.test(h)) render();

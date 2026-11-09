@@ -5,11 +5,11 @@ import { icon } from '../icons.js';
 import { lib } from '../state.js';
 import { setHero, setTitle } from '../router.js';
 import { cardPlaylist, cardArtist, cardAlbum, emptyState, editPlaylist, playlistArt, trackList } from '../ui.js';
-import { descargadas, colecciones, estaColeccion, sinConexion } from '../offline.js';
+import { colecciones, estaColeccion, sinConexion } from '../offline.js';
 
 let cache = { artistas: null, albumes: null, publicas: null, t: 0 };
 
-const TABS = [['playlists', 'Playlists', 'library'], ['albumes', 'Álbumes', 'disc'], ['descargadas', 'Descargadas', 'download']];
+const TABS = [['playlists', 'Playlists', 'library'], ['albumes', 'Álbumes', 'disc']];
 
 /** Fila de la vista en lista. */
 function fila({ href, art, t, s, round = false }) {
@@ -46,14 +46,14 @@ export async function libraryView(el, _p, query, isStale) {
     misPlaylists = cols.filter((c) => c.tipo === 'playlist').map((c) => ({ ...c.datos, cancionesCount: (c.canciones || []).length }));
     albumesGuardados = cols.filter((c) => c.tipo === 'album').map((c) => ({ ...c.datos, totalCanciones: (c.canciones || []).length }));
   }
-  const resumen = [plural(misPlaylists.length, 'playlist', 'playlists'), plural(albumesGuardados.length, 'álbum', 'álbumes'), plural(descargadas().length, 'descarga', 'descargas')].join(' · ');
+  const resumen = [plural(misPlaylists.length, 'playlist', 'playlists'), plural(albumesGuardados.length, 'álbum', 'álbumes')].join(' · ');
 
   el.innerHTML = `
     <header class="lib-head">
       <div><div class="eyebrow">Tu colección</div><h1 class="page-title">Biblioteca</h1><p class="muted">${resumen}</p></div>
       ${offline ? '' : `<button class="btn primary" data-new>${icon('plus', 'sm')} Nueva playlist</button>`}
     </header>
-    ${offline ? `<div class="offline-banner">${icon('download', 'sm')} Sin conexión · solo ves lo que descargaste en este dispositivo</div>` : ''}
+    ${offline ? `<div class="offline-banner">${icon('download', 'sm')} Sin conexión a internet · aquí está lo que descargaste</div>` : ''}
     <nav class="segmented" aria-label="Secciones">${TABS.map(([k, l, ic]) => `<a class="seg ${tab === k ? 'active' : ''}" href="#/biblioteca?tab=${k}">${icon(ic, 'sm')}<span>${l}</span></a>`).join('')}</nav>
     <div class="lib-tools">
       <label class="list-filter">${icon('search')}<input type="search" placeholder="Buscar en tu biblioteca" data-q></label>
@@ -97,11 +97,6 @@ export async function libraryView(el, _p, query, isStale) {
       html = fijos + pinta(pls, cardPlaylist,
         (p) => fila({ href: '#/playlist/' + p.id, art: playlistArt(p, 160), t: p.nombre, s: (p.propia === false ? `Pública${p.autor ? ' · de ' + esc(p.autor) : ''}` : 'Playlist') + ' · ' + plural(p.cancionesCount, 'canción', 'canciones') }),
         q ? emptyState('search', 'Ninguna playlist coincide') : offline ? emptyState('download', 'No hay playlists descargadas', 'Con conexión, abre una playlist y toca el botón de descarga.') : emptyState('library', 'Crea tu primera playlist', 'Guarda tus canciones en listas. Las playlists públicas que encuentres en el buscador también se pueden guardar aquí.'));
-    } else if (tab === 'descargadas') {
-      const d = descargadas().filter((x) => !q || norm(x.nombre + ' ' + x.artista).includes(q));
-      html = d.length
-        ? `<p class="muted" style="margin-top:0">${plural(d.length, 'canción', 'canciones')} en este dispositivo · se escuchan sin conexión${window.SpaceMusicApp ? ' · los MP3 están en Música/SpaceMusic' : ''}</p>` + trackList(d, { context: { type: 'descargadas', label: 'Descargadas', route: '#/biblioteca?tab=descargadas' } })
-        : emptyState('download', q ? 'Ninguna descarga coincide' : 'Aún no descargas canciones', 'Usa “Descargar” en el menú de una canción o el botón de descarga de un álbum o playlist.');
     } else if (tab === 'artistas') {
       const a = by(cache.artistas, (x) => x.nombre, (x) => x.totalReproducciones);
       html = pinta(a, cardArtist,

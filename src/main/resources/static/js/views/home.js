@@ -5,7 +5,7 @@ import { icon } from '../icons.js';
 import { lib } from '../state.js';
 import { setHero } from '../router.js';
 import { actividadAmigos } from './people.js';
-import { descargadas, colecciones, sinConexion } from '../offline.js';
+import { colecciones, sinConexion } from '../offline.js';
 import { cardSong, cardAlbum, cardArtist, cardPlaylist, cardMix, cardGenre, section, registerList, emptyState, playlistArt } from '../ui.js';
 
 function saludo() {
@@ -66,12 +66,10 @@ function inicioSinConexion(el, head) {
     if (c.tipo === 'album') return `<a class="pin" href="#/album/${encodeURIComponent(c.datos.nombre)}"><span class="pin-art">${coverImg(c.datos.portadaUrl, 160, c.datos.nombre)}</span><span class="pin-t ellipsis">${esc(c.datos.nombre)}</span></a>`;
     return '';
   }).join('');
-  const sueltas = descargadas();
   el.innerHTML = `${head}
-    <div class="offline-banner">${icon('download', 'sm')} Sin conexión · escucha lo que descargaste en este dispositivo</div>
-    ${pins ? section('Tus descargas', `<div class="pins">${pins}</div>`, { eyebrow: 'Playlists, álbumes y Me gusta' }) : ''}
-    ${sueltas.length ? section('Canciones descargadas', songShelf(sueltas.slice(0, 40), { type: 'descargadas', label: 'Descargadas', route: '#/biblioteca?tab=descargadas' }), { more: '#/biblioteca?tab=descargadas' }) : ''}
-    ${!pins && !sueltas.length ? emptyState('download', 'No tienes descargas en este dispositivo', 'Cuando tengas conexión, descarga una playlist, un álbum o tu Me gusta con el botón de descarga. Lo que escuchas también se guarda solo.', '<a class="btn" href="#/biblioteca?tab=descargadas">Ver la biblioteca</a>') : ''}`;
+    <div class="offline-banner offline-grande">${icon('download', 'sm')}<div><b>Sin conexión a internet</b><span>Puedes seguir navegando entre lo que descargaste.</span></div></div>
+    ${pins ? section('Tus descargas', `<div class="pins">${pins}</div>`, { eyebrow: 'Playlists, álbumes y Me gusta' })
+      : emptyState('download', 'No tienes descargas en este dispositivo', 'Cuando tengas conexión, abre tu Me gusta, una playlist o un álbum y toca el botón de descarga.')}`;
 }
 
 export async function homeView(el, _p, _q, isStale) {

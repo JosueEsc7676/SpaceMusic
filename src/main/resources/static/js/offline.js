@@ -1,7 +1,8 @@
 // Modo sin conexión: guarda en el dispositivo lo que escuchas, sin descargas manuales.
 // El service worker (sw.js) sirve luego esas canciones, portadas y datos cuando no hay red.
-import { api, audioUrl, downloadUrl, deUsuario } from './api.js';
+import { api, audioUrl, deUsuario } from './api.js';
 import { bus, cover } from './util.js';
+import { icon } from './icons.js';
 import { player } from './player.js';
 
 const SEGUNDOS_PARA_GUARDAR = 25; // una canción escuchada este tiempo se guarda (y la siguiente de la cola)
@@ -26,26 +27,41 @@ export const estaDescargada = (id) => !!leer()[id];
  * En la app de Android además guarda el MP3 en la carpeta Música/SpaceMusic del teléfono.
  * suelta: descargada a mano desde el menú de la canción (no por una playlist o álbum).
  */
-export function descargar(songs, { archivo = true, suelta = true } = {}) {
+export function descargar(songs, { suelta = false } = {}) {
+  // Una sola copia, dentro de la app (como Spotify): sin archivos sueltos ni notificaciones de Android
   const w = sw();
   const m = leer();
-  const app = window.SpaceMusicApp;
   const nuevas = [];
   for (const s of songs) {
     const ya = m[s.id];
     if (!ya) {
       if (w) w.postMessage({ tipo: 'descargar-audio', id: s.id, url: location.origin + audioUrl(s.id) });
-      if (archivo && app?.guardarArchivo) {
-        app.guardarArchivo(location.origin + downloadUrl(s.id), `${s.artista} - ${s.nombre}.mp3`.replace(/[\\/:*?"<>|]/g, '_'));
-      }
+      progreso.set(Number(s.id), 0);
       nuevas.push(s);
     }
     m[s.id] = { ...s, _t: ya?._t || Date.now(), _suelta: !!(ya?._suelta || suelta) };
   }
   escribir(m);
   extras(nuevas);
+  nuevas.forEach((s) => refrescarMarca(s.id));
   bus.emit('descargas');
   return !!w;
+}
+
+// ── Marca de descarga en cada canción: círculo de progreso mientras baja, ícono cuando ya está ──
+export const progreso = new Map();
+export function marcaDescarga(id) {
+  id = Number(id);
+  if (!leer()[id]) return '';
+  if (disponibles.has(id)) return `<span class="dl-mark dl-ok" title="Descargada">${icon('download', 'sm')}</span>`;
+  const p = Math.round((progreso.get(id) || 0) * 100);
+  return `<span class="dl-mark dl-prog" data-dl="${id}" style="--p:${p}" title="Descargando… ${p}%"></span>`;
+}
+function refrescarMarca(id) {
+  document.querySelectorAll(`[data-dl-slot="${id}"]`).forEach((el) => { el.innerHTML = marcaDescarga(id); });
+}
+function refrescarMarcas() {
+  document.querySelectorAll('[data-dl-slot]').forEach((el) => { el.innerHTML = marcaDescarga(el.dataset.dlSlot); });
 }
 
 /** Portadas y letra de las canciones descargadas: así se ven y se leen igual sin conexión. */
@@ -140,7 +156,8 @@ document.documentElement.classList.toggle('sin-red', sinRed);
 
 /** Canciones que se pueden escuchar sin conexión (descargadas o guardadas al escucharlas). */
 const disponibles = new Set();
-export const disponible = (id) => !!leer()[id] || disponibles.has(Number(id));
+// Solo lo que el service worker confirma que tiene completo (una descarga en curso todavía no cuenta)
+export const disponible = (id) => disponibles.has(Number(id));
 export function actualizarDisponibles() {
   const w = sw();
   if (!w) return Promise.resolve();
@@ -152,6 +169,7 @@ export function actualizarDisponibles() {
       clearTimeout(t);
       disponibles.clear();
       (e.data.ids || []).forEach((id) => disponibles.add(id));
+      refrescarMarcas();
       bus.emit('disponibles');
       res();
     });
@@ -213,9 +231,17 @@ function precargarSiguiente() {
 export function iniciarOffline({ toast }) {
   let listas = 0, fallidas = 0, avisoT;
   navigator.serviceWorker?.addEventListener('message', (e) => {
+    if (e.data?.tipo === 'progreso') {
+      const id = Number(e.data.id);
+      progreso.set(id, e.data.pct);
+      document.querySelectorAll(`.dl-prog[data-dl="${id}"]`).forEach((el) => { el.style.setProperty('--p', Math.round(e.data.pct * 100)); });
+      return;
+    }
     if (e.data?.tipo !== 'descarga') return;
-    if (e.data.ok) listas++; else { fallidas++; const m = leer(); delete m[e.data.id]; escribir(m); bus.emit('descargas'); }
+    if (e.data.ok) { listas++; disponibles.add(Number(e.data.id)); progreso.delete(Number(e.data.id)); refrescarMarca(e.data.id); bus.emit('disponibles'); } else { fallidas++; progreso.delete(Number(e.data.id)); refrescarMarca(e.data.id); } // queda pendiente: se reintenta al abrir con conexión
     clearTimeout(avisoT);
+    // Un solo aviso al terminar todo lo que estaba en cola (no uno por canción)
+    if (progreso.size) return;
     avisoT = setTimeout(() => {
       toast(fallidas
         ? `${listas} descargadas · ${fallidas} no se pudieron descargar`
@@ -225,7 +251,25 @@ export function iniciarOffline({ toast }) {
   });
   // Sin conexión el reproductor salta lo que no está en el dispositivo
   player.disponible = (song) => !sinRed || disponible(song.id);
-  navigator.serviceWorker?.ready.then(() => actualizarDisponibles()).catch(() => { });
+  // Las descargas sueltas de versiones anteriores (fuera de toda playlist/álbum/Me gusta) se liberan una vez:
+  // ahora cada descarga vive dentro de su colección, como en Spotify
+  try {
+    const marca = deUsuario('sm_desc_v3');
+    if (!localStorage.getItem(marca)) {
+      const enUso = new Set(Object.values(leerCol()).flatMap((c) => (c.canciones || []).map((x) => x.id)));
+      for (const id of Object.keys(leer()).map(Number)) if (!enUso.has(id)) quitarDescarga(id);
+      localStorage.setItem(marca, '1');
+    }
+  } catch { }
+  // Al abrir con conexión: las descargas que quedaron a medias (app cerrada, sin señal…) se retoman
+  navigator.serviceWorker?.ready.then(async () => {
+    await actualizarDisponibles();
+    if (sinRed || !navigator.onLine) return;
+    const w = sw();
+    const faltan = Object.keys(leer()).map(Number).filter((id) => !disponibles.has(id));
+    if (w) for (const id of faltan) { progreso.set(id, 0); w.postMessage({ tipo: 'descargar-audio', id, url: location.origin + audioUrl(id) }); }
+    if (faltan.length) refrescarMarcas();
+  }).catch(() => { });
   bus.on('descargas', () => { if (sinRed) actualizarDisponibles(); });
   // "Me gusta" descargado: lo que marques después también se descarga (y lo que quites se libera)
   bus.on('favs', async (ev) => {

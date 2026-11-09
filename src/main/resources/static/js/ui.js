@@ -1,6 +1,6 @@
 // Componentes de interfaz: avisos, menús, diálogos, tarjetas y listas
 import { icon } from './icons.js';
-import { descargar, quitarDescarga, estaDescargada, sinConexion, disponible } from './offline.js';
+import { sinConexion, disponible, marcaDescarga } from './offline.js';
 import { esc, $, $$, bus, fmtTime, fmtNum, plural, cover, coverImg, mosaic, isMobile, norm } from './util.js';
 import { api, session, downloadUrl, upload } from './api.js';
 import { lib } from './state.js';
@@ -271,9 +271,8 @@ export function trackList(songs, opts = {}) {
   const rows = songs.map((s, i) => {
     const n = numbers === 'track' && s.numeroPista ? s.numeroPista : i + 1;
     const fav = lib.isFav(s.id);
-    const desc = estaDescargada(s.id);
     const noDisp = sinConexion() && !disponible(s.id);
-    return `<div class="track ${cur === s.id ? 'playing' : ''} ${player.playing ? '' : 'paused'} ${desc ? 'descargada' : ''} ${noDisp ? 'no-disp' : ''}" data-act="play-list" data-list="${id}" data-i="${i}" data-song="${s.id}" tabindex="0" role="row">
+    return `<div class="track ${cur === s.id ? 'playing' : ''} ${player.playing ? '' : 'paused'} ${noDisp ? 'no-disp' : ''}" data-act="play-list" data-list="${id}" data-i="${i}" data-song="${s.id}" tabindex="0" role="row">
       <div class="num">${playlist ? `<span class="drag" data-drag aria-label="Mover">${icon('drag', 'sm')}</span>` : ''}<span class="n">${n}</span><span class="play-ico">${icon('play', 'sm')}</span><span class="eq-anim"><i></i><i></i><i></i></span></div>
       <div class="main-col">${showCover ? coverImg(s.portadaUrl, 64, '') : ''}
         <div class="tt"><div class="name ellipsis">${esc(s.nombre)}${s.letraSincronizada ? '<span class="lrc-tag" title="Letra sincronizada">LRC</span>' : ''}</div>
@@ -281,7 +280,7 @@ export function trackList(songs, opts = {}) {
       ${showAlbum ? `<div class="album ellipsis">${s.album && s.album !== 'Single' ? `<a href="#/album/${encodeURIComponent(s.album)}" data-stop>${esc(s.album)}</a>` : '<span class="dim">Sencillo</span>'}</div>` : ''}
       <div class="end">
         <button class="icon-btn fav-btn ${fav ? 'liked' : ''}" data-act="fav" data-id="${s.id}" aria-label="${fav ? 'Quitar de Me gusta' : 'Me gusta'}">${icon(fav ? 'heartFill' : 'heart')}</button>
-        ${desc ? `<span class="dl-ok" title="Descargada: se escucha sin conexión">${icon('download', 'sm')}</span>` : ''}
+        <span class="dl-slot" data-dl-slot="${s.id}">${marcaDescarga(s.id)}</span>
         <span class="dur">${fmtTime(s.duracionSegundos)}</span>
         <button class="icon-btn" data-act="song-menu" data-list="${id}" data-i="${i}" ${playlist ? `data-pl="${playlist}"` : ''} aria-label="Más opciones">${icon('more')}</button>
       </div>
@@ -330,13 +329,6 @@ export function songMenu(anchor, song, { playlistId } = {}) {
     { label: 'Ir al artista', icon: 'user', fn: () => { location.hash = '#/artista/' + encodeURIComponent(song.artista); } },
     song.album && song.album !== 'Single' ? { label: 'Ir al álbum', icon: 'disc', fn: () => { location.hash = '#/album/' + encodeURIComponent(song.album); } } : null,
     { label: 'Ver letra', icon: 'mic', fn: () => bus.emit('np:lyrics', song) },
-    estaDescargada(song.id)
-      ? { label: 'Quitar descarga', icon: 'trash', fn: () => { quitarDescarga(song.id); toast('Descarga quitada'); } }
-      : { label: 'Descargar', icon: 'download', fn: () => {
-        // En la app: queda sin conexión y también como MP3 en el teléfono. En el navegador: sin conexión + archivo.
-        if (!descargar([song])) toast('Descargando…');
-        if (!window.SpaceMusicApp) { const a = document.createElement('a'); a.href = downloadUrl(song.id); a.download = ''; document.body.appendChild(a); a.click(); a.remove(); }
-      } },
     ...(session.canEdit ? [
       { sep: true },
       { label: 'Editar información', icon: 'edit', fn: () => editSong(song) },

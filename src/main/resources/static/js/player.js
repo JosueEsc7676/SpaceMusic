@@ -11,7 +11,6 @@ const strip = ({ _uid, _user, ...s }) => s;
 
 export const prefs = {
   autoRadio: true,
-  portadaDifuminada: true, // portada sin marco que se funde con el fondo en el reproductor
   normalizeTitles: false,
   eqEnabled: false,
   eq: [0, 0, 0, 0, 0],
@@ -163,6 +162,13 @@ export const player = {
 
   resume() {
     if (!this.current) return;
+    if (!this.disponible(this.current)) {
+      // Sin conexión y la canción no está descargada: se pasa a la siguiente que sí lo esté
+      const j = this.items.findIndex((x, k) => k > this.index && this.disponible(x));
+      if (j >= 0) return this._load(j, true);
+      bus.emit('toast', { msg: 'Sin conexión: esta canción no está descargada' });
+      return;
+    }
     fx.resume();
     if (!audio.src) { this._load(this.index, true); return; }
     audio.play().catch((e) => this._playError(e));

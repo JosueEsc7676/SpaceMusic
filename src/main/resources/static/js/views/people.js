@@ -87,7 +87,7 @@ export async function perfilPublicoView(el, { username }, _q, isStale) {
         <div class="p-info">
           <div class="eyebrow">Perfil${p.amigos ? ' · Amigos' : p.meSigue && !p.esYo ? ' · Te sigue' : ''}</div>
           <h1 class="page-title">${esc(p.nombre)}</h1>
-          <div class="p-meta">@${esc(p.username)}${p.desde ? ' · desde ' + esc(fechaMes(p.desde)) : ''}${p.totalReproducciones ? ' · ' + fmtNum(p.totalReproducciones) + ' escuchas' : ''}</div>
+          <div class="p-meta">@${esc(p.username)}${p.desde ? ' · desde ' + esc(fechaMes(p.desde)) : ''}</div>
           ${p.biografia ? `<p class="p-bio">${esc(p.biografia)}</p>` : ''}
           <div class="p-counts">
             <button data-lista="seguidores"><b>${p.seguidores}</b> ${p.seguidores === 1 ? 'seguidor' : 'seguidores'}</button>
