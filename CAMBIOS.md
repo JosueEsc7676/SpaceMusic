@@ -2,6 +2,7 @@
 
 ## Versión 2.9 (app Android 1.7)
 - **Pantalla negra sin internet (Android):** la hoja de estilos de Google Fonts en el HTML bloqueaba el código de la app mientras la petición quedaba colgada sin red. Ahora se carga desde `js/fuentes.js`, sin bloquear y solo con conexión (`index.html` y `tv.html`).
+- **Causa principal, en el service worker:** el servidor responde con `Vary: Origin` y los módulos JS se piden con Origin, así que `caches.match` no encontraba el código guardado y, sin internet, la app quedaba en negro. Ahora busca con `ignoreVary: true`. Probado en un Android real con el Wi-Fi apagado: abre el inicio completo y reproduce las canciones descargadas.
 - **Red de seguridad en la app:** si sin internet la web no avisa que arrancó (`SpaceMusicApp.lista()`) en 12 s, se muestran las canciones guardadas en el teléfono.
 - **Subir canciones sin repetidas:**
   - antes de subir, `POST /api/canciones/subir/revisar` (nombre y tamaño exacto) evita subir otra vez el mismo archivo;

@@ -130,11 +130,11 @@ async function redPrimero(req) {
     if (r.ok) c.put(req, r.clone());
     return r;
   });
-  const respaldo = new Promise((res) => setTimeout(() => c.match(req).then((g) => g && res(g)), ESPERA_RED_MS));
+  const respaldo = new Promise((res) => setTimeout(() => c.match(req, { ignoreVary: true }).then((g) => g && res(g)), ESPERA_RED_MS));
   try {
     return await Promise.race([red, respaldo]);
   } catch {
-    const g = await c.match(req);
+    const g = await c.match(req, { ignoreVary: true });
     if (g) return g;
     return new Response(JSON.stringify({ error: 'Sin conexión', offline: true }),
       { status: 503, headers: { 'Content-Type': 'application/json' } });
@@ -143,7 +143,7 @@ async function redPrimero(req) {
 
 async function portada(req) {
   const c = await caches.open(PORTADAS);
-  const g = await c.match(req);
+  const g = await c.match(req, { ignoreVary: true });
   if (g) return g;
   const r = await fetch(req);
   if (r.ok && new URL(req.url).searchParams.has('v')) {
@@ -173,9 +173,11 @@ self.addEventListener('fetch', (e) => {
   }
 
   if (req.mode === 'navigate' && (url.pathname === '/' || url.pathname === '/index.html')) {
-    e.respondWith(caches.match('/index.html').then((r) => r || fetch(req)));
+    e.respondWith(caches.match('/index.html', { ignoreVary: true }).then((r) => r || fetch(req)));
     return;
   }
   // Archivos de la interfaz: primero la copia guardada (instantáneo)
-  e.respondWith(caches.match(req, { ignoreSearch: true }).then((r) => r || fetch(req)));
+  // ignoreVary: el servidor responde con "Vary: Origin" y los módulos JS se piden con Origin;
+  // sin esto, sin internet no se encontraba el código guardado y la app quedaba en negro
+  e.respondWith(caches.match(req, { ignoreSearch: true, ignoreVary: true }).then((r) => r || fetch(req)));
 });
