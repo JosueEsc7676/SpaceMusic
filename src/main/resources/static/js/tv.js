@@ -1,4 +1,5 @@
 // SpaceMusic TV — interfaz para Android TV y televisores (control remoto)
+import './fuentes.js';
 window.SM_TV = true;
 
 import { api, session } from './api.js';

@@ -105,6 +105,17 @@ public class CancionService {
                 try (InputStream in = mf.getInputStream()) {
                     Files.copy(in, p, StandardCopyOption.REPLACE_EXISTING);
                 }
+                // Si ya está en la biblioteca (aunque el archivo se llame distinto), no se guarda otra vez
+                Optional<com.bpm.music.dtos.CancionDTO> igual = escaner.repetida(p.toFile());
+                if (igual.isPresent()) {
+                    Files.deleteIfExists(p);
+                    r.put("ok", false);
+                    r.put("repetida", true);
+                    r.put("error", "Ya existe: " + igual.get().getArtista() + " — " + igual.get().getNombre());
+                    r.put("cancion", igual.get());
+                    resultado.add(r);
+                    continue;
+                }
                 Cancion c = escaner.importarArchivo(p.toFile());
                 r.put("ok", true);
                 r.put("cancion", biblioteca.porId(c.getId()).orElse(null));
@@ -116,6 +127,33 @@ public class CancionService {
             resultado.add(r);
         }
         return resultado;
+    }
+
+    /**
+     * Antes de subir: qué archivos ya están en el servidor (mismo nombre y mismo tamaño exacto),
+     * para no gastar datos subiéndolos otra vez.
+     */
+    public List<Boolean> yaExisten(List<Map<String, Object>> archivos) {
+        List<Boolean> r = new ArrayList<>();
+        for (Map<String, Object> a : archivos) {
+            String nombre = String.valueOf(a.getOrDefault("nombre", ""));
+            long tamano = a.get("tamano") instanceof Number n ? n.longValue() : -1;
+            boolean existe = false;
+            if (!nombre.isBlank() && tamano > 0 && !nombre.contains("/") && !nombre.contains("\\")) {
+                String base = nombreSeguro(MetadataService.sinExtension(nombre));
+                String ext = MetadataService.extension(nombre);
+                for (Cancion c : repo.findByRutaArchivoEndingWith(java.io.File.separator + base + "." + ext)) {
+                    File f = new File(c.getRutaArchivo());
+                    if (f.isFile() && f.length() == tamano) { existe = true; break; }
+                }
+                if (!existe) {
+                    File enSubidas = escaner.raiz().toPath().resolve("Subidas").resolve(base + "." + ext).toFile();
+                    existe = enSubidas.isFile() && enSubidas.length() == tamano;
+                }
+            }
+            r.add(existe);
+        }
+        return r;
     }
 
     private static String nombreSeguro(String s) {

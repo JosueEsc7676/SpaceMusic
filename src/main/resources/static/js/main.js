@@ -1,4 +1,5 @@
 // Punto de entrada de la aplicación
+import './fuentes.js';
 import { api, session, logout } from './api.js';
 import { $, $$, esc, bus, debounce, fmtTime, cover, coverImg, dominantColor, isMobile, plural , esIOS } from './util.js';
 import { icon } from './icons.js';
@@ -539,6 +540,9 @@ async function boot() {
   paintState();
   startRouter();
   ocultarSplash();
+  // App de Android: la página ya arrancó (si no llega este aviso sin internet, la app muestra
+  // las canciones guardadas en el teléfono en vez de una pantalla negra)
+  try { window.SpaceMusicApp?.lista?.(); } catch { }
 
   if (session.isAdmin) {
     api('/api/admin/resumen').then((r) => {

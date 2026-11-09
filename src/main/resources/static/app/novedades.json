@@ -1,13 +1,23 @@
 {
-  "version": "2.8",
-  "titulo": "Novedades: app Android sin internet y subidas en segundo plano",
+  "version": "2.9",
+  "titulo": "Novedades: la app de Android abre sin internet",
   "puntos": [
-    "App de Android 1.6: ahora abre sin internet y puedes escuchar tus canciones descargadas. Actualízala desde el aviso dentro de la app.",
-    "Si no hay conexión con el servidor, la app muestra las canciones guardadas en Música/SpaceMusic, listas para reproducir (también con la pantalla apagada).",
-    "Subir canciones: la subida sigue aunque cambies de pantalla. Al terminar te avisamos cuántas se subieron, el tamaño total y sus géneros.",
-    "Las notificaciones abren al instante."
+    "App de Android 1.7: ya no se queda en negro sin internet. Abre SpaceMusic con lo guardado y puedes escuchar tus descargas. Actualízala desde el aviso dentro de la app.",
+    "Si la app no puede arrancar sin conexión, muestra las canciones guardadas en el teléfono, listas para escuchar.",
+    "Subir canciones: las que ya están en el servidor no se vuelven a subir, aunque el archivo tenga otro nombre.",
+    "Portadas del buscador con buen tamaño en teléfonos angostos."
   ],
   "anteriores": [
+    {
+      "version": "2.8",
+      "titulo": "Novedades: app Android sin internet y subidas en segundo plano",
+      "puntos": [
+        "App de Android 1.6: ahora abre sin internet y puedes escuchar tus canciones descargadas. Actualízala desde el aviso dentro de la app.",
+        "Si no hay conexión con el servidor, la app muestra las canciones guardadas en Música/SpaceMusic, listas para reproducir (también con la pantalla apagada).",
+        "Subir canciones: la subida sigue aunque cambies de pantalla. Al terminar te avisamos cuántas se subieron, el tamaño total y sus géneros.",
+        "Las notificaciones abren al instante."
+      ]
+    },
     {
       "version": "2.7",
       "titulo": "Novedades: busca por género y letra en el reproductor",

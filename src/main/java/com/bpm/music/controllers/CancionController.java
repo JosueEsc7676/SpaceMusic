@@ -176,6 +176,14 @@ public class CancionController {
         return r;
     }
 
+    /** Antes de subir: ¿cuáles de estos archivos (nombre y tamaño) ya están en el servidor? */
+    @PostMapping("/subir/revisar")
+    @PreAuthorize("hasAnyRole('ADMIN','COLABORADOR')")
+    public List<Boolean> revisarSubida(@RequestBody List<Map<String, Object>> archivos) {
+        if (archivos == null || archivos.size() > 500) throw new IllegalArgumentException("Demasiados archivos");
+        return canciones.yaExisten(archivos);
+    }
+
     static String mime(String nombre) {
         return switch (MetadataService.extension(nombre)) {
             case "flac" -> "audio/flac";

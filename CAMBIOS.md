@@ -1,5 +1,13 @@
 # Registro de cambios
 
+## Versión 2.9 (app Android 1.7)
+- **Pantalla negra sin internet (Android):** la hoja de estilos de Google Fonts en el HTML bloqueaba el código de la app mientras la petición quedaba colgada sin red. Ahora se carga desde `js/fuentes.js`, sin bloquear y solo con conexión (`index.html` y `tv.html`).
+- **Red de seguridad en la app:** si sin internet la web no avisa que arrancó (`SpaceMusicApp.lista()`) en 12 s, se muestran las canciones guardadas en el teléfono.
+- **Subir canciones sin repetidas:**
+  - antes de subir, `POST /api/canciones/subir/revisar` (nombre y tamaño exacto) evita subir otra vez el mismo archivo;
+  - al recibir, el servidor descarta la canción si ya existe (título, artista y duración, o el mismo contenido con otro nombre).
+- **Portadas en teléfonos angostos:** la cuadrícula ya no cae a una sola columna gigante (2 columnas en pantallas de menos de 520 px).
+
 ## Versión 2.8 (app Android 1.6)
 - **App Android sin internet:**
   - sin conexión abre la copia guardada de SpaceMusic (caché `LOAD_CACHE_ELSE_NETWORK`), con el modo sin conexión y las descargas de la app;

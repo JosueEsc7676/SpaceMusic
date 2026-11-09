@@ -50,6 +50,13 @@ public interface CancionRepository extends JpaRepository<Cancion, Long> {
 
     Optional<Cancion> findFirstByRutaArchivo(String rutaArchivo);
 
+    /** [id, ruta del archivo] de todas las canciones (sin cargar portadas). */
+    @Query("SELECT c.id, c.rutaArchivo FROM Cancion c")
+    List<Object[]> findRutas();
+
+        /** Canciones cuyo archivo se llama así (para saber si una subida ya existe). */
+    List<Cancion> findByRutaArchivoEndingWith(String final_);
+
     /** Cambia el género de unas canciones (corrección manual desde Administración). */
     @Transactional
     @Modifying

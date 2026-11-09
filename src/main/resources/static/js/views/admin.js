@@ -236,22 +236,22 @@ export async function uploadView(el) {
   const input = el.querySelector('[data-file]');
 
   const fila = (it) => {
-    const color = it.estado === 'error' ? 'var(--danger)' : it.estado === 'lista' ? 'var(--accent)' : '';
+    const color = it.estado === 'error' ? 'var(--danger)' : it.estado === 'lista' ? 'var(--accent)' : it.estado === 'repetida' ? 'var(--warning)' : '';
     const c = it.cancion;
     const msg = it.estado === 'lista'
       ? (c ? `Lista: <a href="#/artista/${encodeURIComponent(c.artista)}">${esc(c.artista)}</a> — ${esc(c.nombre)}${c.genero && c.genero !== 'Desconocido' ? ` · ${esc(c.genero)}` : ''}` : 'Lista')
       : esc(it.mensaje);
-    return `<div class="upload-item" data-it="${it.id}">${icon(it.estado === 'lista' ? 'check' : 'note')}<div class="tt">
+    return `<div class="upload-item" data-it="${it.id}">${icon(it.estado === 'lista' ? 'check' : it.estado === 'repetida' ? 'copy' : 'note')}<div class="tt">
       <div class="ellipsis"><strong>${esc(it.nombre)}</strong> <small class="muted">${tamano(it.tamano)}</small></div>
       <div class="progress-line"><i style="width:${Math.round(it.progreso * 100)}%"></i></div>
       <div class="muted st" style="font-size:12px${color ? `;color:${color}` : ''}">${msg}</div></div></div>`;
   };
   const pintar = () => {
     const l = resumenLote();
-    if (l && l.total) {
+    if (l && (l.total || l.repetidas)) {
       const fin = l.hechas === l.total;
       sum.classList.remove('hidden');
-      sum.innerHTML = `<span>${l.hechas} de ${l.total} ${l.total === 1 ? 'canción' : 'canciones'} · ${tamano(l.bytes)}${l.fallidas ? ` · <span style="color:var(--danger)">${l.fallidas} con error</span>` : ''}</span>
+      sum.innerHTML = `<span>${l.hechas} de ${l.total} ${l.total === 1 ? 'canción' : 'canciones'} · ${tamano(l.bytes)}${l.repetidas ? ` · <span style="color:var(--warning)">${l.repetidas} ya ${l.repetidas === 1 ? 'existía' : 'existían'}</span>` : ''}${l.fallidas ? ` · <span style="color:var(--danger)">${l.fallidas} con error</span>` : ''}</span>
         ${fin ? `<span class="row" style="gap:8px"><span class="badge accent">${icon('check', 'sm')} Terminado</span><button class="btn sm ghost" data-limpiar>Limpiar</button></span>` : '<span class="muted">Subiendo…</span>'}`;
       sum.querySelector('[data-limpiar]')?.addEventListener('click', limpiar);
     } else sum.classList.add('hidden');

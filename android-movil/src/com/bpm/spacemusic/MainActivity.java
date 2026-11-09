@@ -53,6 +53,8 @@ public class MainActivity extends Activity {
     private boolean probandoCopia = false;
     /** Se está mostrando la pantalla de respaldo con las canciones del teléfono. */
     private boolean enSinConexion = false;
+    /** La web avisó que ya arrancó (SpaceMusicApp.lista()). */
+    private volatile boolean paginaLista = false;
     private ConnectivityManager.NetworkCallback vigilaRed;
     private ValueCallback<Uri[]> archivoPendiente;
 
@@ -124,7 +126,9 @@ public class MainActivity extends Activity {
                     // (ahí funcionan el modo sin conexión y las canciones descargadas en la app)
                     probandoCopia = true;
                     view.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+                    paginaLista = false;
                     view.post(() -> web.loadUrl(servidor() + "/"));
+                    vigilarArranque();
                     return;
                 }
                 // Ni siquiera hay copia guardada: pantalla de respaldo con la música del teléfono
@@ -185,7 +189,19 @@ public class MainActivity extends Activity {
         // Sin internet se abre directamente la copia guardada (no hay que esperar a que falle)
         probandoCopia = !hayInternet();
         web.getSettings().setCacheMode(probandoCopia ? WebSettings.LOAD_CACHE_ELSE_NETWORK : WebSettings.LOAD_DEFAULT);
+        paginaLista = false;
         web.loadUrl(servidor() + "/");
+        if (probandoCopia) vigilarArranque();
+    }
+
+    /** Sin internet: si la web no arranca en unos segundos, se muestran las canciones del teléfono (nunca pantalla negra). */
+    private void vigilarArranque() {
+        web.postDelayed(() -> {
+            if (web != null && !paginaLista && !enSinConexion && !errorMostrado) {
+                errorMostrado = true;
+                mostrarSinConexion();
+            }
+        }, 12000);
     }
 
     private boolean hayInternet() {
@@ -385,6 +401,12 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void notificar(String titulo, String texto, String ruta) {
             runOnUiThread(() -> Avisos.mostrar(MainActivity.this, titulo, texto, ruta));
+        }
+
+        /** La web avisa que ya arrancó. */
+        @JavascriptInterface
+        public void lista() {
+            paginaLista = true;
         }
 
         /** Pantalla sin conexión: volver a intentar abrir el servidor. */

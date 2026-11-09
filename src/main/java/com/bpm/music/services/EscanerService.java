@@ -250,6 +250,42 @@ public class EscanerService {
     }
 
     /** Agrega o actualiza un único archivo (usado al subir canciones). */
+    /** Canción de la biblioteca igual a este archivo (mismo título y artista, duración casi igual), si la hay. */
+    public Optional<com.bpm.music.dtos.CancionDTO> repetida(File f) {
+        Cancion nueva = crearCancion(f);
+        String clave = claveDuplicado(nueva.getNombre(), nueva.getArtista());
+        Optional<com.bpm.music.dtos.CancionDTO> porDatos = biblioteca.todas().stream()
+                .filter(d -> d.getDuracionSegundos() > 0 && Math.abs(d.getDuracionSegundos() - nueva.getDuracionSegundos()) <= 4)
+                .filter(d -> claveDuplicado(d.getNombre(), d.getArtista()).equals(clave))
+                .findFirst();
+        if (porDatos.isPresent()) return porDatos;
+        // Sin etiquetas útiles: el mismo archivo exacto (mismo tamaño y mismo contenido) con otro nombre
+        long largo = f.length();
+        String propia = f.getAbsolutePath();
+        String huella = null;
+        for (Object[] fila : repo.findRutas()) {
+            String ruta = (String) fila[1];
+            if (ruta == null || ruta.equals(propia)) continue;
+            File otro = new File(ruta);
+            if (otro.length() != largo || !otro.isFile()) continue;
+            if (huella == null) huella = huellaArchivo(f);
+            if (huella != null && huella.equals(huellaArchivo(otro))) return biblioteca.porId(((Number) fila[0]).longValue());
+        }
+        return Optional.empty();
+    }
+
+    private static String huellaArchivo(File f) {
+        try (java.io.InputStream in = new java.io.FileInputStream(f)) {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] buf = new byte[1 << 16];
+            int n;
+            while ((n = in.read(buf)) > 0) md.update(buf, 0, n);
+            return java.util.HexFormat.of().formatHex(md.digest());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public Cancion importarArchivo(File f) {
         String ruta = f.getAbsolutePath();
         Optional<Cancion> existente = repo.findFirstByRutaArchivo(ruta);
