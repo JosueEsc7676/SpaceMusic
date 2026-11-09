@@ -5,6 +5,26 @@ import { esc } from './util.js';
 
 const routes = [];
 let renderSeq = 0;
+
+// Sin conexión: main.js indica qué secciones necesitan internet (guardia) y si estamos sin red
+let guardia = null;
+export function setGuardiaSinRed(fn) { guardia = fn; }
+
+/** Pantalla amable para una sección que necesita internet. */
+export function pantallaSinRed(seccion) {
+  return `<div class="sin-red-view">${icon('download', 'xl')}
+    <h2>Sin conexión a internet</h2>
+    <p>${seccion ? `Para ver <b>${esc(seccion)}</b> necesitas estar en línea.` : 'Esta sección necesita internet.'}<br>Mientras tanto, puedes escuchar lo que descargaste.</p>
+    <div class="row wrap" style="justify-content:center"><a class="btn primary" href="#/">Ir a mis descargas</a><button class="btn" data-reintentar-red>Reintentar</button></div></div>`;
+}
+function pintarSinRed(view, seccion) {
+  const inner = document.createElement('div');
+  inner.className = 'view-inner page-enter';
+  inner.dataset.sinRed = '1';
+  inner.innerHTML = pantallaSinRed(seccion);
+  inner.querySelector('[data-reintentar-red]').onclick = () => render();
+  view.replaceChildren(inner);
+}
 let current = null;
 const scrollPos = new Map();
 const stack = [];
@@ -59,6 +79,15 @@ export async function render() {
     return;
   }
 
+  // Sección que solo funciona con internet y no hay conexión: mensaje amable en vez de un error
+  const bloqueo = guardia?.(path);
+  if (bloqueo) {
+    pintarSinRed(view, bloqueo);
+    current = key;
+    bus.emit('rendered');
+    return;
+  }
+
   // Esqueleto de carga si tarda más de 120 ms
   const timer = setTimeout(() => {
     if (seq !== renderSeq) return;
@@ -80,6 +109,8 @@ export async function render() {
   } catch (e) {
     clearTimeout(timer);
     if (seq !== renderSeq) return;
+    // Sin conexión y la página no está descargada: el mismo mensaje amable
+    if (guardia?.('*')) { pintarSinRed(view, ''); current = key; return; }
     console.error(e);
     inner.innerHTML = `<div class="empty">${icon('info')}<h3>No se pudo cargar</h3><p>${esc(e.message || 'Error')}</p><button class="btn primary" data-retry>Reintentar</button></div>`;
     inner.querySelector('[data-retry]').onclick = () => render();

@@ -6,7 +6,7 @@ import { prefs, fx, EQ_BANDS, EQ_PRESETS } from '../player.js';
 import { setHero, setTitle } from '../router.js';
 import { toast, errorToast, modal, registerList, trackList, emptyState } from '../ui.js';
 import { bus } from '../util.js';
-import { cancionesGuardadas } from '../offline.js';
+import { cancionesGuardadas, sinConexion } from '../offline.js';
 
 export const ACCENTS = {
   Perla: ['#f5f5f7', '#000000'],
@@ -34,10 +34,11 @@ const ROLES = { ADMIN: ['Administrador', 'danger'], COLABORADOR: ['Colaborador',
 // ═══════════════════ Perfil ═══════════════════
 
 export async function profileView(el, _p, _q, isStale) {
-  const u = await api('/api/auth/me');
+  // Sin conexión se abre con los datos guardados de la cuenta (los ajustes de reproducción y color funcionan igual)
+  let u = await api('/api/auth/me').catch(() => null);
   if (isStale()) return;
-  session.setUser(u);
-  bus.emit('user', u);
+  if (u) { session.setUser(u); bus.emit('user', u); } else u = session.user;
+  if (!u) throw new Error('Sin datos de la cuenta');
   setTitle('Perfil');
   setHero([70, 70, 90]);
   const [rolNombre, rolCls] = ROLES[u.rol] || ROLES.USER;
@@ -45,6 +46,7 @@ export async function profileView(el, _p, _q, isStale) {
   const accent = ACCENTS[store.get('sm_accent', 'Perla')] ? store.get('sm_accent', 'Perla') : 'Perla';
 
   el.innerHTML = `
+    ${sinConexion() ? `<div class="offline-banner">${icon('download', 'sm')} Sin conexión a internet · los ajustes de reproducción y el color funcionan; los cambios de tu cuenta necesitan internet</div>` : ''}
     <div class="profile-head">
       <label class="avatar-pick">${avatarHtml(u, 'lg')}<div class="ov">${icon('edit')}&nbsp;Cambiar foto</div><input type="file" accept="image/*" hidden data-avatar></label>
       <div><div class="kind" style="font-size:13px;font-weight:700">Perfil</div>

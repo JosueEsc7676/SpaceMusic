@@ -734,3 +734,9 @@ html.sin-red .card.no-disp, html.sin-red .mix.no-disp { opacity: .35; pointer-ev
 .offline-grande > div { display: grid; gap: 3px; }
 .offline-grande b { font-size: 16px; }
 .offline-grande span { font-weight: 500; color: rgba(245,196,107,.85); }
+
+/* Pantalla amable "Sin conexión a internet" para secciones que necesitan red */
+.sin-red-view { display: grid; justify-items: center; text-align: center; gap: 10px; padding: 14vh 20px 40px; }
+.sin-red-view .icon { width: 48px; height: 48px; color: #f5c46b; margin-bottom: 6px; }
+.sin-red-view h2 { margin: 0; font-size: 24px; }
+.sin-red-view p { margin: 0 0 12px; color: var(--text-2); line-height: 1.5; max-width: 420px; }

@@ -5,7 +5,7 @@ import { $, $$, esc, bus, debounce, fmtTime, cover, coverImg, dominantColor, isM
 import { icon } from './icons.js';
 import { lib } from './state.js';
 import { player, sleep, prefs } from './player.js';
-import { route, startRouter, go, parse, render } from './router.js';
+import { route, startRouter, go, parse, render, setGuardiaSinRed } from './router.js';
 import { np, queueDrawer } from './nowplaying.js';
 import {
   toast, errorToast, getList, songMenu, showMenu, modal, refreshPlayingMarks, editPlaylist, playlistArt,
@@ -17,7 +17,7 @@ import { albumView, artistView, playlistView, likedView, genreView, mixView, his
 import { profileView, statsView, applyAccent, avatarHtml, openEqualizer } from './views/account.js';
 import { adminView, uploadView } from './views/admin.js';
 import { pintarCuerpo, ocultarSplash } from './splash.js';
-import { iniciarOffline } from './offline.js';
+import { iniciarOffline, sinConexion } from './offline.js';
 import { perfilPublicoView } from './views/people.js';
 import { mensajesView } from './views/mensajes.js';
 import { novedadesView } from './views/novedades.js';
@@ -112,6 +112,20 @@ pintarCuerpo(`
 <div class="toasts" id="toasts"></div>`);
 
 // ═══════════════════ Rutas ═══════════════════
+
+// Secciones que solo funcionan con internet (sin conexión muestran un mensaje amable)
+const SOLO_EN_LINEA = [
+  [/^\/historial/, 'tu historial'], [/^\/artista\//, 'este artista'], [/^\/genero\//, 'este género'],
+  [/^\/mix\//, 'esta mezcla'], [/^\/u\//, 'este perfil'], [/^\/mensajes/, 'tus mensajes'],
+  [/^\/novedades/, 'las novedades'], [/^\/estadisticas/, 'tus estadísticas'], [/^\/admin/, 'la administración'],
+  [/^\/subir/, 'la subida de canciones'],
+];
+setGuardiaSinRed((path) => {
+  if (!sinConexion()) return null;
+  if (path === '*') return 'sin-red'; // una página que no está descargada
+  const m = SOLO_EN_LINEA.find(([re]) => re.test(path));
+  return m ? m[1] : null;
+});
 
 route('/', homeView);
 route('/buscar', searchView);
@@ -498,7 +512,9 @@ bus.on('disponibles', () => {
   clearTimeout(repintarDisp);
   repintarDisp = setTimeout(() => bus.emit('conexion', false), 300);
 });
-bus.on('conexion', () => {
+bus.on('conexion', (hay) => {
+  if (hay && document.querySelector('[data-sin-red]')) return render();
+  if (!hay && SOLO_EN_LINEA.some(([re]) => re.test((location.hash || '#/').slice(1)))) return render();
   const h = location.hash || '#/';
   if (/^#\/(|biblioteca.*|favoritos|playlist\/.*|album\/.*|buscar.*)$/.test(h)) render();
 });

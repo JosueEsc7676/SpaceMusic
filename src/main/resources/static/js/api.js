@@ -72,7 +72,7 @@ export async function api(path, { method = 'GET', body, form, signal, timeout } 
     if (signal?.reason === 'tiempo') throw new ApiError('La conexión está lenta. Inténtalo de nuevo.', 0);
     if (e.name === 'AbortError') throw e;
     bus.emit('red', false);
-    throw new ApiError('No hay conexión con el servidor', 0);
+    throw new ApiError('Sin conexión a internet. Inténtalo cuando vuelvas a estar en línea.', 0);
   } finally {
     clearTimeout(reloj);
   }
@@ -111,7 +111,7 @@ export function upload(path, form, onProgress) {
       if (xhr.status >= 200 && xhr.status < 300) resolve(data);
       else reject(new ApiError(data?.error || 'Error al subir (' + xhr.status + ')', xhr.status, data));
     };
-    xhr.onerror = () => reject(new ApiError('No hay conexión con el servidor', 0));
+    xhr.onerror = () => reject(new ApiError('Sin conexión a internet. Inténtalo cuando vuelvas a estar en línea.', 0));
     xhr.send(form);
   });
 }

@@ -1,5 +1,13 @@
 # Registro de cambios
 
+## Versión 3.0.2
+- **Pantallas sin conexión:** las secciones que necesitan internet muestran "Sin conexión a internet" con un mensaje amable y los botones "Ir a mis descargas" y "Reintentar" (`setGuardiaSinRed` en el router):
+  - historial, artista, género, mezclas, perfiles de otros, mensajes, novedades, estadísticas, administración y subir;
+  - también una playlist o un álbum que no está descargado.
+  Al volver la conexión, la sección se abre sola.
+- **Ajustes sin conexión:** se abren con los datos guardados de la cuenta. Los de reproducción y color funcionan; los cambios de la cuenta avisan que necesitan internet.
+- **Errores de red:** el mensaje es "Sin conexión a internet. Inténtalo cuando vuelvas a estar en línea."
+
 ## Versión 3.0.1
 - **Descargas como Spotify:**
   - una sola copia dentro de la app: ya no se guarda el MP3 en Música ni salen notificaciones de Android;
