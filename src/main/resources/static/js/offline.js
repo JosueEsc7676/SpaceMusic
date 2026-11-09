@@ -115,8 +115,9 @@ export function sincronizarColeccion(clave, datos, songs) {
   const ahora = new Set(songs.map((s) => s.id));
   m[clave] = { ...c, datos: { ...datos, canciones: undefined }, canciones: songs };
   escribirCol(m);
-  const nuevas = songs.filter((s) => !antes.has(s.id));
-  if (nuevas.length) descargar(nuevas, { suelta: false });
+  const lista = leer();
+  const faltan = songs.filter((s) => !antes.has(s.id) || !lista[s.id]);
+  if (faltan.length) descargar(faltan, { suelta: false });
   liberar([...antes].filter((id) => !ahora.has(id)));
 }
 
@@ -266,7 +267,9 @@ export function iniciarOffline({ toast }) {
     await actualizarDisponibles();
     if (sinRed || !navigator.onLine) return;
     const w = sw();
-    const faltan = Object.keys(leer()).map(Number).filter((id) => !disponibles.has(id));
+    const sinLista = Object.values(leerCol()).flatMap((c) => c.canciones || []).filter((x) => !leer()[x.id]);
+    if (sinLista.length) descargar(sinLista, { suelta: false }); // se habían perdido (versiones anteriores)
+    const faltan = Object.keys(leer()).map(Number).filter((id) => !disponibles.has(id) && !progreso.has(id));
     if (w) for (const id of faltan) { progreso.set(id, 0); w.postMessage({ tipo: 'descargar-audio', id, url: location.origin + audioUrl(id) }); }
     if (faltan.length) refrescarMarcas();
   }).catch(() => { });

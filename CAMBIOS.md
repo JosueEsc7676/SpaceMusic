@@ -1,5 +1,16 @@
 # Registro de cambios
 
+## Versión 3.0.1
+- **Descargas como Spotify:**
+  - una sola copia dentro de la app: ya no se guarda el MP3 en Música ni salen notificaciones de Android;
+  - círculo de progreso en cada canción mientras baja, y el ícono de descargada cuando el service worker confirma que llegó completa;
+  - cada descarga vive en su colección (sin pestaña "Descargadas" ni descarga de canciones sueltas); una canción está una sola vez aunque esté en varias listas.
+- **Descargas perdidas o a medias:** al abrir con conexión se revisan todas las canciones de cada colección descargada y se baja lo que falte (las versiones anteriores borraban de la lista las que fallaban).
+- **Falso "sin conexión":** una respuesta lenta de la red (por ejemplo, mientras se descarga mucho) ya no cuenta como sin conexión. El service worker marca `X-SM-Copia: sin-red` o `lenta`.
+- **Inicio sin conexión:** "Sin conexión a internet · puedes seguir navegando entre lo que descargaste".
+- **Se quitan** la portada difuminada y el dato de escuchas del perfil.
+- Probado en un Android real con el Wi-Fi apagado: Me gusta (10 canciones) se abrió y sonó desde el dispositivo.
+
 ## Versión 3.0
 - **Modo sin conexión como Spotify** (`offline.js`):
   - se descargan colecciones completas (`sm_colecciones`: playlist, álbum o Me gusta), con portadas y letra, incluida la sincronizada;

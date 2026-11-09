@@ -125,9 +125,9 @@ async function idsAudio() {
 }
 
 /** Copia guardada marcada como tal: así la app sabe que está sin conexión. */
-function comoCopia(r) {
+function comoCopia(r, motivo = 'sin-red') {
   const h = new Headers(r.headers);
-  h.set('X-SM-Copia', '1');
+  h.set('X-SM-Copia', motivo); // 'sin-red': no hubo conexión · 'lenta': la red tardó (sigue habiendo conexión)
   return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
 }
 
@@ -167,7 +167,7 @@ async function redPrimero(req) {
     if (r.ok) c.put(req, r.clone());
     return r;
   });
-  const respaldo = new Promise((res) => setTimeout(() => c.match(req, { ignoreVary: true }).then((g) => g && res(comoCopia(g))), ESPERA_RED_MS));
+  const respaldo = new Promise((res) => setTimeout(() => c.match(req, { ignoreVary: true }).then((g) => g && res(comoCopia(g, 'lenta'))), ESPERA_RED_MS));
   try {
     return await Promise.race([red, respaldo]);
   } catch {

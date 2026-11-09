@@ -81,7 +81,8 @@ export async function api(path, { method = 'GET', body, form, signal, timeout } 
     throw new ApiError('Tu sesión expiró', 401);
   }
   // El service worker marca con X-SM-Copia lo que respondió desde la copia guardada (sin conexión)
-  bus.emit('red', !res.headers.get('X-SM-Copia') && res.status !== 503);
+  // (si solo tardó, la copia viene marcada "lenta" y no cuenta como sin conexión)
+  bus.emit('red', res.headers.get('X-SM-Copia') !== 'sin-red' && res.status !== 503);
   if (res.status === 204) return null;
   const type = res.headers.get('content-type') || '';
   const data = type.includes('json') ? await res.json().catch(() => null) : await res.text();
