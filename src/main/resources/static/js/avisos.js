@@ -71,7 +71,7 @@ async function consultar() {
 }
 
 /** Panel de notificaciones (campana). */
-const ICONO = { ACTUALIZACION: 'sparkles', AVISO: 'bell', SUBIDA: 'upload', ALERTA: 'shield', SOLICITUD: 'request', REPORTE: 'flag', CANCIONES: 'note', PLAYLIST: 'library', COLABORADOR: 'star', SEGUIDOR: 'user', AMIGO: 'users' };
+const ICONO = { ACTUALIZACION: 'sparkles', AVISO: 'bell', SUBIDA: 'upload', ALERTA: 'shield', REPORTE: 'flag', CANCIONES: 'note', PLAYLIST: 'library', COLABORADOR: 'star', SEGUIDOR: 'user', AMIGO: 'users' };
 
 function filaNotif(n) {
   const fig = n.de ? avatarPersona(n.de) : `<span class="notif-ico t-${esc(n.tipo)}">${icon(ICONO[n.tipo] || 'bell', 'sm')}</span>`;

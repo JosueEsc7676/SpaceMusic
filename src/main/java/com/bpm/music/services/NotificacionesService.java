@@ -57,16 +57,6 @@ public class NotificacionesService {
         return r;
     }
 
-    /** Canciones nuevas en el servidor (una sola notificación por escaneo). */
-    @Async
-    public void cancionesNuevas(int cantidad, List<String> artistas) {
-        if (cantidad <= 0) return;
-        String quienes = artistas.isEmpty() ? "" : ": " + String.join(", ", artistas.stream().limit(3).toList())
-                + (artistas.size() > 3 ? " y más" : "");
-        String texto = (cantidad == 1 ? "Se agregó 1 canción nueva" : "Se agregaron " + cantidad + " canciones nuevas") + quienes;
-        for (Usuario u : activos()) crear(u.getId(), "CANCIONES", null, texto, "#/");
-    }
-
     /** Alguien publicó una playlist: se avisa a quienes lo siguen. */
     @Async
     public void playlistPublicada(Long duenoId, Long playlistId, String nombre) {

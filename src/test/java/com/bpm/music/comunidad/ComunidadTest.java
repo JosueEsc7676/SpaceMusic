@@ -17,7 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/** Playlists colaborativas, pedidos de canciones y reportes: permisos y validaciones. */
+/** Playlists colaborativas y reportes: permisos y validaciones. */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:comunidadtest;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
@@ -99,22 +99,19 @@ class ComunidadTest {
     }
 
     @Test
-    void pedidosYReportesValidanYSonDeAdmin() throws Exception {
-        Usuario u = cuenta("pideuser", Usuario.Rol.USER);
-        mvc.perform(post("/api/solicitudes").header("Authorization", token(u))
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"titulo\":\"x\"}"))
-                .andExpect(status().isBadRequest());
-        mvc.perform(post("/api/solicitudes").header("Authorization", token(u))
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"titulo\":\"Una canción nueva\",\"artista\":\"Alguien\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.yaExiste").value(false));
+    void reportesValidanYSonDeAdmin() throws Exception {
+        Usuario u = cuenta("reportauser", Usuario.Rol.USER);
         mvc.perform(post("/api/reportes").header("Authorization", token(u))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"cancionId\":999999,\"motivo\":\"audio\"}"))
                 .andExpect(status().isNotFound());
-        // Un usuario normal no ve la lista de administración
-        mvc.perform(get("/api/admin/comunidad/solicitudes").header("Authorization", token(u))).andExpect(status().isForbidden());
+        // Pedir canciones se quitó
+        mvc.perform(post("/api/solicitudes").header("Authorization", token(u))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"titulo\":\"Algo\"}"))
+                .andExpect(status().is4xxClientError());
+        // Un usuario normal no ve el panel de reportes ni el de descargas
+        mvc.perform(get("/api/admin/comunidad/reportes").header("Authorization", token(u))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/descargas").header("Authorization", token(u))).andExpect(status().isForbidden());
         Usuario admin = cuenta("admincom", Usuario.Rol.ADMIN);
-        mvc.perform(get("/api/admin/comunidad/solicitudes?estado=PENDIENTE").header("Authorization", token(admin)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1));
         mvc.perform(get("/api/admin/comunidad/reportes?estado=INVENTADO").header("Authorization", token(admin)))
                 .andExpect(status().isBadRequest());
     }

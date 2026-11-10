@@ -17,7 +17,8 @@ const ESPERA_RED_MS = 4000;  // pasado este tiempo sin respuesta, se usa la copi
 const PERMANENTES = [API, PORTADAS, AUDIO, DESCARGAS];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))));
+  // Archivo por archivo: si uno falla (p. ej. se renombró), el resto igual queda guardado y la app abre sin internet
+  e.waitUntil(caches.open(CACHE).then((c) => Promise.all(SHELL.map((u) => c.add(new Request(u, { cache: 'reload' })).catch(() => { })))));
 });
 
 self.addEventListener('activate', (e) => {

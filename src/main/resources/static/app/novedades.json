@@ -1,19 +1,28 @@
 {
-  "version": "3.1",
-  "titulo": "Novedades: transiciones, volumen parejo y tu año en SpaceMusic",
+  "version": "3.2",
+  "titulo": "Novedades: arreglos del reproductor",
   "puntos": [
-    "Transición entre canciones: una se funde con la siguiente (de 0 a 12 segundos). Actívala en Perfil → Reproducción.",
-    "Volumen parejo: todas las canciones suenan a un volumen parecido. También en Perfil → Reproducción.",
-    "Tu año (o tu mes) en SpaceMusic: minutos escuchados, tus artistas, canciones y géneros, y una tarjeta para compartir. Está en el menú de tu foto.",
-    "Playlists colaborativas: invita a tus amigos y agreguen canciones juntos.",
-    "¿Falta una canción? Pídela desde el buscador o el menú de tu foto y te avisamos cuando esté.",
-    "Reportar un problema: en el menú de cada canción, si no suena, la letra está mal o los datos son incorrectos.",
-    "Si creaste tu cuenta hace poco, elige tus géneros y artistas favoritos para que tu inicio te conozca desde el primer día.",
-    "Sin internet tu sesión ya no se cierra: puedes seguir escuchando tus descargas aunque pasen días.",
-    "Si el servidor se está actualizando, verás “SpaceMusic está en mantenimiento” en vez de “Sin conexión a internet”.",
-    "Arreglado: dos álbumes con el mismo nombre (como Utopia) ya no se mezclan."
+    "Arreglado: en una playlist, “Agregar” en las canciones recomendadas ahora la agrega (antes empezaba a sonar).",
+    "Arreglado: con la pantalla apagada (sobre todo en iPhone) al terminar una canción sigue la siguiente; el reproductor ya no se cierra.",
+    "Si el servidor se reinicia, verás “SpaceMusic está en mantenimiento” más rápido y sin confusiones.",
+    "Ya no llega una notificación cada vez que se suben canciones."
   ],
   "anteriores": [
+    {
+      "version": "3.1",
+      "titulo": "Novedades: transiciones, volumen parejo y tu año en SpaceMusic",
+      "puntos": [
+        "Transición entre canciones: una se funde con la siguiente (de 0 a 12 segundos). Actívala en Perfil → Reproducción.",
+        "Volumen parejo: todas las canciones suenan a un volumen parecido. También en Perfil → Reproducción.",
+        "Tu año (o tu mes) en SpaceMusic: minutos escuchados, tus artistas, canciones y géneros, y una tarjeta para compartir. Está en el menú de tu foto.",
+        "Playlists colaborativas: invita a tus amigos y agreguen canciones juntos.",
+        "Reportar un problema: en el menú de cada canción, si no suena, la letra está mal o los datos son incorrectos.",
+        "Si creaste tu cuenta hace poco, elige tus géneros y artistas favoritos para que tu inicio te conozca desde el primer día.",
+        "Sin internet tu sesión ya no se cierra: puedes seguir escuchando tus descargas aunque pasen días.",
+        "Si el servidor se está actualizando, verás “SpaceMusic está en mantenimiento” en vez de “Sin conexión a internet”.",
+        "Arreglado: dos álbumes con el mismo nombre (como Utopia) ya no se mezclan."
+      ]
+    },
     {
       "version": "3.0",
       "titulo": "Novedades: modo sin conexión como Spotify",

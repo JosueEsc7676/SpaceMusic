@@ -9,12 +9,9 @@ import com.bpm.music.soporte.Sanitizador;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.*;
 import java.time.format.TextStyle;
@@ -22,7 +19,7 @@ import java.util.*;
 import java.util.function.Consumer;
 
 /**
- * Funciones para los usuarios: gustos al crear la cuenta, pedir canciones, reportar problemas
+ * Funciones para los usuarios: gustos al crear la cuenta, reportar problemas
  * y el resumen del mes o del año ("Tu año en SpaceMusic").
  */
 @Service
@@ -34,7 +31,6 @@ public class ComunidadService {
             "datos", "datos incorrectos", "portada", "portada incorrecta", "duplicada", "está repetida", "otro", "otro problema");
 
     private final UsuarioGustoRepository gustos;
-    private final SolicitudCancionRepository solicitudes;
     private final ReporteCancionRepository reportes;
     private final UsuarioRepository usuarios;
     private final BibliotecaService biblioteca;
@@ -44,10 +40,9 @@ public class ComunidadService {
     /** Se avisa al cambiar los gustos (para recalcular recomendaciones). */
     public static final List<Consumer<Long>> alCambiarGustos = new java.util.concurrent.CopyOnWriteArrayList<>();
 
-    public ComunidadService(UsuarioGustoRepository gustos, SolicitudCancionRepository solicitudes, ReporteCancionRepository reportes,
+    public ComunidadService(UsuarioGustoRepository gustos, ReporteCancionRepository reportes,
                             UsuarioRepository usuarios, BibliotecaService biblioteca, NotificacionesService notificaciones, JdbcTemplate jdbc) {
         this.gustos = gustos;
-        this.solicitudes = solicitudes;
         this.reportes = reportes;
         this.usuarios = usuarios;
         this.biblioteca = biblioteca;
@@ -109,102 +104,6 @@ public class ComunidadService {
         return r;
     }
 
-    // ═══════════════════ Pedir una canción ═══════════════════
-
-    public List<SolicitudCancion> misSolicitudes(Long uid) {
-        return solicitudes.findTop50ByUsuarioIdOrderByFechaDesc(uid);
-    }
-
-    @Transactional
-    public Map<String, Object> pedir(Long uid, String titulo, String artista, String nota) {
-        titulo = texto(titulo, 200);
-        artista = texto(artista, 200);
-        nota = texto(nota, 500);
-        if (titulo == null || titulo.length() < 2) throw new IllegalArgumentException("Escribe el nombre de la canción");
-        if (solicitudes.countByUsuarioIdAndFechaAfter(uid, LocalDateTime.now().minusDays(1)) >= 10)
-            throw new IllegalArgumentException("Ya pediste 10 canciones hoy. Vuelve a intentarlo mañana.");
-        Map<String, Object> r = new LinkedHashMap<>();
-        Optional<CancionDTO> ya = buscarEnBiblioteca(titulo, artista);
-        if (ya.isPresent()) {
-            r.put("yaExiste", true);
-            r.put("cancion", ya.get());
-            return r;
-        }
-        String t = titulo, a = artista;
-        boolean repetida = solicitudes.findTop50ByUsuarioIdOrderByFechaDesc(uid).stream()
-                .anyMatch(s -> s.getEstado() == SolicitudCancion.Estado.PENDIENTE
-                        && BibliotecaService.normalizar(s.getTitulo()).equals(BibliotecaService.normalizar(t))
-                        && Objects.equals(BibliotecaService.normalizar(Objects.toString(s.getArtista(), "")), BibliotecaService.normalizar(Objects.toString(a, ""))));
-        if (repetida) throw new IllegalArgumentException("Ya pediste esta canción; te avisaremos cuando esté");
-        SolicitudCancion s = new SolicitudCancion();
-        s.setUsuarioId(uid);
-        s.setTitulo(titulo);
-        s.setArtista(artista);
-        s.setNota(nota);
-        s = solicitudes.save(s);
-        String quien = usuarios.findById(uid).map(Usuario::getNombreVisible).orElse("Alguien");
-        avisarAdmins("SOLICITUD", uid, quien + " pidió “" + titulo + "”" + (artista != null ? " de " + artista : ""), "#/admin?tab=pedidos");
-        r.put("yaExiste", false);
-        r.put("solicitud", s);
-        return r;
-    }
-
-    /** Cada 10 minutos: si una canción pedida ya llegó a la biblioteca, se marca y se avisa. */
-    @Scheduled(initialDelay = 120_000, fixedRate = 600_000)
-    public void revisarPedidos() {
-        for (SolicitudCancion s : solicitudes.findByEstado(SolicitudCancion.Estado.PENDIENTE)) {
-            buscarEnBiblioteca(s.getTitulo(), s.getArtista()).ifPresent(c -> marcarAgregada(s, c, null));
-        }
-    }
-
-    public Page<SolicitudCancion> listarSolicitudes(String estado, int pagina, int tam) {
-        Collection<SolicitudCancion.Estado> estados = estado == null || estado.isBlank()
-                ? List.of(SolicitudCancion.Estado.values()) : List.of(SolicitudCancion.Estado.valueOf(estado));
-        return solicitudes.findByEstadoInOrderByFechaDesc(estados, PageRequest.of(Math.max(0, pagina), Math.min(Math.max(1, tam), 100)));
-    }
-
-    @Transactional
-    public SolicitudCancion responderSolicitud(Long id, String estado, Long cancionId, String respuesta) {
-        SolicitudCancion s = solicitudes.findById(id).orElseThrow(() -> new NoSuchElementException("Solicitud no encontrada"));
-        SolicitudCancion.Estado e = SolicitudCancion.Estado.valueOf(estado);
-        respuesta = texto(respuesta, 300);
-        if (e == SolicitudCancion.Estado.AGREGADA) {
-            CancionDTO c = cancionId != null ? biblioteca.porId(cancionId).orElseThrow(() -> new IllegalArgumentException("Esa canción no existe"))
-                    : buscarEnBiblioteca(s.getTitulo(), s.getArtista()).orElseThrow(() -> new IllegalArgumentException("Todavía no está en la biblioteca: elige la canción"));
-            return marcarAgregada(s, c, respuesta);
-        }
-        s.setEstado(e);
-        s.setRespuesta(respuesta);
-        s.setResuelta(e == SolicitudCancion.Estado.PENDIENTE ? null : LocalDateTime.now());
-        if (e == SolicitudCancion.Estado.RECHAZADA)
-            notificaciones.crear(s.getUsuarioId(), "SOLICITUD", null, "No pudimos agregar “" + s.getTitulo() + "”"
-                    + (respuesta != null ? ": " + respuesta : ""), "#/pedidos");
-        return solicitudes.save(s);
-    }
-
-    private SolicitudCancion marcarAgregada(SolicitudCancion s, CancionDTO c, String respuesta) {
-        s.setEstado(SolicitudCancion.Estado.AGREGADA);
-        s.setCancionId(c.getId());
-        s.setRespuesta(respuesta);
-        s.setResuelta(LocalDateTime.now());
-        solicitudes.save(s);
-        notificaciones.crear(s.getUsuarioId(), "SOLICITUD", null, "¡Ya está en SpaceMusic! “" + c.getNombre() + "” de " + c.getArtista(),
-                "#/buscar?q=" + URLEncoder.encode(c.getNombre(), StandardCharsets.UTF_8).replace("+", "%20"));
-        return s;
-    }
-
-    /** Coincidencia por título (y artista si se escribió), sin acentos ni mayúsculas. */
-    private Optional<CancionDTO> buscarEnBiblioteca(String titulo, String artista) {
-        String t = BibliotecaService.normalizar(titulo);
-        String a = artista == null ? "" : BibliotecaService.normalizar(artista);
-        if (t.isBlank()) return Optional.empty();
-        return biblioteca.buscarCanciones(titulo, 30).stream()
-                .filter(c -> BibliotecaService.normalizar(c.getNombre()).equals(t)
-                        || BibliotecaService.normalizar(c.getNombre()).startsWith(t + " ("))
-                .filter(c -> a.isBlank() || BibliotecaService.normalizar(c.getArtista()).contains(a) || a.contains(BibliotecaService.normalizar(c.getArtista())))
-                .findFirst();
-    }
-
     // ═══════════════════ Reportar un problema ═══════════════════
 
     @Transactional
@@ -255,24 +154,7 @@ public class ComunidadService {
 
     public Map<String, Object> conteos() {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("solicitudesPendientes", solicitudes.countByEstado(SolicitudCancion.Estado.PENDIENTE));
         m.put("reportesAbiertos", reportes.countByEstado(ReporteCancion.Estado.ABIERTO));
-        return m;
-    }
-
-    /** Datos para mostrar en el panel: quién, qué canción. */
-    public Map<String, Object> filaSolicitud(SolicitudCancion s) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", s.getId());
-        m.put("titulo", s.getTitulo());
-        m.put("artista", s.getArtista());
-        m.put("nota", s.getNota());
-        m.put("estado", s.getEstado());
-        m.put("respuesta", s.getRespuesta());
-        m.put("fecha", s.getFecha());
-        m.put("resuelta", s.getResuelta());
-        m.put("usuario", usuarios.findById(s.getUsuarioId()).map(Usuario::getUsername).orElse(null));
-        m.put("cancion", s.getCancionId() == null ? null : biblioteca.porId(s.getCancionId()).orElse(null));
         return m;
     }
 

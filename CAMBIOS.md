@@ -1,5 +1,17 @@
 # Registro de cambios
 
+## Versión 3.2
+- **Recomendadas en una playlist:** "Agregar" agregaba nada y reproducía la canción. La escucha global de filas (`main.js`, fase de captura) se comía el clic; ahora los botones y enlaces propios de una fila manejan su clic.
+- **Pantalla apagada (iPhone y Android):** al terminar una canción no seguía la siguiente y el reproductor se cerraba. Causa: con la página en segundo plano iOS corta sus peticiones y la app lo tomaba como "sin conexión", así que saltaba todo lo no descargado. Ahora esos fallos no cuentan con la página oculta, si el sistema dice que hay red se intenta la siguiente igual, la radio se pide antes (quedan 2 canciones, al 20 %) y se reintenta hasta 3 veces.
+- **Se quita "Pedir una canción"** (pantallas, rutas y API); los colaboradores suben la música. La tabla `solicitud_cancion` queda en la base de datos sin uso (no se borran datos).
+- **Se quita la notificación a todos** cada vez que llegan canciones nuevas. Quien sube sigue recibiendo su resumen.
+- **Soporte técnico en su propia página** (`#/soporte`): menú lateral por grupos (Estado, Revisar, Personas y seguridad, Herramientas), botones "Volver al inicio" y "Administración"; en celular, un selector de sección. Los enlaces viejos `#/admin?tab=soporte` llevan ahí.
+- **Administración → Descargar música** (paquete `descargas`): las funciones de `Descargar musica.bat` en la web. Pegar enlaces sin límite con vista previa y validación, cola con lo que se baja ahora, progreso en vivo (cada 3 s), detener/reanudar, quitar listas que no empezaron, fallidas con reintentar/olvidar, registro en vivo con filtro, aviso de límite de Spotify y claves de Spotify (se guardan y nunca se devuelven). Usa el programa `descargar` del servidor; los enlaces van por la entrada estándar (sin línea de comandos) y se rechazan líneas que empiezan con "-".
+- **Service worker:** guarda los archivos de la app uno por uno; si uno falla, la app igual abre sin internet.
+- **Mantenimiento:** se reutiliza el último resultado de la prueba de internet (antes una copia guardada podía tapar el aviso).
+- **Pruebas en navegador de celular** (`pruebas/navegador.mjs`): Android simulado, sin internet, servidor caído y pantalla apagada. 8 pruebas: abrir la app, agregar recomendada, transición, volumen parejo con pantalla apagada, siguiente canción con pantalla apagada, reportar un problema, abrir sin internet y sonar lo descargado, aviso de mantenimiento.
+- 22 pruebas del servidor (5 nuevas del panel de descargas).
+
 ## Versión 3.1
 - **Centro de soporte técnico** (Administración → Soporte, solo administradores, paquete `soporte`): resumen, monitor del servidor (muestra por minuto), diagnóstico, incidencias agrupadas por huella, revisión de la biblioteca, base de datos, usuarios y sesiones, alertas, seguridad y auditoría, mantenimiento e informes con CSV. Detalle completo en el informe de la entrega.
 - **Copias de seguridad automáticas** de la base de datos: todos los días a las 4:30 y a pedido, en `./respaldos` (`.sql.gz`), se conservan 7. La restauración es manual (se explica en el panel).

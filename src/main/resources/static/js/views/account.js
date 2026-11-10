@@ -101,8 +101,6 @@ export async function profileView(el, _p, _q, isStale) {
           <button class="btn sm" data-gustos>${icon('heart', 'sm')} Elegir</button></div>
         <div class="setting-row"><div><div class="t">Tu resumen</div><div class="s">Lo que más escuchaste este mes y este año</div></div>
           <a class="btn sm" href="#/resumen">${icon('gift', 'sm')} Ver</a></div>
-        <div class="setting-row"><div><div class="t">Pedir una canción</div><div class="s">¿Falta algo? Pídelo y te avisamos cuando esté</div></div>
-          <a class="btn sm" href="#/pedidos">${icon('request', 'sm')} Mis pedidos</a></div>
         <div class="setting-row"><div><div class="t">Color de la app</div></div>
           <div class="swatches">${Object.entries(ACCENTS).map(([n, [c]]) => `<button class="swatch ${n === accent ? 'active' : ''}" data-accent="${n}" title="${n}" style="background:${c}"></button>`).join('')}</div></div>
         <div class="setting-row"><div><div class="t">Sonido de inicio</div><div class="s">Suena al abrir la app junto al logo</div></div>

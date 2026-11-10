@@ -103,7 +103,7 @@ public class AlertasService {
         if (a.getEstado() == Alerta.Estado.ACTIVA && (a.getAvisada() == null || a.getAvisada().isBefore(ahora.minusMinutes(cada)))) {
             for (Usuario u : usuarios.findAll()) {
                 if (u.getRol() == Usuario.Rol.ADMIN && u.isActivo())
-                    notificaciones.crear(u.getId(), "ALERTA", null, "Soporte: " + mensaje, "#/admin?tab=soporte&sec=alertas");
+                    notificaciones.crear(u.getId(), "ALERTA", null, "Soporte: " + mensaje, "#/soporte?sec=alertas");
             }
             a.setAvisada(ahora);
         }

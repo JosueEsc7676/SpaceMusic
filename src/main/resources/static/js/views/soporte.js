@@ -1,10 +1,11 @@
-// Centro de soporte técnico (Administración → Soporte): monitorización, diagnóstico, incidencias,
+// Centro de soporte técnico (página propia #/soporte, solo administradores): monitorización, diagnóstico, incidencias,
 // biblioteca, base de datos, sesiones, alertas, seguridad, mantenimiento e informes.
 // Todo lo que se muestra viene del servidor; si un dato no se puede medir se indica "No disponible".
 import { api, session } from '../api.js';
 import { esc, fmtNum, timeAgo, bus, store } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, errorToast, confirmDialog, promptDialog, modal, emptyState } from '../ui.js';
+import { setHero, setTitle } from '../router.js';
 
 const SECCIONES = [
   ['resumen', 'Resumen', 'chart'], ['monitor', 'Monitor', 'wave'], ['diagnostico', 'Diagnóstico', 'checkCircle'],
@@ -103,18 +104,62 @@ async function descargar(ruta, nombre) {
 
 // ═══════════════════ Entrada ═══════════════════
 
-export async function centroSoporte(el, query) {
+// Grupos del menú lateral
+const GRUPOS = [
+  ['Estado', ['resumen', 'monitor', 'alertas']],
+  ['Revisar', ['diagnostico', 'incidencias', 'biblioteca', 'basedatos']],
+  ['Personas y seguridad', ['sesiones', 'seguridad']],
+  ['Herramientas', ['mantenimiento', 'informes']],
+];
+const DESCRIPCION = {
+  resumen: 'Estado general del servidor y de cada componente.',
+  monitor: 'Uso de recursos y rendimiento a lo largo del tiempo.',
+  alertas: 'Avisos automáticos cuando algo pasa de los límites.',
+  diagnostico: 'Pruebas de solo lectura para encontrar problemas.',
+  incidencias: 'Errores del servidor agrupados, con su historial.',
+  biblioteca: 'Canciones sin archivo, sin portada, repetidas…',
+  basedatos: 'Conexión, rendimiento e integridad de los datos.',
+  sesiones: 'Quién está conectado y desde qué dispositivo.',
+  seguridad: 'Acciones de los administradores y medidas activas.',
+  mantenimiento: 'Tareas, copias de seguridad, cachés y versiones.',
+  informes: 'Tendencias por día, semana y mes, con exportación.',
+};
+
+/** Página de soporte: menú lateral propio, botón para volver al inicio y la sección elegida. */
+export async function soporteView(el, _p, query) {
+  if (!session.isAdmin) { el.innerHTML = emptyState('lock', 'Solo para administradores'); return; }
   const sec = SECCIONES.some(([k]) => k === query.sec) ? query.sec : 'resumen';
-  el.innerHTML = `<nav class="sop-nav" aria-label="Secciones de soporte">${SECCIONES.map(([k, l, ic]) =>
-    `<a class="chip ${k === sec ? 'active' : ''}" href="#/admin?tab=soporte&sec=${k}" ${k === sec ? 'aria-current="page"' : ''}>${icon(ic, 'sm')} ${esc(l)}</a>`).join('')}</nav>
-    <div class="sop-cuerpo" data-sop><div class="sop-cargando">${icon('clock', 'sm')} Cargando…</div></div>`;
+  const [, titulo, ic] = SECCIONES.find(([k]) => k === sec);
+  setTitle('Soporte · ' + titulo);
+  setHero(null);
+  const enlace = (k) => {
+    const [, l, i] = SECCIONES.find(([x]) => x === k);
+    return `<a class="sop-lado-item ${k === sec ? 'active' : ''}" href="#/soporte?sec=${k}" ${k === sec ? 'aria-current="page"' : ''}>${icon(i, 'sm')}<span>${esc(l)}</span></a>`;
+  };
+  el.innerHTML = `<div class="sop-pagina">
+    <aside class="sop-lado" aria-label="Secciones de soporte">
+      <div class="sop-lado-top">
+        <a class="btn sm" href="#/">${icon('left', 'sm')} Volver al inicio</a>
+        <a class="btn sm ghost" href="#/admin">${icon('shield', 'sm')} Administración</a>
+      </div>
+      <h2 class="sop-lado-t">${icon('sliders')} Soporte técnico</h2>
+      <label class="sop-lado-movil"><span class="muted">Sección</span>
+        <select class="sel" data-sec aria-label="Sección de soporte">${GRUPOS.map(([g, ks]) => `<optgroup label="${esc(g)}">${ks.map((k) =>
+          `<option value="${k}" ${k === sec ? 'selected' : ''}>${esc(SECCIONES.find(([x]) => x === k)[1])}</option>`).join('')}</optgroup>`).join('')}</select></label>
+      <nav class="sop-lado-nav">${GRUPOS.map(([g, ks]) => `<div class="sop-lado-g"><span class="sop-lado-gt">${esc(g)}</span>${ks.map(enlace).join('')}</div>`).join('')}</nav>
+    </aside>
+    <section class="sop-contenido">
+      <header class="sop-cab"><h1>${icon(ic)} ${esc(titulo)}</h1><p class="muted">${esc(DESCRIPCION[sec] || '')}</p></header>
+      <div class="sop-cuerpo" data-sop><div class="sop-cargando">${icon('clock', 'sm')} Cargando…</div></div>
+    </section></div>`;
+  el.querySelector('[data-sec]').addEventListener('change', (e) => { location.hash = '#/soporte?sec=' + e.target.value; });
   const box = el.querySelector('[data-sop]');
   clearInterval(refresco);
   try {
     await ({ resumen, monitor, diagnostico, incidencias, biblioteca, basedatos, sesiones, alertas, seguridad, mantenimiento, informes })[sec](box);
   } catch (e) {
     box.innerHTML = emptyState('info', 'No se pudo cargar esta sección', esc(e.message || 'Error'), '<button class="btn" data-reintentar>Reintentar</button>');
-    box.querySelector('[data-reintentar]')?.addEventListener('click', () => centroSoporte(el, query));
+    box.querySelector('[data-reintentar]')?.addEventListener('click', () => soporteView(el, _p, query));
   }
 }
 
@@ -147,15 +192,15 @@ async function resumen(box) {
       </div>
       <div class="panels">
         <div class="panel"><h3>${icon('info')} Incidencias</h3>
-          <div class="sop-mini">${['NUEVA', 'EN_INVESTIGACION', 'RESUELTA', 'DESCARTADA'].map((e) => `<a href="#/admin?tab=soporte&sec=incidencias" data-ver-estado="${e}">${chip(e)} <b>${fmtNum(inc[e] || 0)}</b></a>`).join('')}</div>
+          <div class="sop-mini">${['NUEVA', 'EN_INVESTIGACION', 'RESUELTA', 'DESCARTADA'].map((e) => `<a href="#/soporte?sec=incidencias" data-ver-estado="${e}">${chip(e)} <b>${fmtNum(inc[e] || 0)}</b></a>`).join('')}</div>
           ${inc.descartadasPorExceso ? `<p class="muted">${inc.descartadasPorExceso} eventos no se guardaron por exceso (la cola tiene un límite).</p>` : ''}</div>
         <div class="panel"><h3>${icon('bell')} Alertas</h3>
-          <div class="sop-mini">${['ACTIVA', 'RECONOCIDA', 'RESUELTA'].map((e) => `<a href="#/admin?tab=soporte&sec=alertas">${chip(e)} <b>${fmtNum(al[e] || 0)}</b></a>`).join('')}</div></div>
+          <div class="sop-mini">${['ACTIVA', 'RECONOCIDA', 'RESUELTA'].map((e) => `<a href="#/soporte?sec=alertas">${chip(e)} <b>${fmtNum(al[e] || 0)}</b></a>`).join('')}</div></div>
         <div class="panel"><h3>${icon('checkCircle')} Último diagnóstico</h3>${r.ultimoDiagnostico
           ? `<p style="margin-top:0">${chip(r.ultimoDiagnostico.estado)} ${esc(hora(r.ultimoDiagnostico.inicio))} · por @${esc(r.ultimoDiagnostico.usuario)}</p>
              <div class="sop-mini"><span>${chip('correcta')} ${r.ultimoDiagnostico.correctas}</span><span>${chip('advertencia')} ${r.ultimoDiagnostico.advertencias}</span><span>${chip('fallida')} ${r.ultimoDiagnostico.fallidas}</span></div>`
           : '<p class="muted">Aún no se ejecutó ninguno.</p>'}
-          <a class="btn sm" href="#/admin?tab=soporte&sec=diagnostico">${icon('checkCircle', 'sm')} Ir al diagnóstico</a></div>
+          <a class="btn sm" href="#/soporte?sec=diagnostico">${icon('checkCircle', 'sm')} Ir al diagnóstico</a></div>
         <div class="panel"><h3>${icon('sliders')} Entorno</h3>
           <div class="kv"><span>Java</span><b>${val(r.version?.java)}</b></div><div class="kv"><span>Spring Boot</span><b>${val(r.version?.springBoot)}</b></div>
           <div class="kv"><span>Sistema</span><b>${val(r.version?.sistema)}</b></div>

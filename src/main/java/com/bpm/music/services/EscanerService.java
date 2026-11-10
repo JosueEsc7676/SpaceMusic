@@ -208,8 +208,8 @@ public class EscanerService {
             }
 
             fase = "Completado";
-            // La primera carga de la biblioteca (servidor vacío) no avisa a nadie
-            if (nuevas > 0 && archivosEncontrados > nuevas) notificaciones.cancionesNuevas(nuevas, List.copyOf(artistasNuevos));
+            // Ya no se avisa a todos los usuarios cada vez que llegan canciones (era tedioso);
+            // quien sube recibe su propio resumen al terminar la subida.
             artistasNuevos.clear();
             if (nuevas > 0 || reubicadas > 0 || duplicadas > 0) {
                 log.info("Escaneo: {} archivos, {} nuevas, {} reubicadas, {} repetidas omitidas, {} errores",

@@ -22,7 +22,8 @@ import { perfilPublicoView } from './views/people.js';
 import { mensajesView } from './views/mensajes.js';
 import { novedadesView } from './views/novedades.js';
 import { iniciarAvisos } from './avisos.js';
-import { resumenView, pedidosView, pedirCancion, revisarBienvenida } from './comunidad.js';
+import { soporteView } from './views/soporte.js';
+import { resumenView, revisarBienvenida } from './comunidad.js';
 import { iniciarNativo, modoLigero } from './nativo.js';
 
 // Sesión vencida sin conexión: se entra igual para escuchar lo descargado (la sesión no caduca sin internet).
@@ -133,7 +134,7 @@ pintarCuerpo(`
 const SOLO_EN_LINEA = [
   [/^\/historial/, 'tu historial'], [/^\/artista\//, 'este artista'], [/^\/genero\//, 'este género'],
   [/^\/mix\//, 'esta mezcla'], [/^\/u\//, 'este perfil'], [/^\/mensajes/, 'tus mensajes'],
-  [/^\/novedades/, 'las novedades'], [/^\/estadisticas/, 'tus estadísticas'], [/^\/resumen/, 'tu resumen'], [/^\/pedidos/, 'tus pedidos'], [/^\/admin/, 'la administración'],
+  [/^\/novedades/, 'las novedades'], [/^\/estadisticas/, 'tus estadísticas'], [/^\/resumen/, 'tu resumen'], [/^\/admin/, 'la administración'], [/^\/soporte/, 'el centro de soporte'],
   [/^\/subir/, 'la subida de canciones'],
 ];
 setGuardiaSinRed((path) => {
@@ -161,8 +162,8 @@ route('/novedades/:version', novedadesView);
 route('/mensajes/:username', mensajesView);
 route('/estadisticas', statsView);
 route('/resumen', resumenView);
-route('/pedidos', pedidosView);
 route('/admin', adminView);
+route('/soporte', soporteView);
 route('/subir', uploadView);
 
 // ═══════════════════ Usuario y permisos ═══════════════════
@@ -184,8 +185,6 @@ $('[data-user-menu]').addEventListener('click', (e) => {
     { label: 'Tus estadísticas', icon: 'chart', fn: () => go('/estadisticas') },
     { label: 'Escuchado recientemente', icon: 'history', fn: () => go('/historial') },
     { label: 'Tu resumen del año', icon: 'gift', fn: () => go('/resumen') },
-    { label: 'Pedir una canción', icon: 'request', fn: () => pedirCancion() },
-    { label: 'Mis pedidos', icon: 'list', fn: () => go('/pedidos') },
     { label: 'Ecualizador', icon: 'sliders', fn: () => openEqualizer() },
     session.canEdit ? { label: 'Subir canciones', icon: 'upload', fn: () => go('/subir') } : null,
     session.isAdmin ? { label: 'Administración', icon: 'shield', fn: () => go('/admin') } : null,
@@ -295,6 +294,10 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('[data-stop]')) return; // enlaces dentro de filas
   const el = e.target.closest('[data-act]');
   if (!el) return;
+  // Un botón o enlace propio dentro de la fila (p. ej. "Agregar" en Recomendadas) maneja su clic:
+  // esta escucha va en fase de captura y si no, lo taparía reproduciendo la canción
+  const propio = e.target.closest('button, a, input, select, textarea, label');
+  if (propio && propio !== el && el.contains(propio)) return;
   const act = el.dataset.act;
   if (act === 'play-list') {
     if (el.closest('.tracks')?._suppressClick) return;

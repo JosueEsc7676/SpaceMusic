@@ -6,7 +6,6 @@ import { colecciones, sinConexion, disponible } from '../offline.js';
 import { icon } from '../icons.js';
 import { setHero, setTitle } from '../router.js';
 import { trackList, cardAlbum, cardArtist, cardPlaylist, cardGenre, cardSong, section, emptyState, registerList, getList } from '../ui.js';
-import { pedirCancion } from '../comunidad.js';
 import { player } from '../player.js';
 
 const RECENT_BASE = 'sm_busquedas';
@@ -70,9 +69,7 @@ export async function searchView(el, _p, query, isStale) {
     `<a class="chip ${tab === k ? 'active' : ''}" href="#/buscar?q=${encodeURIComponent(q)}${k === 'todo' ? '' : '&tab=' + k}">${l}</a>`).join('')}</div>`;
 
   if (!total) {
-    el.innerHTML = chips + emptyState('search', `Sin resultados para “${q}”`, 'Revisa la ortografía o prueba con menos palabras. ¿No está? Pídela y te avisamos cuando llegue.',
-      `<button class="btn primary" data-pedir>${icon('request', 'sm')} Pedir esta canción</button>`);
-    el.querySelector('[data-pedir]').onclick = () => pedirCancion({ titulo: q });
+    el.innerHTML = chips + emptyState('search', `Sin resultados para “${q}”`, 'Revisa la ortografía o prueba con menos palabras.');
     return;
   }
 

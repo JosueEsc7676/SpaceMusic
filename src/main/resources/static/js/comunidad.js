@@ -1,5 +1,5 @@
-// Funciones para los usuarios: reportar un problema de una canción, pedir canciones,
-// elegir gustos al crear la cuenta, "Mis pedidos" y "Tu año en SpaceMusic".
+// Funciones para los usuarios: reportar un problema de una canción,
+// elegir gustos al crear la cuenta y "Tu año en SpaceMusic".
 import { api, session } from './api.js';
 import { esc, cover, coverImg, plural, fmtNum, store, esIOS, textoSinRed } from './util.js';
 import { icon } from './icons.js';
@@ -42,65 +42,6 @@ export async function reportarProblema(song) {
       toast(r.repetido ? 'Ya habías reportado esto: lo estamos revisando' : 'Gracias, enviamos tu reporte');
     },
   });
-}
-
-// ═══════════════════ Pedir una canción ═══════════════════
-
-export async function pedirCancion({ titulo = '', artista = '' } = {}) {
-  if (necesitaRed()) return;
-  await modal({
-    title: 'Pedir una canción',
-    body: `<p class="muted" style="margin-top:0">¿No encuentras una canción? Pídela y te avisaremos cuando esté en SpaceMusic.</p>
-      <div class="field"><label>Canción</label><input data-titulo maxlength="200" value="${esc(titulo)}" placeholder="Nombre de la canción"></div>
-      <div class="field"><label>Artista</label><input data-artista maxlength="200" value="${esc(artista)}" placeholder="Quién la canta"></div>
-      <div class="field"><label>Nota (opcional)</label><input data-nota maxlength="300" placeholder="Versión, álbum, en vivo…"></div>`,
-    actions: [{ label: 'Cancelar', value: null }, { label: 'Pedir', value: 'ok', primary: true }],
-    onAction: async (v, m) => {
-      if (v !== 'ok') return;
-      const body = { titulo: m.querySelector('[data-titulo]').value, artista: m.querySelector('[data-artista]').value, nota: m.querySelector('[data-nota]').value };
-      if (body.titulo.trim().length < 2) { toast('Escribe el nombre de la canción', { error: true }); return false; }
-      const r = await api('/api/solicitudes', { method: 'POST', body });
-      if (r.yaExiste) {
-        toast(`“${r.cancion.nombre}” ya está en SpaceMusic`, { action: { label: 'Reproducir', fn: () => player.playOne(r.cancion) } });
-      } else {
-        toast('Pedido enviado. Te avisaremos cuando esté', { action: { label: 'Mis pedidos', fn: () => { location.hash = '#/pedidos'; } } });
-      }
-    },
-  });
-}
-
-const ESTADO_PEDIDO = { PENDIENTE: ['warning', 'Pendiente'], AGREGADA: ['success', 'Ya está'], RECHAZADA: ['danger', 'No se pudo'] };
-
-export async function pedidosView(el) {
-  setHero(null);
-  setTitle('Mis pedidos');
-  if (sinConexion()) {
-    el.innerHTML = `<h1 class="page-title">Mis pedidos</h1>` + emptyState('download', textoSinRed(), 'Tus pedidos se ven cuando estás en línea.');
-    return;
-  }
-  const lista = await api('/api/solicitudes');
-  const pintar = (l) => {
-    el.innerHTML = `<div class="row wrap" style="justify-content:space-between;align-items:center;gap:12px">
-        <h1 class="page-title" style="margin:0">Mis pedidos</h1>
-        <button class="btn primary" data-pedir>${icon('request', 'sm')} Pedir una canción</button></div>
-      <p class="muted">Canciones que pediste. Cuando se agreguen te llegará una notificación.</p>
-      ${l.length ? `<div class="pedidos">${l.map((s) => {
-        const [cls, txt] = ESTADO_PEDIDO[s.estado] || ['', s.estado];
-        return `<div class="pedido">
-          ${s.cancion ? coverImg(s.cancion.portadaUrl, 56) : `<span class="pedido-ico">${icon('note')}</span>`}
-          <div class="pedido-txt"><b class="ellipsis">${esc(s.titulo)}</b><span class="muted ellipsis">${esc(s.artista || 'Artista sin indicar')} · ${new Date(s.fecha).toLocaleDateString()}</span>
-            ${s.respuesta ? `<span class="muted" style="font-size:13px">“${esc(s.respuesta)}”</span>` : ''}</div>
-          <span class="badge ${cls}">${txt}</span>
-          ${s.cancion ? `<button class="btn sm" data-oir="${s.cancion.id}">${icon('play', 'sm')} Escuchar</button>` : ''}
-        </div>`;
-      }).join('')}</div>` : emptyState('request', 'Todavía no pediste canciones', 'Si buscas algo que no está, pídelo aquí.')}`;
-    el.querySelector('[data-pedir]').onclick = async () => { await pedirCancion(); pintar(await api('/api/solicitudes').catch(() => l)); };
-    el.querySelectorAll('[data-oir]').forEach((b) => b.onclick = () => {
-      const s = l.find((x) => String(x.cancion?.id) === b.dataset.oir);
-      if (s) player.playOne(s.cancion);
-    });
-  };
-  pintar(lista);
 }
 
 // ═══════════════════ Gustos al crear la cuenta ═══════════════════

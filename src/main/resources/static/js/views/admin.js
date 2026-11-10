@@ -6,8 +6,8 @@ import { setHero, setTitle } from '../router.js';
 import { toast, errorToast, confirmDialog, promptDialog, emptyState, trackList, cardArtist, modal, genreColor } from '../ui.js';
 import { bus } from '../util.js';
 import { avatarHtml } from './account.js';
-import { centroSoporte } from './soporte.js';
-import { pedidosTab } from './pedidos-admin.js';
+import { reportesTab } from './reportes-admin.js';
+import { descargasTab } from './descargas-admin.js';
 import { EXT, agregar, items, resumenLote, limpiar, tamano } from '../subidas.js';
 
 let poll = null;
@@ -15,24 +15,27 @@ bus.on('route', () => { clearInterval(poll); poll = null; });
 
 export async function adminView(el, _p, query, isStale) {
   if (!session.isAdmin) { el.innerHTML = emptyState('lock', 'Solo para administradores'); return; }
+  // Soporte tiene su propia página (los enlaces viejos llevan ahí)
+  if (query.tab === 'soporte') { location.replace('#/soporte' + (query.sec ? '?sec=' + encodeURIComponent(query.sec) : '')); return; }
   const tab = query.tab || 'resumen';
   setTitle('Administración');
   setHero([120, 40, 50]);
-  const tabs = [['resumen', 'Resumen'], ['soporte', 'Soporte'], ['generos', 'Géneros'], ['cuentas', 'Cuentas nuevas'], ['biblioteca', 'Biblioteca'], ['usuarios', 'Usuarios'], ['solicitudes', 'Colaboradores'], ['pedidos', 'Pedidos y reportes']];
+  const tabs = [['resumen', 'Resumen'], ['descargas', 'Descargar música'], ['biblioteca', 'Biblioteca'], ['generos', 'Géneros'], ['usuarios', 'Usuarios'], ['cuentas', 'Cuentas nuevas'], ['solicitudes', 'Colaboradores'], ['reportes', 'Reportes']];
   const [resumen, com] = await Promise.all([api('/api/admin/resumen'), api('/api/admin/comunidad/conteos').catch(() => ({}))]);
-  const pendCom = (com.solicitudesPendientes || 0) + (com.reportesAbiertos || 0);
+  const pendCom = com.reportesAbiertos || 0;
   if (isStale()) return;
   el.innerHTML = `<div class="section-head" style="margin-top:8px"><h2 style="font-size:28px">${icon('shield')} Administración</h2></div>
-    <div class="chips">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? 'active' : ''}" href="#/admin?tab=${k}">${l}${k === 'solicitudes' && resumen.solicitudesPendientes ? ` <span class="badge warning">${resumen.solicitudesPendientes}</span>` : ''}${k === 'cuentas' && resumen.cuentasPendientes ? ` <span class="badge warning">${resumen.cuentasPendientes}</span>` : ''}${k === 'pedidos' && pendCom ? ` <span class="badge warning">${pendCom}</span>` : ''}</a>`).join('')}</div>
+    <div class="adm-top"><a class="btn sm" href="#/soporte">${icon('sliders', 'sm')} Centro de soporte técnico</a></div>
+    <div class="chips">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? 'active' : ''}" href="#/admin?tab=${k}">${l}${k === 'solicitudes' && resumen.solicitudesPendientes ? ` <span class="badge warning">${resumen.solicitudesPendientes}</span>` : ''}${k === 'cuentas' && resumen.cuentasPendientes ? ` <span class="badge warning">${resumen.cuentasPendientes}</span>` : ''}${k === 'reportes' && pendCom ? ` <span class="badge warning">${pendCom}</span>` : ''}</a>`).join('')}</div>
     <div data-body></div>`;
   const body = el.querySelector('[data-body]');
   if (tab === 'resumen') await resumenTab(body, resumen);
   else if (tab === 'biblioteca') await bibliotecaTab(body);
   else if (tab === 'usuarios') await usuariosTab(body);
   else if (tab === 'cuentas') await cuentasTab(body);
-  else if (tab === 'soporte') await centroSoporte(body, query);
   else if (tab === 'generos') await generosTab(body);
-  else if (tab === 'pedidos') await pedidosTab(body, query);
+  else if (tab === 'reportes') await reportesTab(body);
+  else if (tab === 'descargas') await descargasTab(body);
   else await solicitudesTab(body);
 }
 

@@ -187,6 +187,8 @@ export const player = {
     let j = this.index + 1;
     while (j < this.items.length && !this.disponible(this.items[j])) j++;
     if (j < this.items.length) return this._load(j, true);
+    // Quizá solo se cortaron las peticiones en segundo plano: si el sistema dice que hay red, se intenta
+    if (auto && this.index < this.items.length - 1 && navigator.onLine !== false) return this._load(this.index + 1, true);
     if (this.index < this.items.length - 1 && auto) { audio.pause(); bus.emit('player:state'); bus.emit('toast', { msg: 'Sin conexión: no hay más canciones descargadas en esta lista' }); return; }
     if (this.repeat === 'all') return this._load(0, true);
     if (prefs.autoRadio && this.current) return this._extendWithRadio(true);
@@ -274,6 +276,7 @@ export const player = {
       const anteriores = this.items.slice(Math.max(0, this.index - 3), this.index).map((x) => x.id).join(',');
       const more = await api(`/api/radio/${this.current.id}?cantidad=20&excluir=${excluir}${anteriores ? '&anteriores=' + anteriores : ''}`);
       if (more?.length) {
+        this._radioIntentos = 0;
         const wasEnd = this.index === this.items.length - 1;
         this.items.push(...more.map((s) => withUid(s)));
         if (!this.context || this.context.type !== 'radio') {
@@ -285,7 +288,11 @@ export const player = {
         audio.pause();
       }
     } catch {
-      if (advance) audio.pause();
+      if (advance) {
+        this._radioIntentos = (this._radioIntentos || 0) + 1;
+        if (this._radioIntentos <= 3) setTimeout(() => this._extendWithRadio(true), 2500);
+        else { this._radioIntentos = 0; audio.pause(); }
+      }
     } finally {
       this._radioLoading = false;
     }
@@ -426,8 +433,8 @@ audio.addEventListener('timeupdate', () => {
   }
   // Si la cola se acaba, pedir la radio con tiempo (no justo al terminar)
   const cur = player.current;
-  if (prefs.autoRadio && cur && player.repeat === 'off' && player.items.length - player.index <= 1
-      && audio.duration && audio.currentTime > audio.duration * 0.4 && player._radioPara !== cur._uid) {
+  if (prefs.autoRadio && cur && player.repeat === 'off' && player.items.length - player.index <= 2
+      && audio.duration && audio.currentTime > audio.duration * 0.2 && player._radioPara !== cur._uid) {
     player._radioPara = cur._uid;
     player._extendWithRadio(false);
   }

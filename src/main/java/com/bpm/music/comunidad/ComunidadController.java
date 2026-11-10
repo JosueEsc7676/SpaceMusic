@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.*;
 
-/** Gustos, pedidos de canciones, reportes de problemas y resumen del año (para cualquier usuario con sesión). */
+/** Gustos, reportes de problemas y resumen del año (para cualquier usuario con sesión). */
 @RestController
 public class ComunidadController {
 
@@ -41,20 +41,6 @@ public class ComunidadController {
         return l.stream().filter(Objects::nonNull).map(String::valueOf).limit(100).toList();
     }
 
-    // ── Pedir una canción ──
-
-    @GetMapping("/api/solicitudes")
-    public List<Map<String, Object>> misSolicitudes() {
-        return service.misSolicitudes(CurrentUser.id()).stream().map(service::filaSolicitud).toList();
-    }
-
-    @PostMapping("/api/solicitudes")
-    public Map<String, Object> pedir(@RequestBody Map<String, String> b) {
-        Map<String, Object> r = new LinkedHashMap<>(service.pedir(CurrentUser.id(), b.get("titulo"), b.get("artista"), b.get("nota")));
-        if (r.get("solicitud") instanceof SolicitudCancion s) r.put("solicitud", service.filaSolicitud(s));
-        return r;
-    }
-
     // ── Reportar un problema ──
 
     @PostMapping("/api/reportes")
@@ -76,29 +62,12 @@ public class ComunidadController {
         return service.periodos(CurrentUser.id());
     }
 
-    // ── Administración (pedidos y reportes) ──
+    // ── Administración (reportes) ──
 
     @GetMapping("/api/admin/comunidad/conteos")
     @PreAuthorize("hasRole('ADMIN')")
     public Map<String, Object> conteos() {
         return service.conteos();
-    }
-
-    @GetMapping("/api/admin/comunidad/solicitudes")
-    @PreAuthorize("hasRole('ADMIN')")
-    public Map<String, Object> solicitudes(@RequestParam(required = false) String estado,
-                                           @RequestParam(defaultValue = "0") int pagina, @RequestParam(defaultValue = "25") int tam) {
-        Page<SolicitudCancion> p = service.listarSolicitudes(validar(estado, SolicitudCancion.Estado.class), pagina, tam);
-        return pagina(p.map(service::filaSolicitud));
-    }
-
-    @PutMapping("/api/admin/comunidad/solicitudes/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public Map<String, Object> responderSolicitud(@PathVariable Long id, @RequestBody Map<String, Object> b) {
-        String estado = validar(Objects.toString(b.get("estado"), null), SolicitudCancion.Estado.class);
-        if (estado == null) throw new IllegalArgumentException("Falta el estado");
-        Long cancionId = b.get("cancionId") instanceof Number n ? n.longValue() : null;
-        return service.filaSolicitud(service.responderSolicitud(id, estado, cancionId, Objects.toString(b.get("respuesta"), null)));
     }
 
     @GetMapping("/api/admin/comunidad/reportes")
