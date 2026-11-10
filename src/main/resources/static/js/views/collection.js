@@ -1,14 +1,14 @@
 // Páginas de álbum, artista, playlist, género, mezcla, Me gusta e historial
 import { api, session } from '../api.js';
 import { descargar, coleccion, estaColeccion, descargarColeccion, quitarColeccion, sincronizarColeccion, sinConexion, disponible } from '../offline.js';
-import { esc, $, cover, coverImg, mosaic, dominantColor, fmtLong, plural, norm, bus, copyText } from '../util.js';
+import { esc, $, cover, coverImg, mosaic, dominantColor, fmtLong, plural, norm, bus, copyText, albumHref } from '../util.js';
 import { icon } from '../icons.js';
 import { lib } from '../state.js';
 import { player } from '../player.js';
 import { setHero, setTitle, go } from '../router.js';
 import {
   trackList, cardAlbum, cardArtist, section, emptyState, toast, errorToast, showMenu,
-  pickPlaylist, editPlaylist, confirmDialog, sortable, playlistArt, genreColor,
+  pickPlaylist, editPlaylist, confirmDialog, promptDialog, sortable, playlistArt, genreColor,
 } from '../ui.js';
 
 // ── Piezas comunes ──
@@ -154,15 +154,18 @@ async function heroColor(url) {
 
 // ═══════════════════ Álbum ═══════════════════
 
-export async function albumView(el, { nombre }, _q, isStale) {
-  const clave = 'album:' + nombre;
-  const a = await cargarColeccion(clave, () => api('/api/albumes/detalle?nombre=' + encodeURIComponent(nombre)));
+export async function albumView(el, { nombre }, q, isStale) {
+  const artistaQ = q?.artista || '';
+  const clave = 'album:' + nombre + (artistaQ ? ' · ' + artistaQ : '');
+  const a = await cargarColeccion(clave, () => api('/api/albumes/detalle?nombre=' + encodeURIComponent(nombre)
+    + (artistaQ ? '&artista=' + encodeURIComponent(artistaQ) : '')));
   if (isStale()) return;
   const todas = a.canciones;
   a.canciones = visibles(todas);
   setTitle(a.nombre);
   heroColor(a.portadaUrl);
-  const route = '#/album/' + encodeURIComponent(a.nombre);
+  const route = albumHref(a.nombre, a.artista);
+  const claveGuardado = a.clave || a.nombre;
   const ctx = { type: 'album', label: a.nombre, route };
   const masDelArtista = a.artista !== 'Varios artistas' && !sinConexion()
     ? await api('/api/artistas/' + encodeURIComponent(a.artista)).catch(() => null) : null;
@@ -176,10 +179,10 @@ export async function albumView(el, { nombre }, _q, isStale) {
     meta: `${artistLink}${a.anio ? sep + a.anio : ''}${sep}${plural(a.totalCanciones, 'canción', 'canciones')}, <span class="muted">${fmtLong(a.duracionTotal)}</span>`,
   })
     + avisoSinRed(a.canciones.length, todas.length)
-    + actions({ liked: a.canciones.every((s) => lib.isFav(s.id)), extra: botonGuardar('album', a.nombre), col: clave })
+    + actions({ liked: a.canciones.every((s) => lib.isFav(s.id)), extra: botonGuardar('album', claveGuardado), col: clave })
     + trackList(a.canciones, { context: ctx, showAlbum: false, showCover: a.artista === 'Varios artistas', numbers: 'track' })
     + (otros.length ? `<div style="height:36px"></div>` + section('Más de ' + a.artista, `<div class="grid">${otros.slice(0, 6).map(cardAlbum).join('')}</div>`, { more: '#/artista/' + encodeURIComponent(a.artista) }) : '');
-  conectarGuardar(el, 'album', a.nombre);
+  conectarGuardar(el, 'album', claveGuardado);
   wire(el, () => a.canciones, ctx, () => [
     a.artista !== 'Varios artistas' ? { label: 'Ir al artista', icon: 'user', fn: () => go('/artista/' + encodeURIComponent(a.artista)) } : null,
     { label: 'Crear playlist con este álbum', icon: 'plus', fn: () => editPlaylist(null, a.canciones).then((p) => p && go('/playlist/' + p.id)) },
@@ -242,28 +245,36 @@ export async function playlistView(el, { id }, _q, isStale) {
       meta: `${p.autorUsername ? `<a href="#/u/${encodeURIComponent(p.autorUsername)}"><strong>${esc(autor)}</strong></a>` : `<strong>${esc(autor)}</strong>`}${sep}${plural(canciones.length, 'canción', 'canciones')}${canciones.length ? `, <span class="muted">${fmtLong(p.duracionTotal)}</span>` : ''}`,
     })
       + avisoSinRed(canciones.length, todasPl.length)
-      + actions({ filter: canciones.length > 8, extra: p.propia ? '' : botonGuardar('playlist', p.id), col: clave })
+      + colaboradoresHtml()
+      + actions({ filter: canciones.length > 8, extra: p.propia || p.editable ? '' : botonGuardar('playlist', p.id), col: clave })
       + (canciones.length
-        ? `<div id="pltracks">${trackList(canciones, { context: ctx, playlist: p.propia ? p.id : null })}</div>`
+        ? `<div id="pltracks">${trackList(canciones, { context: ctx, playlist: p.editable ? p.id : null })}</div>`
         : emptyState('note', 'Esta playlist está vacía', 'Busca canciones y usa “Agregar a playlist” en su menú.', `<a class="btn primary" href="#/buscar">Buscar canciones</a>`))
-      + (p.propia ? '<div id="recs"></div>' : '');
+      + (p.editable ? '<div id="recs"></div>' : '');
 
     wire(el, () => canciones, ctx, () => p.propia ? [
       { sep: true },
       { label: 'Editar detalles', icon: 'edit', fn: edit },
       { label: p.publica ? 'Hacer privada' : 'Hacer pública', icon: p.publica ? 'lock' : 'globe', fn: togglePublic },
+      { label: 'Invitar a colaborar', icon: 'users', fn: invitar },
       { label: 'Duplicar', icon: 'copy', fn: duplicar },
       { label: 'Copiar enlace', icon: 'link', fn: () => copyText(location.origin + '/' + route).then(() => toast('Enlace copiado')) },
       { sep: true },
       { label: 'Eliminar playlist', icon: 'trash', danger: true, fn: borrar },
+    ] : p.editable ? [
+      { sep: true },
+      { label: 'Guardar una copia en mi biblioteca', icon: 'copy', fn: duplicar },
+      { label: 'Salir de esta playlist', icon: 'logout', danger: true, fn: salir },
     ] : [
       { label: 'Guardar una copia en mi biblioteca', icon: 'copy', fn: duplicar },
     ], { clave, tipo: 'playlist', datos: () => p });
+    el.querySelectorAll('[data-quitar-colab]').forEach((b) => b.addEventListener('click', () => quitarColaborador(Number(b.dataset.quitarColab), b.dataset.nombre)));
+    el.querySelector('[data-invitar]')?.addEventListener('click', invitar);
     el.querySelector('[data-edit-cover]')?.addEventListener('click', edit);
-    if (!p.propia) conectarGuardar(el, 'playlist', p.id);
+    if (!p.propia && !p.editable) conectarGuardar(el, 'playlist', p.id);
 
     const tl = el.querySelector('#pltracks .tracks');
-    if (tl && p.propia) {
+    if (tl && p.editable) {
       sortable(tl, '.track', '[data-drag]', async (from, to) => {
         const nuevo = [...canciones];
         const [m] = nuevo.splice(from, 1);
@@ -274,7 +285,52 @@ export async function playlistView(el, { id }, _q, isStale) {
         catch (e) { errorToast(e); }
       });
     }
-    if (p.propia && !sinConexion()) loadRecs();
+    if (p.editable && !sinConexion()) loadRecs();
+  };
+
+  // ── Playlist colaborativa: quién más puede agregar canciones ──
+  const colaboradoresHtml = () => {
+    const l = p.colaboradores || [];
+    if (!l.length && !p.propia) return '';
+    return `<div class="colabs">
+      <span class="colabs-t">${icon('users', 'sm')} ${l.length ? 'Colaboran' : 'Playlist solo tuya'}</span>
+      ${l.map((c) => `<span class="colab">
+        <a href="#/u/${encodeURIComponent(c.username)}" class="colab-a">${c.fotoPerfil ? `<img src="${esc(c.fotoPerfil)}" alt="">` : `<span class="colab-ini">${esc((c.nombre || c.username).slice(0, 1).toUpperCase())}</span>`}<span>${esc(c.nombre || c.username)}</span></a>
+        ${p.propia ? `<button class="icon-btn sm" data-quitar-colab="${c.id}" data-nombre="${esc(c.nombre || c.username)}" aria-label="Quitar a ${esc(c.nombre || c.username)}" title="Quitar">${icon('close', 'sm')}</button>` : ''}</span>`).join('')}
+      ${p.propia ? `<button class="btn sm" data-invitar>${icon('plus', 'sm')} Invitar amigos</button>` : ''}
+    </div>`;
+  };
+  const invitar = async () => {
+    if (sinConexion()) { toast('Necesitas internet para invitar', { error: true }); return; }
+    const username = await promptDialog('Invitar a colaborar', { label: 'Usuario de tu amigo (alguien que sigues o que te sigue)', placeholder: '@usuario', ok: 'Invitar' });
+    if (!username) return;
+    try {
+      const r = await api(`/api/playlists/${p.id}/colaboradores`, { method: 'POST', body: { username } });
+      p = { ...p, ...r };
+      canciones = visibles(p.canciones);
+      lib.upsertPlaylist(r);
+      toast('Invitación enviada: ya puede agregar canciones');
+      draw();
+    } catch (e) { errorToast(e); }
+  };
+  const quitarColaborador = async (uid, nombre) => {
+    if (!await confirmDialog(`${nombre} ya no podrá agregar ni quitar canciones.`, { title: '¿Quitar colaborador?', ok: 'Quitar', danger: true })) return;
+    try {
+      await api(`/api/playlists/${p.id}/colaboradores/${uid}`, { method: 'DELETE' });
+      p = await api('/api/playlists/' + p.id);
+      canciones = visibles(p.canciones);
+      draw();
+    } catch (e) { errorToast(e); }
+  };
+  const salir = async () => {
+    if (!await confirmDialog('Ya no la verás en tu biblioteca ni podrás agregar canciones.', { title: '¿Salir de esta playlist?', ok: 'Salir', danger: true })) return;
+    try {
+      await api(`/api/playlists/${p.id}/colaboradores/${session.user.id}`, { method: 'DELETE' });
+      lib.removePlaylist?.(p.id);
+      await lib.refreshPlaylists();
+      toast('Saliste de la playlist');
+      go('/biblioteca');
+    } catch (e) { errorToast(e); }
   };
 
   const loadRecs = async () => {

@@ -22,13 +22,26 @@ public class RegistroErrores {
     private static final int MAX = 200;
     private final Deque<Map<String, Object>> eventos = new ArrayDeque<>();
 
+    /** Destinos opcionales que registra el soporte (sin depender de él: así no hay ciclos al arrancar). */
+    public static volatile java.util.function.Consumer<ILoggingEvent> incidencias;
+    public static volatile java.util.function.Consumer<ILoggingEvent> consultasLentas;
+
     @PostConstruct
     void registrar() {
         LoggerContext ctx = (LoggerContext) LoggerFactory.getILoggerFactory();
         AppenderBase<ILoggingEvent> a = new AppenderBase<>() {
             @Override
             protected void append(ILoggingEvent e) {
+                // Consultas lentas de Hibernate (INFO) → panel de base de datos del soporte
+                if ("org.hibernate.SQL_SLOW".equals(e.getLoggerName())) {
+                    var d = consultasLentas;
+                    if (d != null) try { d.accept(e); } catch (Exception ignored) { }
+                    return;
+                }
                 if (!e.getLevel().isGreaterOrEqual(Level.WARN)) return;
+                // Centro de incidencias del soporte (se guardan agrupadas en la base de datos)
+                var dest = incidencias;
+                if (dest != null) try { dest.accept(e); } catch (Exception ignored) { }
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("fecha", LocalDateTime.ofInstant(Instant.ofEpochMilli(e.getTimeStamp()), ZoneId.systemDefault()));
                 m.put("nivel", e.getLevel().toString());

@@ -1,5 +1,20 @@
 # Registro de cambios
 
+## Versión 3.1
+- **Centro de soporte técnico** (Administración → Soporte, solo administradores, paquete `soporte`): resumen, monitor del servidor (muestra por minuto), diagnóstico, incidencias agrupadas por huella, revisión de la biblioteca, base de datos, usuarios y sesiones, alertas, seguridad y auditoría, mantenimiento e informes con CSV. Detalle completo en el informe de la entrega.
+- **Copias de seguridad automáticas** de la base de datos: todos los días a las 4:30 y a pedido, en `./respaldos` (`.sql.gz`), se conservan 7. La restauración es manual (se explica en el panel).
+- **Álbumes con el mismo nombre** (Utopia de Romeo Santos y de Travis Scott): se separan por artista principal (`AlbumDTO.clave`, `#/album/X?artista=Y`).
+- **Transición entre canciones** (`mezcla` en `player.js`): segundo `<audio>` que baja mientras sube el siguiente, curva de igual potencia, 0–12 s. No se usa en iPhone.
+- **Volumen parejo** (`nivelador`): mide el RMS con Web Audio, lleva cada canción a ≈ −18 dBFS (−10 a +8 dB) con un limitador y recuerda el ajuste por canción.
+- **Sesión sin internet:** con el token vencido y sin conexión con el servidor se entra igual a las descargas; al volver la conexión el servidor renueva o pide iniciar sesión.
+- **"SpaceMusic está en mantenimiento":** el servidor avisa por SSE antes de apagarse y, si no responde pero hay internet, la app lo distingue de "sin internet".
+- **Gustos al crear la cuenta** (`usuario_gusto`): géneros y artistas que alimentan las recomendaciones; se pueden cambiar en Ajustes.
+- **Pedir una canción** (`solicitud_cancion`): desde el buscador y el menú de la cuenta; Administración → Pedidos y reportes; cada 10 minutos se revisa si ya llegó a la biblioteca y se avisa.
+- **Reportar un problema** (`reporte_cancion`) en el menú de cada canción; al resolverlo se avisa a quien reportó.
+- **Playlists colaborativas** (`playlist_colaborador`): el dueño invita a amigos (seguidos o seguidores); los invitados agregan, quitan y ordenan canciones, no cambian nombre, portada ni visibilidad.
+- **Tu año / tu mes en SpaceMusic** (`#/resumen`): minutos, artistas, canciones, géneros, racha, momento del día y tarjeta para compartir.
+- **Pruebas automáticas** (`src/test`): 17 pruebas (soporte, permisos, copias, colaborativas, pedidos y resumen).
+
 ## Versión 3.0.2
 - **Pantallas sin conexión:** las secciones que necesitan internet muestran "Sin conexión a internet" con un mensaje amable y los botones "Ir a mis descargas" y "Reintentar" (`setGuardiaSinRed` en el router):
   - historial, artista, género, mezclas, perfiles de otros, mensajes, novedades, estadísticas, administración y subir;

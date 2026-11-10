@@ -3,7 +3,7 @@ import './fuentes.js';
 window.SM_TV = true;
 
 import { api, session } from './api.js';
-import { esc, cover, fmtTime, fmtLong, plural, dominantColor, bus, store } from './util.js';
+import { esc, cover, fmtTime, fmtLong, plural, dominantColor, bus, store, albumHref } from './util.js';
 import { icon } from './icons.js';
 import { player, prefs } from './player.js';
 import { parseLrc } from './lrc.js';
@@ -308,7 +308,7 @@ function tarjetasCanciones(songs, ctx) {
   return songs.map((s, i) => `<button class="card f" data-play="${id}" data-i="${i}"><div class="art">${img(s.portadaUrl)}</div>
     <div class="t ellipsis">${esc(s.nombre)}</div><div class="s ellipsis">${esc(s.artista)}</div></button>`).join('');
 }
-const tAlbum = (a) => `<button class="card f" data-album="${esc(a.nombre)}"><div class="art">${img(a.portadaUrl)}</div>
+const tAlbum = (a) => `<button class="card f" data-album="${esc(a.clave || a.nombre)}"><div class="art">${img(a.portadaUrl)}</div>
   <div class="t ellipsis">${esc(a.nombre)}</div><div class="s ellipsis">${esc(a.artista)}</div></button>`;
 const tArtista = (a) => `<button class="card round f" data-artista="${esc(a.nombre)}"><div class="art">${img(a.portadaUrl)}</div>
   <div class="t ellipsis">${esc(a.nombre)}</div><div class="s">${plural(a.totalCanciones, 'canción', 'canciones')}</div></button>`;
@@ -443,7 +443,7 @@ async function vistaAlbum(nombre) {
   const a = await api('/api/albumes/detalle?nombre=' + encodeURIComponent(nombre));
   coleccion({ kind: 'Álbum', titulo: a.nombre, arte: img(a.portadaUrl, 640),
     meta: `${esc(a.artista)}${a.anio ? ' · ' + a.anio : ''} · ${plural(a.totalCanciones, 'canción', 'canciones')} · ${fmtLong(a.duracionTotal)}`,
-    songs: a.canciones, ctx: { type: 'album', label: a.nombre, route: '#/album/' + encodeURIComponent(a.nombre) }, colorDe: a.portadaUrl, pista: true });
+    songs: a.canciones, ctx: { type: 'album', label: a.nombre, route: albumHref(a.nombre, a.artista) }, colorDe: a.portadaUrl, pista: true });
 }
 
 async function vistaArtista(nombre) {

@@ -1,7 +1,7 @@
 // Modo sin conexión: guarda en el dispositivo lo que escuchas, sin descargas manuales.
 // El service worker (sw.js) sirve luego esas canciones, portadas y datos cuando no hay red.
 import { api, audioUrl, deUsuario } from './api.js';
-import { bus, cover } from './util.js';
+import { bus, cover, servidor } from './util.js';
 import { icon } from './icons.js';
 import { player } from './player.js';
 
@@ -144,9 +144,41 @@ function liberar(ids) {
 // Sin conexión: la app muestra solo lo descargado y salta lo que no se puede escuchar.
 let sinRed = typeof navigator !== 'undefined' && navigator.onLine === false;
 export const sinConexion = () => sinRed;
+// Si no responde el servidor pero sí hay internet, es que SpaceMusic está en mantenimiento
+// (se prueba cargando una imagen pequeña de otro sitio; como mucho una vez cada 30 s)
+let ultimaPrueba = 0, avisoMantenimiento = 0;
+function hayInternet() {
+  return new Promise((res) => {
+    const img = new Image();
+    const fin = (ok) => { clearTimeout(t); img.onload = img.onerror = null; res(ok); };
+    const t = setTimeout(() => fin(false), 5000);
+    img.onload = () => fin(true);
+    img.onerror = () => fin(false);
+    img.referrerPolicy = 'no-referrer';
+    img.src = 'https://www.google.com/favicon.ico?_=' + Date.now();
+  });
+}
+async function revisarMantenimiento() {
+  if (navigator.onLine === false) { marcarMantenimiento(false); return; }
+  // El servidor avisó que se iba a reiniciar hace poco
+  if (Date.now() - avisoMantenimiento < 10 * 60000) { marcarMantenimiento(true); return; }
+  if (Date.now() - ultimaPrueba < 30000) return;
+  ultimaPrueba = Date.now();
+  const internet = await hayInternet();
+  if (sinRed) marcarMantenimiento(internet);
+}
+function marcarMantenimiento(si) {
+  if (servidor.mantenimiento === si) return;
+  servidor.mantenimiento = si;
+  document.documentElement.classList.toggle('mantenimiento', si);
+  bus.emit('conexion', !sinRed);
+}
+bus.on('servidor:mantenimiento', () => { avisoMantenimiento = Date.now(); });
+
 function ponerRed(hay) {
   const antes = sinRed;
   sinRed = !hay;
+  if (sinRed) revisarMantenimiento(); else { marcarMantenimiento(false); avisoMantenimiento = 0; }
   document.documentElement.classList.toggle('sin-red', sinRed);
   if (antes !== sinRed) { if (sinRed) actualizarDisponibles(); bus.emit('conexion', !sinRed); }
 }

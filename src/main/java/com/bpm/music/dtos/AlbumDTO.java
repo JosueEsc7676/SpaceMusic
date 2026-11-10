@@ -11,9 +11,11 @@ public record AlbumDTO(
         int duracionTotal,
         int reproducciones,
         String portadaUrl,
-        List<CancionDTO> canciones
+        List<CancionDTO> canciones,
+        /** Identificador del álbum: su nombre, o "Nombre · Artista" si hay dos álbumes con el mismo nombre. */
+        String clave
 ) {
     public AlbumDTO sinCanciones() {
-        return new AlbumDTO(nombre, artista, anio, totalCanciones, duracionTotal, reproducciones, portadaUrl, null);
+        return new AlbumDTO(nombre, artista, anio, totalCanciones, duracionTotal, reproducciones, portadaUrl, null, clave);
     }
 }

@@ -194,6 +194,14 @@ public class RecomendacionService {
 
     // ═══════════════════════ Música "aparte" (cristiana, infantil) ═══════════════════════
 
+    private com.bpm.music.comunidad.UsuarioGustoRepository gustos;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setGustos(com.bpm.music.comunidad.UsuarioGustoRepository gustos) {
+        this.gustos = gustos;
+        com.bpm.music.comunidad.ComunidadService.alCambiarGustos.add(uid -> { cacheMixes.borrar(uid); cacheAparte.borrar(uid); });
+    }
+
     private final CacheTemporal<Long, Set<String>> cacheAparte = new CacheTemporal<>(5 * 60_000, 500);
 
     /** Familias aparte que esta persona sí escucha (3 o más canciones, o el 10 % de lo que escucha y le gusta). */
@@ -210,6 +218,12 @@ public class RecomendacionService {
             int total = Math.max(1, suyas.size());
             Set<String> r = new HashSet<>();
             n.forEach((f, k) -> { if (k >= 3 || k * 10 >= total) r.add(f); });
+            // También si la eligió entre sus gustos al crear la cuenta
+            if (gustos != null) for (var g : gustos.findByUsuarioId(userId)) {
+                if (g.getTipo() != com.bpm.music.comunidad.UsuarioGusto.Tipo.GENERO) continue;
+                String f = GeneroService.familia(g.getValor());
+                if (GeneroService.APARTE.contains(f)) r.add(f);
+            }
             return r;
         });
     }
@@ -402,5 +416,11 @@ public class RecomendacionService {
             ultimo = normalizar(c.getArtista());
         }
         return out;
+    }
+
+    /** Soporte → Mantenimiento: vacía las mezclas y gustos calculados (se recalculan solos al pedirlos). */
+    public void limpiarCaches() {
+        cacheMixes.limpiar();
+        cacheAparte.limpiar();
     }
 }

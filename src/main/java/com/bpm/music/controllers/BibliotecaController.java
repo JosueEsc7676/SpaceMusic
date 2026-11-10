@@ -103,8 +103,8 @@ public class BibliotecaController {
     }
 
     @GetMapping("/albumes/detalle")
-    public ResponseEntity<AlbumDTO> album(@RequestParam String nombre) {
-        return biblioteca.album(nombre).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<AlbumDTO> album(@RequestParam String nombre, @RequestParam(required = false) String artista) {
+        return biblioteca.album(nombre, artista).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
     }
 
     // ── Artistas ──

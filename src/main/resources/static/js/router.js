@@ -1,7 +1,7 @@
 // Navegación por rutas con # (funciona el botón atrás del navegador)
 import { $, bus } from './util.js';
 import { icon } from './icons.js';
-import { esc } from './util.js';
+import { esc, textoSinRed, detalleSinRed } from './util.js';
 
 const routes = [];
 let renderSeq = 0;
@@ -13,8 +13,8 @@ export function setGuardiaSinRed(fn) { guardia = fn; }
 /** Pantalla amable para una sección que necesita internet. */
 export function pantallaSinRed(seccion) {
   return `<div class="sin-red-view">${icon('download', 'xl')}
-    <h2>Sin conexión a internet</h2>
-    <p>${seccion ? `Para ver <b>${esc(seccion)}</b> necesitas estar en línea.` : 'Esta sección necesita internet.'}<br>Mientras tanto, puedes escuchar lo que descargaste.</p>
+    <h2>${textoSinRed()}</h2>
+    <p>${detalleSinRed()}${seccion ? `Para ver <b>${esc(seccion)}</b> necesitas estar en línea.` : 'Esta sección necesita internet.'}<br>Mientras tanto, puedes escuchar lo que descargaste.</p>
     <div class="row wrap" style="justify-content:center"><a class="btn primary" href="#/">Ir a mis descargas</a><button class="btn" data-reintentar-red>Reintentar</button></div></div>`;
 }
 function pintarSinRed(view, seccion) {

@@ -1,10 +1,11 @@
 // Componentes de interfaz: avisos, menús, diálogos, tarjetas y listas
 import { icon } from './icons.js';
 import { sinConexion, disponible, marcaDescarga } from './offline.js';
-import { esc, $, $$, bus, fmtTime, fmtNum, plural, cover, coverImg, mosaic, isMobile, norm } from './util.js';
+import { esc, $, $$, bus, fmtTime, fmtNum, plural, cover, coverImg, mosaic, isMobile, norm, albumHref } from './util.js';
 import { api, session, downloadUrl, upload } from './api.js';
 import { lib } from './state.js';
 import { player } from './player.js';
+import { reportarProblema } from './comunidad.js';
 
 // ═══════════════════ Avisos ═══════════════════
 
@@ -197,9 +198,9 @@ export function cardSong(s, listId, i) {
 }
 
 export function cardAlbum(a) {
-  const href = '#/album/' + encodeURIComponent(a.nombre);
+  const href = albumHref(a.nombre, a.artista);
   return `<a class="card" href="${href}" data-album="${esc(a.nombre)}">
-    <div class="art">${coverImg(a.portadaUrl, 300, a.nombre)}${playBtn(`data-act="play-album" data-name="${esc(a.nombre)}"`)}</div>
+    <div class="art">${coverImg(a.portadaUrl, 300, a.nombre)}${playBtn(`data-act="play-album" data-name="${esc(a.clave || a.nombre)}"`)}</div>
     <div class="t ellipsis">${esc(a.nombre)}</div>
     <div class="s">${a.anio ? a.anio + ' • ' : ''}${esc(a.artista)}</div>
   </a>`;
@@ -221,7 +222,7 @@ export function cardPlaylist(p) {
   return `<a class="card" href="#/playlist/${p.id}">
     <div class="art">${playlistArt(p)}${p.cancionesCount ? playBtn(`data-act="play-playlist" data-id="${p.id}"`) : ''}</div>
     <div class="t ellipsis">${esc(p.nombre)}</div>
-    <div class="s">${p.propia === false ? `<span class="badge">${icon('globe', 'sm')} Pública</span> ${p.autor ? 'de ' + esc(p.autor) : ''}` : 'Playlist'} • ${plural(p.cancionesCount, 'canción', 'canciones')}</div>
+    <div class="s">${p.colaborativa && p.editable ? `<span class="badge">${icon('users', 'sm')} Colaborativa</span>${p.propia === false && p.autor ? ' de ' + esc(p.autor) : ''}` : p.propia === false ? `<span class="badge">${icon('globe', 'sm')} Pública</span> ${p.autor ? 'de ' + esc(p.autor) : ''}` : 'Playlist'} • ${plural(p.cancionesCount, 'canción', 'canciones')}</div>
   </a>`;
 }
 
@@ -277,7 +278,7 @@ export function trackList(songs, opts = {}) {
       <div class="main-col">${showCover ? coverImg(s.portadaUrl, 64, '') : ''}
         <div class="tt"><div class="name ellipsis">${esc(s.nombre)}${s.letraSincronizada ? '<span class="lrc-tag" title="Letra sincronizada">LRC</span>' : ''}</div>
         <div class="artist ellipsis"><a href="#/artista/${encodeURIComponent(s.artista)}" data-stop>${esc(s.artista)}</a></div></div></div>
-      ${showAlbum ? `<div class="album ellipsis">${s.album && s.album !== 'Single' ? `<a href="#/album/${encodeURIComponent(s.album)}" data-stop>${esc(s.album)}</a>` : '<span class="dim">Sencillo</span>'}</div>` : ''}
+      ${showAlbum ? `<div class="album ellipsis">${s.album && s.album !== 'Single' ? `<a href="${albumHref(s.album, s.artista)}" data-stop>${esc(s.album)}</a>` : '<span class="dim">Sencillo</span>'}</div>` : ''}
       <div class="end">
         <button class="icon-btn fav-btn ${fav ? 'liked' : ''}" data-act="fav" data-id="${s.id}" aria-label="${fav ? 'Quitar de Me gusta' : 'Me gusta'}">${icon(fav ? 'heartFill' : 'heart')}</button>
         <span class="dl-slot" data-dl-slot="${s.id}">${marcaDescarga(s.id)}</span>
@@ -327,8 +328,9 @@ export function songMenu(anchor, song, { playlistId } = {}) {
     playlistId ? { label: 'Quitar de esta playlist', icon: 'trash', fn: () => bus.emit('playlist:remove', { playlistId, song }) } : null,
     { sep: true },
     { label: 'Ir al artista', icon: 'user', fn: () => { location.hash = '#/artista/' + encodeURIComponent(song.artista); } },
-    song.album && song.album !== 'Single' ? { label: 'Ir al álbum', icon: 'disc', fn: () => { location.hash = '#/album/' + encodeURIComponent(song.album); } } : null,
+    song.album && song.album !== 'Single' ? { label: 'Ir al álbum', icon: 'disc', fn: () => { location.hash = albumHref(song.album, song.artista); } } : null,
     { label: 'Ver letra', icon: 'mic', fn: () => bus.emit('np:lyrics', song) },
+    { label: 'Reportar un problema', icon: 'flag', fn: () => reportarProblema(song) },
     ...(session.canEdit ? [
       { sep: true },
       { label: 'Editar información', icon: 'edit', fn: () => editSong(song) },

@@ -182,3 +182,15 @@ export async function copyText(text) {
 }
 
 export const isMobile = () => matchMedia('(max-width: 820px)').matches;
+
+/** Enlace a un álbum. Lleva el artista para distinguir álbumes con el mismo nombre (p. ej. dos "Utopia"). */
+export function albumHref(nombre, artista) {
+  const a = artista && artista !== 'Varios artistas' ? '?artista=' + encodeURIComponent(artista) : '';
+  return '#/album/' + encodeURIComponent(nombre) + a;
+}
+
+// ── ¿Sin internet o el servidor en mantenimiento? (lo decide offline.js) ──
+export const servidor = { mantenimiento: false };
+/** Título para los avisos sin conexión: distingue "sin internet" de "SpaceMusic en mantenimiento". */
+export const textoSinRed = () => (servidor.mantenimiento ? 'SpaceMusic está en mantenimiento' : 'Sin conexión a internet');
+export const detalleSinRed = () => (servidor.mantenimiento ? 'Estamos actualizando el servidor; vuelve en unos minutos. ' : '');

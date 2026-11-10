@@ -56,3 +56,4 @@ android-tv/*.apk
 android-movil/build/
 android-movil/*.apk
 android-movil/*.idsig
+respaldos/

@@ -32,4 +32,10 @@ public class PlaylistDTO {
     private LocalDateTime fechaActualizacion;
     /** Solo se incluye en el detalle. */
     private List<CancionDTO> canciones;
+    /** Tiene personas invitadas que también pueden agregar canciones. */
+    private boolean colaborativa;
+    /** El usuario que la pide puede agregar, quitar y ordenar canciones (dueño o invitado). */
+    private boolean editable;
+    /** Invitados (solo en el detalle): id, username, nombre, avatarUrl. */
+    private List<java.util.Map<String, Object>> colaboradores;
 }

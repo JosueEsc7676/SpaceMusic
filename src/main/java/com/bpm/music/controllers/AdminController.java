@@ -88,8 +88,10 @@ public class AdminController {
 
     @PutMapping("/usuarios/{userId}/rol")
     @Transactional
-    public ResponseEntity<Map<String, Object>> rol(@PathVariable Long userId, @RequestBody Map<String, String> b) {
+    public ResponseEntity<Map<String, Object>> rol(@PathVariable Long userId, @RequestBody Map<String, String> b,
+                                                   jakarta.servlet.http.HttpServletRequest req) {
         Usuario u = usuario(userId);
+        com.bpm.music.soporte.AuditoriaInterceptor.detalle(req, "Rol de @" + u.getUsername() + ": " + u.getRol() + " → " + b.get("rol"));
         Usuario.Rol nuevo;
         try {
             nuevo = Usuario.Rol.valueOf(b.get("rol"));

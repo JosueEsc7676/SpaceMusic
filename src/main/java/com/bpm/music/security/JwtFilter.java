@@ -86,6 +86,7 @@ public class JwtFilter extends OncePerRequestFilter {
                     Cuenta c = cuenta(userId);
                     long emitido = claims.getIssuedAt() == null ? 0 : claims.getIssuedAt().getTime() / 1000;
                     if (c.valida() && emitido >= c.sesionesDesde()) {
+                        req.setAttribute("sm.uid", userId); // para el monitor de soporte (sesiones y auditoría)
                         var auth = new UsernamePasswordAuthenticationToken(
                                 userId, null, List.of(new SimpleGrantedAuthority("ROLE_" + c.rol())));
                         SecurityContextHolder.getContext().setAuthentication(auth);

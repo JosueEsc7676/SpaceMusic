@@ -1,6 +1,6 @@
 // Pantalla de inicio (identidad "Noir")
 import { api, session } from '../api.js';
-import { esc, cover, coverImg, mosaic, fmtTime } from '../util.js';
+import { esc, cover, coverImg, mosaic, fmtTime, albumHref , textoSinRed, detalleSinRed } from '../util.js';
 import { icon } from '../icons.js';
 import { lib } from '../state.js';
 import { setHero } from '../router.js';
@@ -63,13 +63,30 @@ function inicioSinConexion(el, head) {
   const pins = cols.map((c) => {
     if (c.tipo === 'favoritos') return `<a class="pin" href="#/favoritos"><span class="pin-art art-liked">${icon('heartFill')}</span><span class="pin-t ellipsis">Me gusta</span></a>`;
     if (c.tipo === 'playlist') return `<a class="pin" href="#/playlist/${c.datos.id}"><span class="pin-art">${playlistArt(c.datos, 160)}</span><span class="pin-t ellipsis">${esc(c.datos.nombre)}</span></a>`;
-    if (c.tipo === 'album') return `<a class="pin" href="#/album/${encodeURIComponent(c.datos.nombre)}"><span class="pin-art">${coverImg(c.datos.portadaUrl, 160, c.datos.nombre)}</span><span class="pin-t ellipsis">${esc(c.datos.nombre)}</span></a>`;
+    if (c.tipo === 'album') return `<a class="pin" href="${albumHref(c.datos.nombre, c.datos.artista)}"><span class="pin-art">${coverImg(c.datos.portadaUrl, 160, c.datos.nombre)}</span><span class="pin-t ellipsis">${esc(c.datos.nombre)}</span></a>`;
     return '';
   }).join('');
   el.innerHTML = `${head}
-    <div class="offline-banner offline-grande">${icon('download', 'sm')}<div><b>Sin conexión a internet</b><span>Puedes seguir navegando entre lo que descargaste.</span></div></div>
+    <div class="offline-banner offline-grande">${icon('download', 'sm')}<div><b>${textoSinRed()}</b><span>${detalleSinRed()}Puedes seguir navegando entre lo que descargaste.</span></div></div>
     ${pins ? section('Tus descargas', `<div class="pins">${pins}</div>`, { eyebrow: 'Playlists, álbumes y Me gusta' })
       : emptyState('download', 'No tienes descargas en este dispositivo', 'Cuando tengas conexión, abre tu Me gusta, una playlist o un álbum y toca el botón de descarga.')}`;
+}
+
+/** "Tu año en SpaceMusic" en diciembre y la primera quincena de enero; "Tu mes" la primera semana de cada mes. */
+function bannerResumen() {
+  const h = new Date();
+  const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  let titulo, href;
+  if (h.getMonth() === 11 || (h.getMonth() === 0 && h.getDate() <= 15)) {
+    const anio = h.getMonth() === 11 ? h.getFullYear() : h.getFullYear() - 1;
+    titulo = `Tu ${anio} en SpaceMusic`;
+    href = `#/resumen?anio=${anio}`;
+  } else if (h.getDate() <= 7) {
+    const m = new Date(h.getFullYear(), h.getMonth() - 1, 1);
+    titulo = `Tu ${MES[m.getMonth()]} en SpaceMusic`;
+    href = `#/resumen?anio=${m.getFullYear()}&mes=${m.getMonth() + 1}`;
+  } else return '';
+  return `<a class="resumen-banner" href="${href}">${icon('gift')}<div><b>${esc(titulo)}</b><span>Tus artistas, canciones y minutos escuchados</span></div>${icon('right', 'sm')}</a>`;
 }
 
 export async function homeView(el, _p, _q, isStale) {
@@ -109,6 +126,7 @@ export async function homeView(el, _p, _q, isStale) {
       ${spotlight(mixes[0])}
       ${pins.length ? `<div class="pins">${pins.join('')}</div>` : ''}
     </div>
+    ${d.recientes?.length ? bannerResumen() : ''}
     <div data-amigos></div>
     ${section('Continúa escuchando', songShelf(d.recientes, { type: 'historial', label: 'Escuchado recientemente' }), { more: '#/historial', eyebrow: 'Tu historial' })}
     ${section('Tus mezclas', shelf(mixes.map(cardMix).join('')), { eyebrow: 'Se actualizan con lo que escuchas' })}

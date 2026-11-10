@@ -1,12 +1,13 @@
 // Perfil, ajustes y estadísticas personales
 import { api, session, logout } from '../api.js';
-import { esc, fmtNum, fmtDate, cover, coverImg, plural, store } from '../util.js';
+import { esc, fmtNum, fmtDate, cover, coverImg, plural, store , textoSinRed, detalleSinRed } from '../util.js';
 import { icon } from '../icons.js';
-import { prefs, fx, EQ_BANDS, EQ_PRESETS } from '../player.js';
+import { prefs, fx, EQ_BANDS, EQ_PRESETS, nivelador, mezcla } from '../player.js';
 import { setHero, setTitle } from '../router.js';
 import { toast, errorToast, modal, registerList, trackList, emptyState } from '../ui.js';
 import { bus } from '../util.js';
 import { cancionesGuardadas, sinConexion } from '../offline.js';
+import { elegirGustos } from '../comunidad.js';
 
 export const ACCENTS = {
   Perla: ['#f5f5f7', '#000000'],
@@ -46,7 +47,7 @@ export async function profileView(el, _p, _q, isStale) {
   const accent = ACCENTS[store.get('sm_accent', 'Perla')] ? store.get('sm_accent', 'Perla') : 'Perla';
 
   el.innerHTML = `
-    ${sinConexion() ? `<div class="offline-banner">${icon('download', 'sm')} Sin conexión a internet · los ajustes de reproducción y el color funcionan; los cambios de tu cuenta necesitan internet</div>` : ''}
+    ${sinConexion() ? `<div class="offline-banner">${icon('download', 'sm')} ${textoSinRed()} · los ajustes de reproducción y el color funcionan; los cambios de tu cuenta necesitan internet</div>` : ''}
     <div class="profile-head">
       <label class="avatar-pick">${avatarHtml(u, 'lg')}<div class="ov">${icon('edit')}&nbsp;Cambiar foto</div><input type="file" accept="image/*" hidden data-avatar></label>
       <div><div class="kind" style="font-size:13px;font-weight:700">Perfil</div>
@@ -92,6 +93,16 @@ export async function profileView(el, _p, _q, isStale) {
           <label class="switch"><input type="checkbox" data-pref="visualizer" ${prefs.visualizer ? 'checked' : ''}><span></span></label></div>
         <div class="setting-row"><div><div class="t">Ecualizador</div><div class="s">${prefs.eqEnabled ? 'Activado' : 'Desactivado'}</div></div>
           <button class="btn sm" data-eq>${icon('sliders', 'sm')} Ajustar</button></div>
+        ${nivelador.disponible ? `<div class="setting-row"><div><div class="t">Volumen parejo</div><div class="s">Todas las canciones suenan a un volumen parecido</div></div>
+          <label class="switch"><input type="checkbox" data-normalizar ${prefs.normalizar ? 'checked' : ''}><span></span></label></div>` : ''}
+        ${mezcla.disponible ? `<div class="setting-row"><div><div class="t">Transición entre canciones</div><div class="s" data-mezcla-txt>${prefs.mezcla ? `${prefs.mezcla} s: una canción se funde con la siguiente` : 'Desactivada'}</div></div>
+          <input type="range" min="0" max="12" step="1" value="${Number(prefs.mezcla) || 0}" data-mezcla aria-label="Segundos de transición" style="width:130px"></div>` : ''}
+        <div class="setting-row"><div><div class="t">Tus gustos</div><div class="s">Géneros y artistas para tu inicio y tus mixes</div></div>
+          <button class="btn sm" data-gustos>${icon('heart', 'sm')} Elegir</button></div>
+        <div class="setting-row"><div><div class="t">Tu resumen</div><div class="s">Lo que más escuchaste este mes y este año</div></div>
+          <a class="btn sm" href="#/resumen">${icon('gift', 'sm')} Ver</a></div>
+        <div class="setting-row"><div><div class="t">Pedir una canción</div><div class="s">¿Falta algo? Pídelo y te avisamos cuando esté</div></div>
+          <a class="btn sm" href="#/pedidos">${icon('request', 'sm')} Mis pedidos</a></div>
         <div class="setting-row"><div><div class="t">Color de la app</div></div>
           <div class="swatches">${Object.entries(ACCENTS).map(([n, [c]]) => `<button class="swatch ${n === accent ? 'active' : ''}" data-accent="${n}" title="${n}" style="background:${c}"></button>`).join('')}</div></div>
         <div class="setting-row"><div><div class="t">Sonido de inicio</div><div class="s">Suena al abrir la app junto al logo</div></div>
@@ -171,6 +182,14 @@ export async function profileView(el, _p, _q, isStale) {
       return r;
     },
   }).then((r) => r && profileView(el, {}, {}, () => false));
+  $('[data-gustos]')?.addEventListener('click', () => elegirGustos().catch(errorToast));
+  $('[data-normalizar]')?.addEventListener('change', (e) => { nivelador.activar(e.target.checked); toast(e.target.checked ? 'Volumen parejo activado' : 'Volumen parejo desactivado'); });
+  const rango = $('[data-mezcla]');
+  rango?.addEventListener('input', () => {
+    const v = Number(rango.value);
+    $('[data-mezcla-txt]').textContent = v ? `${v} s: una canción se funde con la siguiente` : 'Desactivada';
+  });
+  rango?.addEventListener('change', () => { prefs.mezcla = Number(rango.value); prefs.save(); toast('Preferencia guardada'); });
   el.querySelectorAll('[data-pref]').forEach((c) => c.addEventListener('change', () => {
     prefs[c.dataset.pref] = c.checked;
     prefs.save();

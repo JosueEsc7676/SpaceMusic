@@ -37,6 +37,19 @@ public class UsuarioService {
         this.biblioteca = biblioteca;
     }
 
+    /** Gustos elegidos al crear la cuenta (opcional: ayudan a recomendar desde el primer día). */
+    private com.bpm.music.comunidad.UsuarioGustoRepository gustos;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setGustos(com.bpm.music.comunidad.UsuarioGustoRepository gustos) {
+        this.gustos = gustos;
+        com.bpm.music.comunidad.ComunidadService.alCambiarGustos.add(uid -> { cachePesos.borrar(uid); cacheGeneros.borrar(uid); });
+    }
+
+    private List<com.bpm.music.comunidad.UsuarioGusto> elegidos(Long userId) {
+        return gustos == null || userId == null ? List.of() : gustos.findByUsuarioId(userId);
+    }
+
     public static String sesionDe(Long userId) {
         return "u" + userId;
     }
@@ -235,6 +248,9 @@ public class UsuarioService {
         for (Long id : favRepo.findCancionIdsByUsuario(userId)) {
             biblioteca.porId(id).ifPresent(c -> pesos.merge(BibliotecaService.normalizar(c.getArtista()), 3L, Long::sum));
         }
+        // Artistas elegidos al crear la cuenta: pesan como unos cuantos Me gusta
+        for (var g : elegidos(userId))
+            if (g.getTipo() == com.bpm.music.comunidad.UsuarioGusto.Tipo.ARTISTA) pesos.merge(BibliotecaService.normalizar(g.getValor()), 5L, Long::sum);
         return pesos;
     }
 
@@ -248,7 +264,11 @@ public class UsuarioService {
             biblioteca.porId(((Number) r[0]).longValue()).ifPresent(c ->
                     g.merge(BibliotecaService.normalizar(c.getGenero()), ((Number) r[1]).longValue(), Long::sum));
         }
-        return g.entrySet().stream().sorted(Map.Entry.<String, Long>comparingByValue().reversed())
-                .limit(5).map(Map.Entry::getKey).collect(Collectors.toSet());
+        Set<String> r = g.entrySet().stream().sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(5).map(Map.Entry::getKey).collect(Collectors.toCollection(HashSet::new));
+        // Géneros elegidos al crear la cuenta
+        for (var x : elegidos(userId))
+            if (x.getTipo() == com.bpm.music.comunidad.UsuarioGusto.Tipo.GENERO) r.add(BibliotecaService.normalizar(x.getValor()));
+        return r;
     }
 }

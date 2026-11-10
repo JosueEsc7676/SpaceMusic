@@ -1,6 +1,6 @@
 // Pantalla "Reproduciendo ahora", letras sincronizadas y cola
 import { api, session } from './api.js';
-import { esc, $, bus, cover, coverImg, fmtTime, dominantColor, store, isMobile, fmtDate } from './util.js';
+import { esc, $, bus, cover, coverImg, fmtTime, dominantColor, store, isMobile, fmtDate, albumHref } from './util.js';
 import { icon } from './icons.js';
 import { player, prefs, fx } from './player.js';
 import { lib } from './state.js';
@@ -245,7 +245,7 @@ export const np = {
       { label: fav ? 'Quitar de Me gusta' : 'Agregar a Me gusta', icon: fav ? 'heartFill' : 'heart', fn: () => lib.toggleFav(s.id).catch(errorToast) },
       { label: 'Agregar a playlist', icon: 'plusCircle', fn: () => import('./ui.js').then((u) => u.pickPlaylist([s])) },
       { label: 'Ir al artista', icon: 'user', fn: () => { this.close(); location.hash = '#/artista/' + encodeURIComponent(s.artista); } },
-      s.album && s.album !== 'Single' ? { label: 'Ir al álbum', icon: 'disc', fn: () => { this.close(); location.hash = '#/album/' + encodeURIComponent(s.album); } } : null,
+      s.album && s.album !== 'Single' ? { label: 'Ir al álbum', icon: 'disc', fn: () => { this.close(); location.hash = albumHref(s.album, s.artista); } } : null,
       { sep: true },
       conSync ? { label: `Ajustar sincronía (${fmtOffCorto(getOffset(s.id))})`, icon: 'clock', fn: () => this.menuSync(anchor) } : null,
       session.canEdit ? { label: 'Editar letra', icon: 'edit', fn: () => editLyrics(s) } : null,

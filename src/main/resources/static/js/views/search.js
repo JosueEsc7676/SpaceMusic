@@ -1,11 +1,12 @@
 // Búsqueda
 import { api , deUsuario } from '../api.js';
 import { cardPersona } from './people.js';
-import { esc, store, coverImg, plural, norm } from '../util.js';
+import { esc, store, coverImg, plural, norm , textoSinRed, detalleSinRed } from '../util.js';
 import { colecciones, sinConexion, disponible } from '../offline.js';
 import { icon } from '../icons.js';
 import { setHero, setTitle } from '../router.js';
 import { trackList, cardAlbum, cardArtist, cardPlaylist, cardGenre, cardSong, section, emptyState, registerList, getList } from '../ui.js';
+import { pedirCancion } from '../comunidad.js';
 import { player } from '../player.js';
 
 const RECENT_BASE = 'sm_busquedas';
@@ -50,7 +51,7 @@ export async function searchView(el, _p, query, isStale) {
       .filter((s) => disponible(s.id) && !vistas.has(s.id) && vistas.add(s.id))
       .filter((s) => norm(`${s.nombre} ${s.artista} ${s.album || ''}`).includes(nq));
     const cols = colecciones().filter((c) => c.tipo !== 'favoritos' && norm(c.datos.nombre || '').includes(nq));
-    el.innerHTML = `<div class="offline-banner">${icon('download', 'sm')} Sin conexión a internet · resultados de tus descargas</div>
+    el.innerHTML = `<div class="offline-banner">${icon('download', 'sm')} ${textoSinRed()} · resultados de tus descargas</div>
       ${cols.length ? section('Playlists y álbumes', `<div class="grid">${cols.map((c) => (c.tipo === 'album' ? cardAlbum(c.datos) : cardPlaylist({ ...c.datos, cancionesCount: c.canciones.length }))).join('')}</div>`) : ''}
       ${canciones.length ? section('Canciones', trackList(canciones, { context: { type: 'busqueda', label: q, route: '#/buscar?q=' + encodeURIComponent(q) } })) : ''}
       ${!cols.length && !canciones.length ? emptyState('search', 'Nada descargado coincide', 'Sin conexión solo se busca entre tus descargas.') : ''}`;
@@ -69,7 +70,9 @@ export async function searchView(el, _p, query, isStale) {
     `<a class="chip ${tab === k ? 'active' : ''}" href="#/buscar?q=${encodeURIComponent(q)}${k === 'todo' ? '' : '&tab=' + k}">${l}</a>`).join('')}</div>`;
 
   if (!total) {
-    el.innerHTML = chips + emptyState('search', `Sin resultados para “${q}”`, 'Revisa la ortografía o prueba con menos palabras.');
+    el.innerHTML = chips + emptyState('search', `Sin resultados para “${q}”`, 'Revisa la ortografía o prueba con menos palabras. ¿No está? Pídela y te avisamos cuando llegue.',
+      `<button class="btn primary" data-pedir>${icon('request', 'sm')} Pedir esta canción</button>`);
+    el.querySelector('[data-pedir]').onclick = () => pedirCancion({ titulo: q });
     return;
   }
 

@@ -71,7 +71,7 @@ async function consultar() {
 }
 
 /** Panel de notificaciones (campana). */
-const ICONO = { ACTUALIZACION: 'sparkles', AVISO: 'bell', SUBIDA: 'upload', CANCIONES: 'note', PLAYLIST: 'library', COLABORADOR: 'star', SEGUIDOR: 'user', AMIGO: 'users' };
+const ICONO = { ACTUALIZACION: 'sparkles', AVISO: 'bell', SUBIDA: 'upload', ALERTA: 'shield', SOLICITUD: 'request', REPORTE: 'flag', CANCIONES: 'note', PLAYLIST: 'library', COLABORADOR: 'star', SEGUIDOR: 'user', AMIGO: 'users' };
 
 function filaNotif(n) {
   const fig = n.de ? avatarPersona(n.de) : `<span class="notif-ico t-${esc(n.tipo)}">${icon(ICONO[n.tipo] || 'bell', 'sm')}</span>`;
@@ -172,6 +172,8 @@ function conectarEnVivo() {
     toast(`${d.nombre}: ${texto}`, { ms: 6000, action: { label: 'Ver', fn: () => { location.hash = ruta; } } });
     avisoSistema(d.nombre, texto, ruta);
   });
+  // El servidor avisa antes de reiniciarse: si se corta la conexión, se muestra "en mantenimiento"
+  fuente.addEventListener('mantenimiento', () => bus.emit('servidor:mantenimiento'));
   fuente.addEventListener('visto', (e) => { try { bus.emit('dm:visto', JSON.parse(e.data)); } catch { } });
   fuente.addEventListener('notificacion', () => consultar());
   fuente.addEventListener('actividad', (e) => { try { bus.emit('amigo:actividad', JSON.parse(e.data)); } catch { } });

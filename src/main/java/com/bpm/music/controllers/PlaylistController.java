@@ -130,4 +130,17 @@ public class PlaylistController {
                 .cacheControl(CacheControl.maxAge(30, TimeUnit.DAYS).cachePublic())
                 .body(new FileSystemResource(p));
     }
+
+    // ── Playlists colaborativas ──
+
+    @PostMapping("/{id}/colaboradores")
+    public PlaylistDTO invitar(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        return service.invitar(id, CurrentUser.id(), body.get("username"));
+    }
+
+    @DeleteMapping("/{id}/colaboradores/{usuarioId}")
+    public ResponseEntity<Void> quitarColaborador(@PathVariable Long id, @PathVariable Long usuarioId) {
+        service.quitarColaborador(id, CurrentUser.id(), usuarioId);
+        return ResponseEntity.noContent().build();
+    }
 }

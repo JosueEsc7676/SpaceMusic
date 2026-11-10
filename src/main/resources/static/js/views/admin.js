@@ -6,6 +6,8 @@ import { setHero, setTitle } from '../router.js';
 import { toast, errorToast, confirmDialog, promptDialog, emptyState, trackList, cardArtist, modal, genreColor } from '../ui.js';
 import { bus } from '../util.js';
 import { avatarHtml } from './account.js';
+import { centroSoporte } from './soporte.js';
+import { pedidosTab } from './pedidos-admin.js';
 import { EXT, agregar, items, resumenLote, limpiar, tamano } from '../subidas.js';
 
 let poll = null;
@@ -16,19 +18,21 @@ export async function adminView(el, _p, query, isStale) {
   const tab = query.tab || 'resumen';
   setTitle('Administración');
   setHero([120, 40, 50]);
-  const tabs = [['resumen', 'Resumen'], ['soporte', 'Soporte'], ['generos', 'Géneros'], ['cuentas', 'Cuentas nuevas'], ['biblioteca', 'Biblioteca'], ['usuarios', 'Usuarios'], ['solicitudes', 'Colaboradores']];
-  const resumen = await api('/api/admin/resumen');
+  const tabs = [['resumen', 'Resumen'], ['soporte', 'Soporte'], ['generos', 'Géneros'], ['cuentas', 'Cuentas nuevas'], ['biblioteca', 'Biblioteca'], ['usuarios', 'Usuarios'], ['solicitudes', 'Colaboradores'], ['pedidos', 'Pedidos y reportes']];
+  const [resumen, com] = await Promise.all([api('/api/admin/resumen'), api('/api/admin/comunidad/conteos').catch(() => ({}))]);
+  const pendCom = (com.solicitudesPendientes || 0) + (com.reportesAbiertos || 0);
   if (isStale()) return;
   el.innerHTML = `<div class="section-head" style="margin-top:8px"><h2 style="font-size:28px">${icon('shield')} Administración</h2></div>
-    <div class="chips">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? 'active' : ''}" href="#/admin?tab=${k}">${l}${k === 'solicitudes' && resumen.solicitudesPendientes ? ` <span class="badge warning">${resumen.solicitudesPendientes}</span>` : ''}${k === 'cuentas' && resumen.cuentasPendientes ? ` <span class="badge warning">${resumen.cuentasPendientes}</span>` : ''}</a>`).join('')}</div>
+    <div class="chips">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? 'active' : ''}" href="#/admin?tab=${k}">${l}${k === 'solicitudes' && resumen.solicitudesPendientes ? ` <span class="badge warning">${resumen.solicitudesPendientes}</span>` : ''}${k === 'cuentas' && resumen.cuentasPendientes ? ` <span class="badge warning">${resumen.cuentasPendientes}</span>` : ''}${k === 'pedidos' && pendCom ? ` <span class="badge warning">${pendCom}</span>` : ''}</a>`).join('')}</div>
     <div data-body></div>`;
   const body = el.querySelector('[data-body]');
   if (tab === 'resumen') await resumenTab(body, resumen);
   else if (tab === 'biblioteca') await bibliotecaTab(body);
   else if (tab === 'usuarios') await usuariosTab(body);
   else if (tab === 'cuentas') await cuentasTab(body);
-  else if (tab === 'soporte') await soporteTab(body);
+  else if (tab === 'soporte') await centroSoporte(body, query);
   else if (tab === 'generos') await generosTab(body);
+  else if (tab === 'pedidos') await pedidosTab(body, query);
   else await solicitudesTab(body);
 }
 
@@ -272,84 +276,6 @@ export async function uploadView(el) {
 }
 
 // ═══════════════════ Soporte técnico ═══════════════════
-
-const dur = (seg) => {
-  const d = Math.floor(seg / 86400), h = Math.floor((seg % 86400) / 3600), m = Math.floor((seg % 3600) / 60);
-  return d ? `${d} d ${h} h` : h ? `${h} h ${m} min` : `${m} min`;
-};
-const barra = (usado, total) => {
-  const pct = total ? Math.min(100, Math.round((usado / total) * 100)) : 0;
-  return `<div class="progress-line ${pct > 85 ? 'alto' : ''}"><i style="width:${pct}%"></i></div>`;
-};
-
-async function soporteTab(el) {
-  const [s, errs] = await Promise.all([api('/api/admin/sistema'), api('/api/admin/errores')]);
-  const stat = (ico, k, v, d = '') => `<div class="stat"><div class="k">${icon(ico)} ${k}</div><div class="v">${v}</div>${d ? `<div class="d">${d}</div>` : ''}</div>`;
-  const usadoDisco = Math.max(0, s.discoTotalGb - s.discoLibreGb);
-  el.innerHTML = `
-    <div class="stat-cards">
-      ${stat('check', 'Estado', 'En línea', `Versión ${esc(s.version || '—')} · encendido hace ${dur(s.activoSegundos)}`)}
-      ${stat('users', 'Conectados ahora', fmtNum(s.enLinea.length), plural(s.enLinea.reduce((a, u) => a + u.dispositivos, 0), 'dispositivo', 'dispositivos'))}
-      ${stat('play', 'Reproducciones', fmtNum(s.reproducciones24h), 'en las últimas 24 horas')}
-      ${stat('info', 'Errores', fmtNum(s.erroresRecientes), s.erroresRecientes ? 'revisa la lista de abajo' : 'todo en orden')}
-    </div>
-    <div class="panels">
-      <div class="panel"><h3>${icon('sliders')} Servidor</h3>
-        <div class="kv"><span>Memoria</span><b>${fmtNum(s.memoriaUsadaMb)} de ${fmtNum(s.memoriaMaxMb)} MB</b></div>${barra(s.memoriaUsadaMb, s.memoriaMaxMb)}
-        <div class="kv"><span>Disco de la música</span><b>${s.discoLibreGb} GB libres de ${s.discoTotalGb} GB</b></div>${barra(usadoDisco, s.discoTotalGb)}
-        <div class="kv"><span>Procesador</span><b>${s.procesadores} núcleos${s.carga != null ? ` · carga ${s.carga}` : ''}</b></div>
-        <div class="kv"><span>Sistema</span><b>${esc(s.sistema)} · Java ${esc(s.java)}</b></div>
-        <div class="kv"><span>Escáner</span><b>${esc(s.escaner.fase || '—')}</b></div>
-        <div class="row wrap" style="margin-top:14px">
-          <button class="btn sm" data-refrescar>${icon('refresh', 'sm')} Recargar biblioteca</button>
-          <a class="btn sm ghost" href="#/admin?tab=biblioteca">${icon('folder', 'sm')} Escanear música</a>
-        </div></div>
-      <div class="panel"><h3>${icon('note')} Datos guardados</h3>
-        <div class="kv"><span>Canciones</span><b>${fmtNum(s.canciones)}</b></div>
-        <div class="kv"><span>Usuarios</span><b>${fmtNum(s.usuarios)}</b></div>
-        <div class="kv"><span>Playlists</span><b>${fmtNum(s.playlists)}</b></div>
-        <div class="kv"><span>Mensajes</span><b>${fmtNum(s.mensajes)}</b></div>
-        <div class="kv"><span>Notificaciones</span><b>${fmtNum(s.notificaciones)}</b></div></div>
-    </div>
-    <div class="panels">
-      <div class="panel"><h3>${icon('users')} Conectados ahora</h3>
-        ${s.enLinea.length ? s.enLinea.map((u) => `<button class="kv kv-btn" data-detalle="${u.id}"><span>${esc(u.nombre)} <small class="muted">@${esc(u.username)}</small></span><b>${plural(u.dispositivos, 'dispositivo', 'dispositivos')}</b></button>`).join('')
-          : '<p class="muted">Nadie tiene la app abierta en este momento.</p>'}</div>
-      <div class="panel"><h3>${icon('bell')} Aviso para todos</h3>
-        <p class="muted" style="margin-top:0">Llega a las notificaciones de todos los usuarios (web y app de Android).</p>
-        <div class="field"><textarea data-aviso maxlength="300" rows="3" placeholder="Ej.: El servidor se reiniciará esta noche a las 11"></textarea></div>
-        <div class="field"><input data-aviso-ruta maxlength="120" placeholder="Enlace opcional dentro de la app, ej. #/novedades"></div>
-        <button class="btn primary sm" data-enviar-aviso>${icon('send', 'sm')} Enviar aviso</button></div>
-    </div>
-    <div class="panel"><div class="row" style="justify-content:space-between;margin-bottom:8px"><h3 style="margin:0">${icon('info')} Errores y advertencias recientes</h3>
-      ${errs.length ? `<button class="btn sm ghost" data-vaciar-errores>${icon('trash', 'sm')} Vaciar</button>` : ''}</div>
-      ${errs.length ? `<div class="log">${errs.map((e) => `<div class="log-row ${e.nivel === 'ERROR' ? 'err' : ''}">
-          <span class="badge ${e.nivel === 'ERROR' ? 'danger' : 'warning'}">${e.nivel === 'ERROR' ? 'Error' : 'Aviso'}</span>
-          <div><b>${esc(e.mensaje)}</b>${e.detalle ? `<small>${esc(e.detalle)}</small>` : ''}<small>${esc(e.origen)} · ${esc(timeAgo(e.fecha))}</small></div></div>`).join('')}</div>`
-        : '<p class="muted">Sin errores desde que se encendió el servidor.</p>'}</div>`;
-
-  el.querySelector('[data-refrescar]').onclick = async () => {
-    try { const r = await api('/api/admin/sistema/refrescar', { method: 'POST' }); toast(`Biblioteca recargada: ${fmtNum(r.canciones)} canciones`); bus.emit('library:changed'); }
-    catch (e) { errorToast(e); }
-  };
-  el.querySelector('[data-enviar-aviso]').onclick = async () => {
-    const texto = el.querySelector('[data-aviso]').value.trim();
-    const ruta = el.querySelector('[data-aviso-ruta]').value.trim();
-    if (!texto) { toast('Escribe el aviso', { error: true }); return; }
-    if (!(await confirmDialog(`Se enviará a todos los usuarios: “${texto}”`, { title: 'Enviar aviso', ok: 'Enviar' }))) return;
-    try {
-      const r = await api('/api/admin/aviso', { method: 'POST', body: { texto, ruta } });
-      toast(`Aviso enviado a ${plural(r.enviados, 'usuario', 'usuarios')}`);
-      el.querySelector('[data-aviso]').value = '';
-      el.querySelector('[data-aviso-ruta]').value = '';
-    } catch (e) { errorToast(e); }
-  };
-  el.querySelector('[data-vaciar-errores]')?.addEventListener('click', async () => {
-    await api('/api/admin/errores', { method: 'DELETE' }).catch(errorToast);
-    soporteTab(el);
-  });
-  el.querySelectorAll('[data-detalle]').forEach((b) => b.addEventListener('click', () => detalleUsuario(+b.dataset.detalle)));
-}
 
 /** Ficha de soporte de un usuario: su cuenta, actividad y acciones rápidas. */
 async function detalleUsuario(id) {

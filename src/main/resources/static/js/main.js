@@ -1,7 +1,7 @@
 // Punto de entrada de la aplicación
 import './fuentes.js';
 import { api, session, logout } from './api.js';
-import { $, $$, esc, bus, debounce, fmtTime, cover, coverImg, dominantColor, isMobile, plural , esIOS } from './util.js';
+import { $, $$, esc, bus, debounce, fmtTime, cover, coverImg, dominantColor, isMobile, plural , esIOS, albumHref } from './util.js';
 import { icon } from './icons.js';
 import { lib } from './state.js';
 import { player, sleep, prefs } from './player.js';
@@ -22,9 +22,25 @@ import { perfilPublicoView } from './views/people.js';
 import { mensajesView } from './views/mensajes.js';
 import { novedadesView } from './views/novedades.js';
 import { iniciarAvisos } from './avisos.js';
+import { resumenView, pedidosView, pedirCancion, revisarBienvenida } from './comunidad.js';
 import { iniciarNativo, modoLigero } from './nativo.js';
 
-if (!session.valid()) {
+// Sesión vencida sin conexión: se entra igual para escuchar lo descargado (la sesión no caduca sin internet).
+// Al volver la conexión, el servidor decide: renueva el token o pide iniciar sesión otra vez.
+async function sesionSinRed() {
+  if (!session.token || !session.user) return false;
+  if (navigator.onLine === false) return true;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 5000);
+  try {
+    const r = await fetch('/api/auth/refresh', { method: 'POST', headers: { Authorization: 'Bearer ' + session.token }, signal: ctrl.signal });
+    if (r.ok) { const d = await r.json().catch(() => null); if (d?.token) session.save(d.token, d.usuario); return true; }
+    return false; // el servidor respondió: la sesión venció de verdad
+  } catch {
+    return true; // sin conexión con el servidor
+  } finally { clearTimeout(t); }
+}
+if (!session.valid() && !(await sesionSinRed())) {
   logout(session.token ? 'expirada' : '');
   throw new Error('Sin sesión');
 }
@@ -117,7 +133,7 @@ pintarCuerpo(`
 const SOLO_EN_LINEA = [
   [/^\/historial/, 'tu historial'], [/^\/artista\//, 'este artista'], [/^\/genero\//, 'este género'],
   [/^\/mix\//, 'esta mezcla'], [/^\/u\//, 'este perfil'], [/^\/mensajes/, 'tus mensajes'],
-  [/^\/novedades/, 'las novedades'], [/^\/estadisticas/, 'tus estadísticas'], [/^\/admin/, 'la administración'],
+  [/^\/novedades/, 'las novedades'], [/^\/estadisticas/, 'tus estadísticas'], [/^\/resumen/, 'tu resumen'], [/^\/pedidos/, 'tus pedidos'], [/^\/admin/, 'la administración'],
   [/^\/subir/, 'la subida de canciones'],
 ];
 setGuardiaSinRed((path) => {
@@ -144,6 +160,8 @@ route('/novedades', novedadesView);
 route('/novedades/:version', novedadesView);
 route('/mensajes/:username', mensajesView);
 route('/estadisticas', statsView);
+route('/resumen', resumenView);
+route('/pedidos', pedidosView);
 route('/admin', adminView);
 route('/subir', uploadView);
 
@@ -165,6 +183,9 @@ $('[data-user-menu]').addEventListener('click', (e) => {
     { label: 'Ajustes de la cuenta', icon: 'sliders', fn: () => go('/perfil') },
     { label: 'Tus estadísticas', icon: 'chart', fn: () => go('/estadisticas') },
     { label: 'Escuchado recientemente', icon: 'history', fn: () => go('/historial') },
+    { label: 'Tu resumen del año', icon: 'gift', fn: () => go('/resumen') },
+    { label: 'Pedir una canción', icon: 'request', fn: () => pedirCancion() },
+    { label: 'Mis pedidos', icon: 'list', fn: () => go('/pedidos') },
     { label: 'Ecualizador', icon: 'sliders', fn: () => openEqualizer() },
     session.canEdit ? { label: 'Subir canciones', icon: 'upload', fn: () => go('/subir') } : null,
     session.isAdmin ? { label: 'Administración', icon: 'shield', fn: () => go('/admin') } : null,
@@ -248,7 +269,7 @@ async function playCollection(kind, val) {
   try {
     if (kind === 'album') {
       const a = await api('/api/albumes/detalle?nombre=' + encodeURIComponent(val));
-      player.play(a.canciones, player.shuffle ? -1 : 0, { type: 'album', label: a.nombre, route: '#/album/' + encodeURIComponent(a.nombre) });
+      player.play(a.canciones, player.shuffle ? -1 : 0, { type: 'album', label: a.nombre, route: albumHref(a.nombre, a.artista) });
     } else if (kind === 'artist') {
       const a = await api('/api/artistas/' + encodeURIComponent(val));
       const list = [...a.populares, ...a.canciones.filter((c) => !a.populares.some((p) => p.id === c.id))];
@@ -336,7 +357,7 @@ function paintSong() {
   if (!s) return;
   $('[data-pcover]').innerHTML = coverImg(s.portadaUrl, 160, '');
   $('[data-pname]').innerHTML = s.album && s.album !== 'Single'
-    ? `<a href="#/album/${encodeURIComponent(s.album)}">${esc(s.nombre)}</a>` : esc(s.nombre);
+    ? `<a href="${albumHref(s.album, s.artista)}">${esc(s.nombre)}</a>` : esc(s.nombre);
   $('[data-partist]').innerHTML = `<a href="#/artista/${encodeURIComponent(s.artista)}">${esc(s.artista)}</a>`;
   paintFav();
   dominantColor(s.portadaUrl).then((c) => bar.style.setProperty('--player-color', `rgb(${c.map((x) => Math.round(x * 0.55)).join(',')})`));
@@ -571,6 +592,8 @@ async function boot() {
   paintState();
   startRouter();
   ocultarSplash();
+  // Cuenta nueva: elegir géneros y artistas (una sola vez)
+  setTimeout(() => revisarBienvenida(), 1200);
   // App de Android: la página ya arrancó (si no llega este aviso sin internet, la app muestra
   // las canciones guardadas en el teléfono en vez de una pantalla negra)
   try { window.SpaceMusicApp?.lista?.(); } catch { }

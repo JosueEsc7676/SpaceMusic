@@ -430,4 +430,9 @@ public class GeneroService {
         elegidas.addAll(resto);
         return Map.of("titulo", titulo, "canciones", elegidas.stream().limit(50).toList(), "total", r.size());
     }
+
+    /** Soporte → Mantenimiento: vacía los géneros de artistas en memoria (se vuelven a leer de la base). */
+    public void limpiarCache() {
+        cache.clear();
+    }
 }

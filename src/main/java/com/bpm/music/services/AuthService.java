@@ -29,6 +29,11 @@ public class AuthService {
     private final String setupKey;
     private final boolean requiereVerificacion;
 
+    private com.bpm.music.soporte.SesionesService sesiones;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setSesiones(com.bpm.music.soporte.SesionesService sesiones) { this.sesiones = sesiones; }
+
     public AuthService(UsuarioRepository repo, PasswordEncoder encoder, JwtUtil jwtUtil, MailService mail,
                        LoginRateLimiter limiter,
                        @Value("${app.setup-key:}") String setupKey,
@@ -159,6 +164,7 @@ public class AuthService {
 
         if (opt.isEmpty() || !encoder.matches(password, opt.get().getPassword())) {
             limiter.registrarFallo(ip, usuarioOEmail);
+            if (sesiones != null) sesiones.falloLogin(usuarioOEmail, ip); // Soporte → Usuarios y sesiones
             return Map.of("error", "Usuario o contraseña incorrectos");
         }
         Usuario u = opt.get();

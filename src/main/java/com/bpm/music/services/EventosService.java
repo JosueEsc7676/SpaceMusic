@@ -56,6 +56,16 @@ public class EventosService {
         }
     }
 
+    /** Al apagar o reiniciar el servidor: las apps abiertas mostrarán "SpaceMusic está en mantenimiento". */
+    @org.springframework.context.event.EventListener(org.springframework.context.event.ContextClosedEvent.class)
+    public void alApagar() {
+        conexiones.forEach((uid, lista) -> {
+            for (SseEmitter e : lista) {
+                try { e.send(SseEmitter.event().name("mantenimiento").data("{}")); } catch (Exception ignored) { }
+            }
+        });
+    }
+
     /** Latido cada 25 s: mantiene viva la conexión a través de proxys (Tailscale) y detecta las cerradas. */
     @Scheduled(fixedRate = 25_000)
     public void latido() {

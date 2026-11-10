@@ -41,7 +41,7 @@ public class BibliotecaService {
                             List<AlbumDTO> albumes, Map<String, AlbumDTO> albumPorClave,
                             List<ArtistaDTO> artistas, Map<String, List<CancionDTO>> cancionesPorArtista,
                             Map<String, ArtistaDTO> artistaPorClave, List<Map<String, Object>> generos,
-                            Map<String, List<CancionDTO>> cancionesPorGenero) {}
+                            Map<String, List<CancionDTO>> cancionesPorGenero, Map<Long, String> albumDeCancion) {}
 
     private Snapshot snap() {
         Snapshot s = snapshot;
@@ -71,11 +71,39 @@ public class BibliotecaService {
         }
 
         // ── Álbumes ──
-        Map<String, List<CancionDTO>> porAlbum = new LinkedHashMap<>();
+        // Se agrupan por nombre; si dos artistas distintos tienen varias canciones en un álbum con el
+        // mismo nombre (p. ej. "Utopia" de Travis Scott y de Romeo Santos) son álbumes distintos.
+        // Una compilación (muchos artistas con una canción cada uno) sigue siendo un solo álbum.
+        Map<String, List<CancionDTO>> porNombre = new LinkedHashMap<>();
         for (CancionDTO c : todas) {
-            String clave = normalizar(c.getAlbum());
-            if (ALBUM_SUELTO.contains(clave)) continue;
-            porAlbum.computeIfAbsent(clave, k -> new ArrayList<>()).add(c);
+            String base = normalizar(c.getAlbum());
+            if (ALBUM_SUELTO.contains(base)) continue;
+            porNombre.computeIfAbsent(base, k -> new ArrayList<>()).add(c);
+        }
+        Map<String, List<CancionDTO>> porAlbum = new LinkedHashMap<>();
+        Map<Long, String> albumDeCancion = new HashMap<>();
+        Set<String> divididos = new HashSet<>();
+        for (var e : porNombre.entrySet()) {
+            Map<String, List<CancionDTO>> porArt = new LinkedHashMap<>();
+            for (CancionDTO c : e.getValue()) porArt.computeIfAbsent(normalizar(GeneroService.principal(c.getArtista())), k -> new ArrayList<>()).add(c);
+            List<String> grandes = porArt.entrySet().stream().filter(x -> x.getValue().size() >= 2)
+                    .sorted(Map.Entry.<String, List<CancionDTO>>comparingByValue(Comparator.comparingInt(List::size)).reversed())
+                    .map(Map.Entry::getKey).toList();
+            for (CancionDTO c : e.getValue()) {
+                String clave = e.getKey();
+                if (grandes.size() >= 2) {
+                    String art = normalizar(GeneroService.principal(c.getArtista()));
+                    if (!grandes.contains(art)) {
+                        // Colaboración suelta: va con el artista que comparte la portada (si no, el principal)
+                        art = grandes.stream().filter(g -> porArt.get(g).stream().anyMatch(x -> Objects.equals(x.getPortadaUrl(), c.getPortadaUrl())))
+                                .findFirst().orElse(grandes.get(0));
+                    }
+                    clave = e.getKey() + "|" + art;
+                    divididos.add(clave);
+                }
+                porAlbum.computeIfAbsent(clave, k -> new ArrayList<>()).add(c);
+                albumDeCancion.put(c.getId(), clave);
+            }
         }
         Map<String, AlbumDTO> albumPorClave = new HashMap<>();
         List<AlbumDTO> albumes = new ArrayList<>();
@@ -90,7 +118,8 @@ public class BibliotecaService {
                     cs.stream().mapToInt(CancionDTO::getDuracionSegundos).sum(),
                     cs.stream().mapToInt(CancionDTO::getReproducciones).sum(),
                     portadaRepresentativa(cs),
-                    Collections.unmodifiableList(cs));
+                    Collections.unmodifiableList(cs),
+                    divididos.contains(e.getKey()) ? masComun(cs, CancionDTO::getAlbum) + " · " + artistaDeAlbum(cs) : masComun(cs, CancionDTO::getAlbum));
             albumes.add(al);
             albumPorClave.put(e.getKey(), al);
         }
@@ -141,7 +170,7 @@ public class BibliotecaService {
                 todas.size(), albumes.size(), artistas.size(), System.currentTimeMillis() - t0);
 
         return new Snapshot(Collections.unmodifiableList(todas), porId, indice, albumes, albumPorClave,
-                artistas, porArtista, artistaPorClave, generos, porGenero);
+                artistas, porArtista, artistaPorClave, generos, porGenero, albumDeCancion);
     }
 
     private static final Comparator<CancionDTO> ORDEN_ALBUM = Comparator
@@ -224,7 +253,22 @@ public class BibliotecaService {
     }
 
     public Optional<AlbumDTO> album(String nombre) {
-        return Optional.ofNullable(snap().albumPorClave().get(normalizar(nombre)));
+        return album(nombre, null);
+    }
+
+    /** Álbum por nombre; si hay varios con ese nombre, el del artista indicado (o el de más canciones). */
+    public Optional<AlbumDTO> album(String nombre, String artista) {
+        Snapshot s = snap();
+        String base = normalizar(nombre);
+        AlbumDTO a = s.albumPorClave().get(base);
+        if (a != null) return Optional.of(a);
+        if (artista != null && !artista.isBlank()) {
+            a = s.albumPorClave().get(base + "|" + normalizar(GeneroService.principal(artista)));
+            if (a != null) return Optional.of(a);
+        }
+        return s.albumes().stream()
+                .filter(x -> normalizar(x.clave()).equals(base) || normalizar(x.nombre()).equals(base))
+                .max(Comparator.comparingInt(AlbumDTO::totalCanciones));
     }
 
     public List<AlbumDTO> albumesRecientes(int n) {
@@ -253,8 +297,8 @@ public class BibliotecaService {
                 .limit(10).toList();
 
         // Álbumes donde aparece el artista
-        Set<String> clavesAlbum = cs.stream().map(c -> normalizar(c.getAlbum()))
-                .filter(k -> !ALBUM_SUELTO.contains(k)).collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<String> clavesAlbum = cs.stream().map(c -> s.albumDeCancion().get(c.getId()))
+                .filter(Objects::nonNull).collect(Collectors.toCollection(LinkedHashSet::new));
         List<AlbumDTO> albumes = clavesAlbum.stream().map(k -> s.albumPorClave().get(k)).filter(Objects::nonNull)
                 .sorted(Comparator.comparing((AlbumDTO a) -> a.anio() == null ? 0 : a.anio()).reversed())
                 .map(AlbumDTO::sinCanciones).toList();

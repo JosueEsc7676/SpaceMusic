@@ -1,6 +1,6 @@
 // Biblioteca: playlists, artistas, álbumes y comunidad (identidad "Noir")
 import { api } from '../api.js';
-import { esc, norm, store, plural, coverImg } from '../util.js';
+import { esc, norm, store, plural, coverImg, albumHref , textoSinRed, detalleSinRed } from '../util.js';
 import { icon } from '../icons.js';
 import { lib } from '../state.js';
 import { setHero, setTitle } from '../router.js';
@@ -37,7 +37,7 @@ export async function libraryView(el, _p, query, isStale) {
   const vista = store.get('sm_lib_view', 'grid');
   // Solo lo que el usuario guardó: sus playlists, las públicas que guardó y sus álbumes
   const guardadas = cache.publicas.filter((x) => lib.estaGuardado('playlist', x.id)).map((x) => ({ ...x, propia: false }));
-  let albumesGuardados = cache.albumes.filter((x) => lib.estaGuardado('album', x.nombre));
+  let albumesGuardados = cache.albumes.filter((x) => lib.estaGuardado('album', x.clave || x.nombre));
   let misPlaylists = [...lib.playlists, ...guardadas];
   // Sin conexión (como Spotify): solo lo descargado
   const offline = sinConexion();
@@ -53,7 +53,7 @@ export async function libraryView(el, _p, query, isStale) {
       <div><div class="eyebrow">Tu colección</div><h1 class="page-title">Biblioteca</h1><p class="muted">${resumen}</p></div>
       ${offline ? '' : `<button class="btn primary" data-new>${icon('plus', 'sm')} Nueva playlist</button>`}
     </header>
-    ${offline ? `<div class="offline-banner">${icon('download', 'sm')} Sin conexión a internet · aquí está lo que descargaste</div>` : ''}
+    ${offline ? `<div class="offline-banner">${icon('download', 'sm')} ${textoSinRed()} · aquí está lo que descargaste</div>` : ''}
     <nav class="segmented" aria-label="Secciones">${TABS.map(([k, l, ic]) => `<a class="seg ${tab === k ? 'active' : ''}" href="#/biblioteca?tab=${k}">${icon(ic, 'sm')}<span>${l}</span></a>`).join('')}</nav>
     <div class="lib-tools">
       <label class="list-filter">${icon('search')}<input type="search" placeholder="Buscar en tu biblioteca" data-q></label>
@@ -110,7 +110,7 @@ export async function libraryView(el, _p, query, isStale) {
     } else if (tab === 'albumes') {
       const a = by(albumesGuardados, (x) => x.nombre + ' ' + x.artista, (x) => x.reproducciones, (x) => x.anio || 0);
       html = pinta(a, cardAlbum,
-        (x) => fila({ href: '#/album/' + encodeURIComponent(x.nombre), art: coverImg(x.portadaUrl, 160, x.nombre), t: x.nombre, s: (x.anio ? x.anio + ' · ' : '') + esc(x.artista) }),
+        (x) => fila({ href: albumHref(x.nombre, x.artista), art: coverImg(x.portadaUrl, 160, x.nombre), t: x.nombre, s: (x.anio ? x.anio + ' · ' : '') + esc(x.artista) }),
         offline && !q ? emptyState('download', 'No hay álbumes descargados', 'Con conexión, abre un álbum y toca el botón de descarga.') : emptyState('disc', q ? 'Ningún álbum coincide' : 'Aún no guardas álbumes', 'Abre un álbum y toca “Guardar en biblioteca” para tenerlo aquí.'));
     } else {
       const a = by(cache.publicas, (x) => x.nombre, (x) => x.cancionesCount, (x) => x.fechaActualizacion);

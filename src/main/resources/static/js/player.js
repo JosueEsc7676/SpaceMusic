@@ -15,6 +15,8 @@ export const prefs = {
   eqEnabled: false,
   eq: [0, 0, 0, 0, 0],
   visualizer: true,
+  normalizar: false,  // volumen parejo entre canciones
+  mezcla: 0,          // segundos de transición entre canciones (0 = sin transición)
   ...store.get(PREFS_KEY, {}),
   save() { const { save, ...p } = this; store.set(PREFS_KEY, p); bus.emit('prefs', this); },
 };
@@ -226,7 +228,8 @@ export const player = {
 
   _applyVolume() {
     // Curva cuadrática: el control se siente más natural
-    audio.volume = this.muted ? 0 : Math.pow(this.volume, 2) * sleep.factor;
+    audio.volume = this.muted ? 0 : Math.pow(this.volume, 2) * sleep.factor * mezcla.entrada;
+    mezcla.volumenCola();
     bus.emit('player:volume');
   },
 
@@ -298,6 +301,7 @@ export const player = {
 
   _load(i, autoplay, startAt = 0) {
     this._finishListen();
+    if (!mezcla.enCurso) mezcla.cortar();
     this.index = i;
     const s = this.current;
     if (!s) return;
@@ -427,6 +431,7 @@ audio.addEventListener('timeupdate', () => {
     player._radioPara = cur._uid;
     player._extendWithRadio(false);
   }
+  mezcla.revisar();
   // Precargar la siguiente canción cuando falte poco
   const nxt = player.items[player.index + 1];
   if (!nxt || !audio.duration) return;
@@ -459,6 +464,80 @@ audio.addEventListener('error', () => {
 
 window.addEventListener('pagehide', () => player._save());
 document.addEventListener('visibilitychange', () => { if (document.hidden) player._save(); });
+
+// ═══════════════════ Transición entre canciones (crossfade) ═══════════════════
+// En los últimos segundos, la canción que termina pasa a un segundo <audio> que baja su volumen
+// mientras la siguiente empieza en el principal y sube. Si algo falla se corta sin transición.
+// En iPhone no se usa: un segundo <audio> puede interrumpir la música con la pantalla bloqueada.
+
+const cola = new Audio();
+cola.preload = 'auto';
+
+export const mezcla = {
+  entrada: 1,       // factor de volumen de la canción que entra
+  salida: 0,        // factor de volumen de la que sale (en el segundo <audio>)
+  enCurso: false,
+  _para: null,
+  _t: null,
+  get disponible() { return !esIOS; },
+  volumenCola() { cola.volume = player.muted ? 0 : Math.min(1, Math.pow(player.volume, 2) * sleep.factor * this.salida); },
+  revisar() {
+    const seg = Number(prefs.mezcla) || 0;
+    const cur = player.current;
+    if (!seg || !this.disponible || this.enCurso || !cur || audio.paused) return;
+    const dur = audio.duration;
+    if (!isFinite(dur) || dur < seg * 2 + 10) return;
+    if (dur - audio.currentTime > seg || this._para === cur._uid) return;
+    if (player.repeat === 'one' || sleep.endOfSong) return;
+    const nxt = player.items[player.index + 1];
+    if (!nxt || !player.disponible(nxt)) return;
+    this._para = cur._uid;
+    this.empezar(seg);
+  },
+  empezar(seg) {
+    this.enCurso = true;
+    // La canción actual sigue en el segundo <audio> desde el mismo punto
+    cola.src = audio.currentSrc || audio.src;
+    cola.volume = 0;
+    let listo = false;
+    const pasar = () => {
+      if (listo) return;
+      listo = true;
+      if (Math.abs(cola.currentTime - audio.currentTime) > 0.2) { try { cola.currentTime = audio.currentTime + 0.05; } catch { } }
+      this.salida = 1;
+      this.entrada = 0;
+      this.volumenCola();
+      player.next(true);
+      this.enCurso = false;
+      const t0 = Date.now(), ms = seg * 1000;
+      clearInterval(this._t);
+      this._t = setInterval(() => {
+        const k = Math.min(1, (Date.now() - t0) / ms);
+        // Curva de igual potencia: el volumen total no baja a la mitad
+        this.entrada = Math.sin(k * Math.PI / 2);
+        this.salida = Math.cos(k * Math.PI / 2);
+        player._applyVolume();
+        if (k >= 1) this.cortar();
+      }, 80);
+    };
+    cola.addEventListener('playing', pasar, { once: true });
+    try { cola.currentTime = audio.currentTime; } catch { }
+    cola.play().catch(() => { listo = true; this.enCurso = false; this.cortar(); });
+    // Si el segundo <audio> no arranca rápido, se sigue sin transición
+    setTimeout(() => { if (!listo) { listo = true; this.enCurso = false; this.cortar(); } }, 1500);
+  },
+  /** Termina la transición: la canción que sale se detiene y la nueva queda a volumen normal. */
+  cortar() {
+    clearInterval(this._t);
+    this._t = null;
+    if (cola.src) { cola.pause(); cola.removeAttribute('src'); try { cola.load(); } catch { } }
+    this.salida = 0;
+    if (this.entrada !== 1) { this.entrada = 1; player._applyVolume(); }
+  },
+};
+// Pausar durante la transición detiene también la canción que sale
+// (se comprueba un momento después: al cambiar de canción el navegador también avisa "pause")
+audio.addEventListener('pause', () => setTimeout(() => { if (audio.paused && mezcla._t) mezcla.cortar(); }, 300));
 
 // ═══════════════════ Media Session (teclas multimedia, pantalla bloqueada) ═══════════════════
 
@@ -562,11 +641,25 @@ export const fx = {
       this.analyser = this.ctx.createAnalyser();
       this.analyser.fftSize = 256;
       this.analyser.smoothingTimeConstant = 0.8;
+      // Volumen parejo: se mide el nivel de cada canción y se ajusta una ganancia; un limitador evita saturar
+      this.nivel = this.ctx.createGain();
+      this.medidor = this.ctx.createAnalyser();
+      this.medidor.fftSize = 2048;
+      this.limitador = this.ctx.createDynamicsCompressor();
+      this.limitador.threshold.value = -3;
+      this.limitador.knee.value = 2;
+      this.limitador.ratio.value = 20;
+      this.limitador.attack.value = 0.003;
+      this.limitador.release.value = 0.25;
       let node = src;
       for (const f of this.filters) { node.connect(f); node = f; }
-      node.connect(this.analyser);
+      node.connect(this.medidor);
+      node.connect(this.nivel);
+      this.nivel.connect(this.limitador);
+      this.limitador.connect(this.analyser);
       this.analyser.connect(this.ctx.destination);
       this.apply();
+      nivelador.iniciar();
       return true;
     } catch (e) {
       console.warn('Web Audio no disponible', e);
@@ -581,7 +674,69 @@ export const fx = {
   },
 };
 
-if (prefs.eqEnabled) {
+// ═══════════════════ Volumen parejo ═══════════════════
+// Mide la intensidad (RMS) de lo que suena y lleva cada canción a un nivel parecido (≈ -18 dBFS),
+// entre -10 y +8 dB. Lo aprendido de cada canción se recuerda para que empiece ya ajustada.
+
+const NIVELES_KEY = 'sm_niveles';
+const OBJETIVO_DB = -18;
+export const nivelador = {
+  _t: null,
+  _suma: 0,
+  _n: 0,
+  _id: null,
+  _niveles: store.get(NIVELES_KEY, {}),
+  get disponible() { return !esIOS && !!(window.AudioContext || window.webkitAudioContext); },
+  iniciar() {
+    if (this._t || !fx.ctx) return;
+    const buf = new Float32Array(fx.medidor.fftSize);
+    this._t = setInterval(() => {
+      const cur = player.current;
+      if (!cur) return;
+      if (cur.id !== this._id) this._nueva(cur.id);
+      if (!prefs.normalizar) { this._fijar(0, 0.3); return; }
+      if (audio.paused || player.buffering) return;
+      fx.medidor.getFloatTimeDomainData(buf);
+      let e = 0;
+      for (let i = 0; i < buf.length; i++) e += buf[i] * buf[i];
+      const db = 10 * Math.log10(e / buf.length + 1e-12);
+      if (db < -50) return; // silencio: no cuenta
+      this._suma += Math.pow(10, db / 10);
+      this._n++;
+      if (this._n < 8) return; // unos segundos de muestra antes de ajustar
+      const medio = 10 * Math.log10(this._suma / this._n);
+      const g = Math.max(-10, Math.min(8, OBJETIVO_DB - medio));
+      this._fijar(g, 1.5);
+      if (this._n % 40 === 0) this._recordar(cur.id, g);
+    }, 250);
+  },
+  _nueva(id) {
+    if (this._id != null && this._n >= 40) this._recordar(this._id, Math.max(-10, Math.min(8, OBJETIVO_DB - 10 * Math.log10(this._suma / this._n))));
+    this._id = id;
+    this._suma = 0;
+    this._n = 0;
+    const g = this._niveles[id];
+    if (prefs.normalizar) this._fijar(typeof g === 'number' ? g : 0, 0.05);
+  },
+  _recordar(id, g) {
+    this._niveles[id] = Math.round(g * 10) / 10;
+    const ks = Object.keys(this._niveles);
+    if (ks.length > 3000) for (const k of ks.slice(0, ks.length - 3000)) delete this._niveles[k];
+    store.set(NIVELES_KEY, this._niveles);
+  },
+  _fijar(db, tau) {
+    if (!fx.nivel) return;
+    fx.nivel.gain.setTargetAtTime(Math.pow(10, db / 20), fx.ctx.currentTime, tau);
+  },
+  /** Activa o desactiva desde Ajustes (necesita el gesto del usuario para crear el audio de Web Audio). */
+  activar(on) {
+    prefs.normalizar = !!on;
+    prefs.save();
+    if (on) { fx.ensure(); fx.resume(); }
+  },
+};
+
+if (prefs.eqEnabled || prefs.normalizar) {
   // El contexto de audio necesita un gesto del usuario: se activa en el primer clic
   const once = () => { fx.ensure(); fx.resume(); window.removeEventListener('pointerdown', once); };
   window.addEventListener('pointerdown', once);
