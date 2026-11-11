@@ -45,10 +45,7 @@ final class ModelosTests: XCTestCase {
     }
 
     func testLRCAplicaDesfaseOcultaCreditosYMarcaInterludios() {
-        let l = LectorLRC.leer("[offset:+500]
-[00:01.00]Letra: Alguien
-[00:10.00][00:40.00]Coro
-[00:20.50]Verso")
+        let l = LectorLRC.leer("[offset:+500]\n[00:01.00]Letra: Alguien\n[00:10.00][00:40.00]Coro\n[00:20.50]Verso")
         XCTAssertFalse(l.contains { $0.texto == "Letra: Alguien" })
         XCTAssertTrue(l[0].interludio, "antes del primer verso hay un interludio")
         XCTAssertEqual(l.filter { !$0.interludio }.map(\.texto), ["Coro", "Verso", "Coro"])
