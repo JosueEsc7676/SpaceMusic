@@ -309,10 +309,12 @@ struct Burbuja: View {
 /// Campana: nuevos seguidores, amigos, canciones nuevas, playlists y avisos.
 struct NotificacionesVista: View {
     @State private var lista: [Notificacion]?
+    @State private var errorCarga: String?
     @State private var eventos = Eventos.compartido
 
     var body: some View {
         List {
+            if let errorCarga { EstadoVista(icono: "wifi.exclamationmark", titulo: "No se pudieron cargar las notificaciones", texto: errorCarga) { Task { await cargar() } } }
             if let lista {
                 if lista.isEmpty {
                     EstadoVista(icono: "bell", titulo: "Sin notificaciones").listRowSeparator(.hidden)
@@ -324,10 +326,14 @@ struct NotificacionesVista: View {
                 }
                 .onDelete { idx in
                     let ids = idx.map { lista[$0].id }
-                    self.lista?.remove(atOffsets: idx)
-                    Task { for id in ids { try? await API.hacer("DELETE", "/api/notificaciones/\(id)") } }
+                    Task {
+                        do {
+                            for id in ids { try await API.hacer("DELETE", "/api/notificaciones/\(id)") }
+                            self.lista?.removeAll { ids.contains($0.id) }
+                        } catch { errorCarga = error.localizedDescription; await cargar() }
+                    }
                 }
-            } else {
+            } else if errorCarga == nil {
                 Cargando().listRowSeparator(.hidden)
             }
         }
@@ -337,8 +343,10 @@ struct NotificacionesVista: View {
             if lista?.isEmpty == false {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Vaciar") {
-                        lista = []
-                        Task { try? await API.hacer("DELETE", "/api/notificaciones") }
+                        Task {
+                            do { try await API.hacer("DELETE", "/api/notificaciones"); lista = []; eventos.notificacionesLeidas() }
+                            catch { errorCarga = error.localizedDescription }
+                        }
                     }
                 }
             }
@@ -348,9 +356,12 @@ struct NotificacionesVista: View {
     }
 
     private func cargar() async {
-        lista = (try? await API.get("/api/notificaciones")) ?? lista ?? []
-        try? await API.hacer("POST", "/api/notificaciones/leidas")
-        eventos.notificacionesLeidas()
+        do {
+            let nuevas: [Notificacion] = try await API.get("/api/notificaciones")
+            lista = nuevas; errorCarga = nil
+            try await API.hacer("POST", "/api/notificaciones/leidas")
+            eventos.notificacionesLeidas()
+        } catch { if !Task.isCancelled { errorCarga = error.localizedDescription } }
     }
 
     private func abrir(_ n: Notificacion) {

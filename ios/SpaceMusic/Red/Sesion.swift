@@ -51,7 +51,12 @@ final class Sesion {
         Reproductor.compartido.detener()
         Eventos.compartido.desconectar()
         Descargas.compartido.borrarTodo()
+        CopiaLocal.borrar()
         Biblioteca.compartida.limpiar()
+        CancionesEditadas.compartidas.limpiar()
+        Hojas.compartidas.agregarAPlaylist = nil
+        Hojas.compartidas.enviarCancion = nil
+        Hojas.compartidas.editarCancion = nil
         Navegacion.compartida.reiniciar()
         Eventos.compartido.limpiar()
         Llavero.borrar("token")

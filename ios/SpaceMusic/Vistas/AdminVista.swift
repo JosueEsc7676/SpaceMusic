@@ -3,16 +3,28 @@ import SwiftUI
 /// Panel de administración: cuentas nuevas, colaboradores, usuarios, biblioteca y avisos.
 struct AdminVista: View {
     @State private var resumen: AdminResumen?
+    @State private var errorCarga: String?
     @State private var pendientes: [Usuario] = []
     @State private var solicitudes: [Usuario] = []
     @State private var usuarios: [Usuario] = []
     @State private var aviso = ""
+    @State private var notas: [Int: String] = [:]
+    @State private var confirmarAviso = false
     @State private var rutaAviso = ""
     @State private var mensaje: String?
     @State private var trabajando = false
 
     var body: some View {
         List {
+            if let errorCarga {
+                Section { Text(errorCarga).foregroundStyle(Tema.peligro); Button("Reintentar") { Task { await cargar() } } }
+            }
+            Section("Herramientas") {
+                NavigationLink("Estadísticas del servidor", value: Destino.resumenAdmin)
+                NavigationLink("Soporte y errores", value: Destino.soporte)
+                NavigationLink("Géneros y artistas", value: Destino.generosAdmin)
+                NavigationLink("Mantenimiento de biblioteca", value: Destino.bibliotecaAdmin)
+            }
             if let r = resumen {
                 Section("Resumen") {
                     LabeledContent("Usuarios", value: "\(r.totalUsuarios)")
@@ -50,10 +62,11 @@ struct AdminVista: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(u.nombre).font(.headline)
                             if let m = u.motivoSolicitud, !m.isEmpty { Text("“\(m)”").font(.subheadline).foregroundStyle(Tema.secundario) }
+                            TextField("Respuesta al solicitante (opcional)", text: Binding(get: { notas[u.id] ?? "" }, set: { notas[u.id] = $0 }))
                             HStack {
-                                Button("Aprobar") { Task { await accion("/api/admin/solicitudes/\(u.id)/aprobar") } }
+                                Button("Aprobar") { Task { await enviar("POST", "/api/admin/solicitudes/\(u.id)/aprobar", ["nota": notas[u.id] ?? ""]) } }
                                     .buttonStyle(BotonPrincipal())
-                                Button("Rechazar") { Task { await accion("/api/admin/solicitudes/\(u.id)/rechazar") } }
+                                Button("Rechazar") { Task { await enviar("POST", "/api/admin/solicitudes/\(u.id)/rechazar", ["nota": notas[u.id] ?? ""]) } }
                                     .buttonStyle(BotonSecundario())
                             }
                         }
@@ -78,7 +91,7 @@ struct AdminVista: View {
                 TextField("Texto del aviso (máx. 300)", text: $aviso, axis: .vertical).lineLimit(2...5)
                 TextField("Enlace de la app (opcional, ej. #/novedades)", text: $rutaAviso)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button("Enviar a todos") { Task { await enviarAviso() } }
+                Button("Enviar a todos") { confirmarAviso = true }
                     .disabled(aviso.trimmingCharacters(in: .whitespaces).isEmpty || aviso.count > 300 || trabajando)
             } header: { Text("Aviso para todos") } footer: { Text("Les llega como notificación en la campana.") }
 
@@ -89,6 +102,10 @@ struct AdminVista: View {
             if let mensaje {
                 Section { Text(mensaje).foregroundStyle(Tema.celeste) }
             }
+        }
+        .disabled(trabajando)
+        .confirmationDialog("¿Enviar este aviso a todos los usuarios?", isPresented: $confirmarAviso, titleVisibility: .visible) {
+            Button("Enviar aviso") { Task { await enviarAviso() } }
         }
         .navigationTitle("Administración")
         .refreshable { await cargar() }
@@ -121,6 +138,7 @@ struct AdminVista: View {
                 Button("Cerrar sus sesiones", role: .destructive) {
                     Task { await accion("/api/admin/usuarios/\(u.id)/cerrar-sesiones", texto: "Sesiones cerradas") }
                 }
+                NavigationLink("Detalle y actividad", value: Destino.usuarioAdmin(u.id))
                 NavigationLink(value: Destino.perfil(u.username)) { Label("Ver perfil", systemImage: "person") }
             } label: {
                 Text(nombreRol(u.rol)).font(.caption.weight(.semibold))
@@ -139,14 +157,15 @@ struct AdminVista: View {
     }
 
     private func cargar() async {
-        async let r: AdminResumen? = try? API.get("/api/admin/resumen")
-        async let p: [Usuario]? = try? API.get("/api/admin/cuentas/pendientes")
-        async let s: [Usuario]? = try? API.get("/api/admin/solicitudes")
-        async let u: [Usuario]? = try? API.get("/api/admin/usuarios")
-        resumen = await r
-        pendientes = await p ?? []
-        solicitudes = await s ?? []
-        usuarios = await u ?? []
+        do {
+            async let r: AdminResumen = API.get("/api/admin/resumen")
+            async let p: [Usuario] = API.get("/api/admin/cuentas/pendientes")
+            async let s: [Usuario] = API.get("/api/admin/solicitudes")
+            async let u: [Usuario] = API.get("/api/admin/usuarios")
+            let resultado = try await (r, p, s, u)
+            resumen = resultado.0; pendientes = resultado.1; solicitudes = resultado.2; usuarios = resultado.3
+            errorCarga = nil
+        } catch { if !Task.isCancelled { errorCarga = error.localizedDescription } }
     }
 
     private func accion(_ ruta: String, texto: String? = nil) async {
@@ -155,6 +174,7 @@ struct AdminVista: View {
 
     @discardableResult
     private func enviar(_ metodo: String, _ ruta: String, _ cuerpo: [String: Any]?, texto: String? = nil) async -> Bool {
+        guard !trabajando else { return false }
         trabajando = true
         defer { trabajando = false }
         do {

@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import ImageIO
 
 /// Descarga y guarda en memoria las portadas y fotos.
 actor CacheImagenes {
@@ -8,7 +9,7 @@ actor CacheImagenes {
     nonisolated(unsafe) private let memoria = NSCache<NSString, UIImage>()
     private var enCurso: [String: Task<UIImage?, Never>] = [:]
 
-    init() { memoria.countLimit = 400 }
+    init() { memoria.countLimit = 400; memoria.totalCostLimit = 64 * 1024 * 1024 }
 
     /// El servidor ya ofrece miniaturas: evita descargar el original en cada fila.
     nonisolated static func rutaReducida(_ ruta: String, pixeles: Int) -> String {
@@ -20,24 +21,31 @@ actor CacheImagenes {
         return partes.string ?? ruta
     }
 
-    nonisolated func enMemoria(_ ruta: String) -> UIImage? { memoria.object(forKey: ruta as NSString) }
+    nonisolated private func clave(_ ruta: String) -> String { Sesion.compartida.servidor + "|" + ruta }
+    nonisolated func enMemoria(_ ruta: String) -> UIImage? { memoria.object(forKey: clave(ruta) as NSString) }
 
     func imagen(_ ruta: String) async -> UIImage? {
-        if let i = memoria.object(forKey: ruta as NSString) { return i }
-        if let t = enCurso[ruta] { return await t.value }
+        let llave = clave(ruta)
+        if let i = memoria.object(forKey: llave as NSString) { return i }
+        if let t = enCurso[llave] { return await t.value }
         let t = Task<UIImage?, Never> {
             guard var r = try? API.peticion(ruta) else { return nil }
             r.setValue("image/*", forHTTPHeaderField: "Accept")
             r.cachePolicy = .returnCacheDataElseLoad
             guard let (d, resp) = try? await API.sesionURL.data(for: r),
                   (resp as? HTTPURLResponse)?.statusCode == 200,
-                  let img = UIImage(data: d) else { return nil }
-            return img.preparingThumbnail(of: CacheImagenes.tamano(img.size)) ?? img
+                  let fuente = CGImageSourceCreateWithData(d as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+                  let miniatura = CGImageSourceCreateThumbnailAtIndex(fuente, 0, [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 900
+                  ] as CFDictionary) else { return nil }
+            return UIImage(cgImage: miniatura)
         }
-        enCurso[ruta] = t
+        enCurso[llave] = t
         let img = await t.value
-        enCurso[ruta] = nil
-        if let img { memoria.setObject(img, forKey: ruta as NSString) }
+        enCurso[llave] = nil
+        if let img { memoria.setObject(img, forKey: llave as NSString, cost: Int(img.size.width * img.size.height * 4)) }
         return img
     }
 
@@ -56,6 +64,7 @@ struct ImagenRemota: View {
     var icono = "music.note"
     var redonda = false
     var pixeles = 640
+    var posicionVertical: CGFloat = 0.5
 
     @State private var imagen: UIImage?
 
@@ -63,7 +72,10 @@ struct ImagenRemota: View {
         GeometryReader { espacio in
           ZStack {
             if let imagen {
+                let escala = max(espacio.size.width / max(imagen.size.width, 1), espacio.size.height / max(imagen.size.height, 1))
                 Image(uiImage: imagen).resizable().scaledToFill()
+                    .frame(width: espacio.size.width, height: espacio.size.height)
+                    .offset(y: (espacio.size.height - imagen.size.height * escala) * (min(max(posicionVertical, 0), 1) - 0.5))
             } else {
                 LinearGradient(colors: [Color(white: 0.16), Color(white: 0.09)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 Image(systemName: icono).font(.title2).foregroundStyle(.white.opacity(0.35))

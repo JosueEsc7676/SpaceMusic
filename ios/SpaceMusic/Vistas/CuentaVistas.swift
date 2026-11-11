@@ -16,6 +16,7 @@ struct EstadisticasVista: View {
                     Text("7 días").tag(7)
                     Text("30 días").tag(30)
                     Text("1 año").tag(365)
+                    Text("Todo").tag(0)
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
@@ -163,6 +164,11 @@ struct NovedadesVista: View {
 struct CuentaVista: View {
     @State private var sesion = Sesion.compartida
     @State private var privacidad: Perfil.Privacidad?
+    @State private var biografia = ""
+    @State private var biografiaGuardada = ""
+    @State private var cargandoPerfil = true
+    @State private var claveRepetida = ""
+    @State private var reproductor = Reproductor.compartido
     @State private var canciones = true
     @State private var generos = true
     @State private var vibras = true
@@ -188,7 +194,12 @@ struct CuentaVista: View {
                 }
             }
 
+            Section("Reproducción") {
+                Toggle("Radio automática", isOn: $reproductor.radioAutomatica)
+            }
             Section {
+                TextField("Sobre ti (máximo 160 caracteres)", text: $biografia, axis: .vertical)
+                Button("Guardar biografía") { guardarPrivacidad() }.disabled(cargandoPerfil || biografia.count > 160)
                 Toggle("Mostrar mis canciones más escuchadas", isOn: $canciones)
                 Toggle("Mostrar mis géneros", isOn: $generos)
                 Toggle("Mostrar mis vibras", isOn: $vibras)
@@ -201,11 +212,13 @@ struct CuentaVista: View {
             .tint(Tema.celeste)
             .onChange(of: [canciones, generos, vibras, actividad]) { _, _ in guardarPrivacidad() }
 
+            .disabled(cargandoPerfil || trabajando)
             Section("Cambiar contraseña") {
                 SecureField("Contraseña actual", text: $claveActual).textContentType(.password)
                 SecureField("Nueva contraseña (mínimo 8)", text: $claveNueva).textContentType(.newPassword)
+                SecureField("Repite la nueva contraseña", text: $claveRepetida).textContentType(.newPassword)
                 Button("Cambiar contraseña") { Task { await cambiarClave() } }
-                    .disabled(claveActual.isEmpty || claveNueva.count < 8 || trabajando)
+                    .disabled(claveActual.isEmpty || claveNueva.count < 8 || claveNueva != claveRepetida || trabajando)
             }
 
             Section {
@@ -249,9 +262,13 @@ struct CuentaVista: View {
     }
 
     private func cargar() async {
+        cargandoPerfil = true
+        defer { cargandoPerfil = false }
         if let me: Usuario = try? await API.get("/api/auth/me") { sesion.ponerUsuario(me) }
         guard let u = sesion.usuario, let p: Perfil = try? await API.get("/api/perfiles/\(API.segmento(u.username))"),
               let pr = p.privacidad else { return }
+        biografia = p.biografia ?? ""
+        biografiaGuardada = biografia
         privacidad = pr
         canciones = pr.canciones
         generos = pr.generos
@@ -260,12 +277,16 @@ struct CuentaVista: View {
     }
 
     private func guardarPrivacidad() {
-        guard let p = privacidad else { return }
-        if p.canciones == canciones && p.generos == generos && p.vibras == vibras && p.actividad == actividad { return }
+        guard !cargandoPerfil, !trabajando, privacidad != nil, biografia.count <= 160 else { return }
+        guard let previa = privacidad else { return }
+        guard previa.canciones != canciones || previa.generos != generos || previa.vibras != vibras || previa.actividad != actividad || biografia != biografiaGuardada else { return }
+        trabajando = true
+        let cuerpo: [String: Any] = ["canciones": canciones, "generos": generos, "vibras": vibras, "actividad": actividad, "biografia": biografia]
         Task {
+            defer { trabajando = false }
             do {
-                try await API.hacer("PUT", "/api/perfiles/yo/privacidad",
-                                    ["canciones": canciones, "generos": generos, "vibras": vibras, "actividad": actividad])
+                try await API.hacer("PUT", "/api/perfiles/yo/privacidad", cuerpo)
+                biografiaGuardada = biografia
                 privacidad?.canciones = canciones
                 privacidad?.generos = generos
                 privacidad?.vibras = vibras
@@ -286,6 +307,7 @@ struct CuentaVista: View {
             if let t = r.token { sesion.guardar(token: t, usuario: nil) }
             claveActual = ""
             claveNueva = ""
+            claveRepetida = ""
             mensaje = r.message ?? "Contraseña actualizada"
         } catch {
             mensaje = error.localizedDescription
@@ -365,6 +387,10 @@ struct SubirVista: View {
                         Task { await subirTodo() }
                     }
                     .disabled(subiendo || !archivos.contains { $0.estado == .pendiente })
+                    Button("Reintentar archivos con error") {
+                        for i in archivos.indices { if case .error = archivos[i].estado { archivos[i].estado = .pendiente } }
+                        Task { await subirTodo() }
+                    }.disabled(subiendo)
                     Button("Limpiar lista", role: .destructive) { archivos = [] }.disabled(subiendo)
                 }
             }
@@ -385,6 +411,7 @@ struct SubirVista: View {
     }
 
     private func subirTodo() async {
+        guard !subiendo else { return }
         subiendo = true
         defer { subiendo = false }
         let pendientes = archivos.indices.filter { archivos[$0].estado == .pendiente }

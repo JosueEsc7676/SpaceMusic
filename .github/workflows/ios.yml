@@ -29,6 +29,10 @@ jobs:
       - name: Versión de Xcode
         run: xcodebuild -version
 
+      - name: Probar modelos y letras
+        working-directory: ios
+        run: swift test
+
       - name: Compilar (sin firmar)
         working-directory: ios
         run: |

@@ -66,8 +66,10 @@ final class Eventos {
     }
 
     func actualizarResumen() async {
+        let token = Sesion.compartida.token
         guard Sesion.compartida.conectado,
               let r: ResumenAvisos = try? await API.get("/api/notificaciones/resumen", tiempo: 15) else { return }
+        guard !Task.isCancelled, token == Sesion.compartida.token else { return }
         mensajesSinLeer = r.mensajes
         notificacionesSinLeer = r.notificaciones
     }

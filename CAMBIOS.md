@@ -1,6 +1,7 @@
 # Registro de cambios
 
 ## App de iPhone 1.0 (nativa)
+- Ampliación de iOS: soporte, géneros, mantenimiento y detalle de usuarios; letras con archivos y borrado, ajuste del banner, recomendaciones y guardado de mixes; temporizador y restauración de cola; copias sin conexión y descargas con cancelación/reintento; mejoras de memoria, carga y protección de sesiones. Pruebas de modelos y LRC preparadas para la compilación final.
 - Revisión de desbordamientos de imágenes y reproductor, miniaturas ligeras, arranque de audio con menor búfer, correcciones de carga de letras y editor de información, portada y letra para colaboradores y administradores. Pendiente de comprobar en iPhone.
 - Mini reproductor colocado sobre las pestañas mediante el área segura, sin separación fija ni relleno duplicado; mensajes anteriores sin salto al final, protección contra envíos repetidos y conservación del borrador al enviar; limpieza de navegación y biblioteca al salir de la cuenta.
 - Correcciones de iOS: portadas cuadradas y adaptadas al espacio del reproductor, búsqueda e imágenes protegidas contra respuestas antiguas, radio que respeta los cambios de cola y barra de tiempo reiniciada al cambiar de canción.

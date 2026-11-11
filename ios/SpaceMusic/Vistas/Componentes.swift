@@ -12,8 +12,10 @@ struct FilaCancion: View {
 
     @State private var reproductor = Reproductor.compartido
     @State private var descargas = Descargas.compartido
+    @State private var ediciones = CancionesEditadas.compartidas
 
     var body: some View {
+        let cancion = ediciones.actual(self.cancion)
         let esActual = reproductor.actual?.id == cancion.id
         HStack(spacing: 4) {
         Button(action: accion) {
@@ -383,6 +385,13 @@ struct Encabezado<Arte: View, Extra: View>: View {
             }
             .buttonStyle(.plain)
             .padding(.horizontal)
+            Menu {
+                Button("Agregar todas a favoritos") { Task { await Biblioteca.compartida.agregarFavoritos(canciones) } }
+                Button("Agregar todas a la cola") { Reproductor.compartido.agregarAlFinal(canciones) }
+                Button("Agregar a una playlist") { Hojas.compartidas.agregarAPlaylist = canciones }
+            } label: { Label("Opciones de la lista", systemImage: "ellipsis") }
+            .font(.subheadline)
+            .disabled(canciones.isEmpty)
         }
     }
 }
@@ -395,10 +404,24 @@ struct ListaCanciones: View {
     var mostrarPortada = true
     /// Si es false, al tocar una canción suena sola y sigue la radio.
     var enOrden = true
+    @State private var filtro = ""
+
+    private var visibles: [(offset: Int, element: Cancion)] {
+        let consulta = filtro.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Array(canciones.enumerated()).filter { fila in
+            consulta.isEmpty || (fila.element.nombre + " " + fila.element.artista + " " + fila.element.album)
+                .range(of: consulta, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        }
+    }
 
     var body: some View {
         LazyVStack(spacing: 10) {
-            ForEach(Array(canciones.enumerated()), id: \.element.id) { i, c in
+            if canciones.count > 15 {
+                TextField("Filtrar canciones de esta lista", text: $filtro)
+                    .textFieldStyle(.roundedBorder).autocorrectionDisabled()
+            }
+            if visibles.isEmpty, !filtro.isEmpty { Text("Sin coincidencias en esta lista").foregroundStyle(Tema.secundario) }
+            ForEach(visibles, id: \.element.id) { i, c in
                 FilaCancion(cancion: c, numero: numerada ? (c.numeroPista ?? i + 1) : nil, mostrarPortada: mostrarPortada) {
                     if enOrden {
                         Reproductor.compartido.reproducir(canciones, desde: i, contexto: contexto)

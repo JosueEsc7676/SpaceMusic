@@ -6,6 +6,7 @@ struct InicioVista: View {
     @State private var error: String?
     @State private var eventos = Eventos.compartido
     @State private var sesion = Sesion.compartida
+    @State private var conexion = Conexion.compartida
 
     var body: some View {
         ScrollView {
@@ -28,6 +29,7 @@ struct InicioVista: View {
             }
         }
         .task { if inicio == nil { await cargar() } }
+        .onChange(of: conexion.disponible) { _, conectada in if conectada { Task { await cargar() } } }
     }
 
     private var saludo: String {

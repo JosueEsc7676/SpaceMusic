@@ -105,11 +105,24 @@ struct BibliotecaVista: View {
         await biblioteca.cargar()
         // Playlists guardadas de otras personas
         let ids = biblioteca.playlistsGuardadas
-        var pls: [Playlist] = []
-        for id in ids.prefix(40) {
-            if let p: Playlist = try? await API.get("/api/playlists/\(id)") { pls.append(p) }
+        guardadas = await withTaskGroup(of: (Int, Playlist?).self) { grupo in
+            var indice = 0
+            var resultados: [Int: Playlist] = [:]
+            for i in 0..<min(4, ids.count) {
+                let id = ids[i]
+                grupo.addTask { (i, try? await API.get("/api/playlists/\(id)")) }
+                indice += 1
+            }
+            while let resultado = await grupo.next() {
+                if let playlist = resultado.1 { resultados[resultado.0] = playlist }
+                if indice < ids.count, !Task.isCancelled {
+                    let posicion = indice, id = ids[indice]
+                    grupo.addTask { (posicion, try? await API.get("/api/playlists/\(id)")) }
+                    indice += 1
+                }
+            }
+            return resultados.keys.sorted().compactMap { resultados[$0] }
         }
-        guardadas = pls
         // Álbumes guardados: se leen de la lista de álbumes
         let nombres = biblioteca.albumesGuardados
         if !nombres.isEmpty, let todos: [Album] = try? await API.get("/api/albumes") {

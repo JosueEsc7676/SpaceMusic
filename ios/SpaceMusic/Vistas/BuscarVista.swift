@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BuscarVista: View {
     @State private var texto = ""
+    @State private var intento = 0
     @State private var resultado: Busqueda?
     @State private var generos: [Genero] = []
     @State private var buscando = false
@@ -19,7 +20,7 @@ struct BuscarVista: View {
             } else if let r = resultado {
                 resultados(r)
             } else if let error {
-                EstadoVista(icono: "wifi.exclamationmark", titulo: "No se pudo buscar", texto: error)
+                EstadoVista(icono: "wifi.exclamationmark", titulo: "No se pudo buscar", texto: error) { intento += 1 }
             } else {
                 Cargando()
             }
@@ -29,7 +30,7 @@ struct BuscarVista: View {
         .searchable(text: $texto, placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "Canciones, artistas, géneros o ánimo")
         .onSubmit(of: .search) { guardarReciente(texto) }
-        .task(id: texto) {
+        .task(id: texto + "\n" + String(intento)) {
             let q = texto.trimmingCharacters(in: .whitespaces)
             resultado = nil
             error = nil
@@ -109,7 +110,7 @@ struct BuscarVista: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Canciones").titulo().padding(.horizontal)
                         LazyVStack(spacing: 10) {
-                            ForEach(r.canciones.prefix(20)) { c in
+                            ForEach(r.canciones) { c in
                                 FilaCancion(cancion: c) {
                                     guardarReciente(texto)
                                     Reproductor.compartido.reproducirSuelta(c, contexto: "buscar")

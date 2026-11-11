@@ -24,6 +24,7 @@ struct Cargador<T, Contenido: View>: View {
             }
         }
         .task { if valor == nil { await traer() } }
+        .onReceive(NotificationCenter.default.publisher(for: .cancionActualizada)) { _ in Task { await traer() } }
     }
 
     private func traer() async {
@@ -108,6 +109,9 @@ struct ArtistaVista: View {
 
                     HStack(spacing: 14) {
                         BotonDescargarLista(canciones: a.canciones)
+                        NavigationLink(value: Destino.mix(id: "artista:" + a.nombre, titulo: "Mix de " + a.nombre)) {
+                            Image(systemName: "sparkles").font(.title2)
+                        }
                         Spacer()
                         Button {
                             Task {
@@ -171,6 +175,8 @@ struct PlaylistVista: View {
     @State private var error: String?
     @State private var editando = false
     @State private var ordenando = false
+    @State private var recomendadas: [Cancion] = []
+    @State private var agregando: Set<Int> = []
     @State private var confirmarBorrar = false
     @State private var foto: PhotosPickerItem?
     @State private var eligiendoFoto = false
@@ -189,6 +195,7 @@ struct PlaylistVista: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .task { if playlist == nil { await cargar() } }
+        .onReceive(NotificationCenter.default.publisher(for: .cancionActualizada)) { _ in Task { await cargar() } }
         .sheet(isPresented: $editando) {
             if let p = playlist { EditarPlaylistHoja(playlist: p) { nueva in Task { await cargar(); _ = nueva } } }
         }
@@ -204,8 +211,13 @@ struct PlaylistVista: View {
 
     private func cargar() async {
         do {
-            playlist = try await API.get("/api/playlists/\(id)")
+            let nueva: Playlist = try await API.get("/api/playlists/\(id)")
+            playlist = nueva
             error = nil
+            if nueva.propia, let semilla = nueva.canciones.last {
+                let excluir = nueva.canciones.map { String($0.id) }.joined(separator: ",")
+                recomendadas = (try? await API.get("/api/radio/\(semilla.id)?cantidad=8&excluir=\(excluir)")) ?? []
+            }
         } catch is CancellationError {
         } catch {
             self.error = error.localizedDescription
@@ -264,10 +276,32 @@ struct PlaylistVista: View {
                     }
                     .padding(.horizontal)
                 }
+                if p.propia, !recomendadas.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Recomendadas para esta playlist").titulo()
+                        ForEach(recomendadas) { c in
+                            HStack {
+                                FilaCancion(cancion: c) { Reproductor.compartido.reproducirSuelta(c, contexto: "recomendadas") }
+                                Button { Task { await agregarRecomendada(c) } } label: { Image(systemName: "plus.circle") }
+                                    .disabled(agregando.contains(c.id)).accessibilityLabel("Agregar a esta playlist")
+                            }
+                        }
+                    }.padding(.horizontal)
+                }
             }
             .padding(.bottom, 20)
         }
         .refreshable { await cargar() }
+    }
+
+    private func agregarRecomendada(_ c: Cancion) async {
+        guard !agregando.contains(c.id) else { return }; agregando.insert(c.id)
+        defer { agregando.remove(c.id) }
+        do {
+            try await API.hacer("POST", "/api/playlists/\(id)/canciones", ["ids": [c.id]])
+            recomendadas.removeAll { $0.id == c.id }
+            await cargar(); await biblioteca.recargarPlaylists()
+        } catch { Avisos.compartido.error(error) }
     }
 
     private func menu(_ p: Playlist) -> some View {
@@ -407,7 +441,10 @@ struct GeneroVista: View {
                     Encabezado(titulo: g.nombre, detalle: Formato.canciones(g.canciones.count), canciones: g.canciones, contexto: "genero") {
                         Mosaico(rutas: Array(Set(g.canciones.compactMap(\.portadaUrl))).sorted().prefix(4).map { $0 }, radio: 12)
                     } extra: {
-                        BotonDescargarLista(canciones: Array(g.canciones.prefix(50)))
+                        BotonDescargarLista(canciones: g.canciones)
+                        NavigationLink(value: Destino.mix(id: "genero:" + g.nombre, titulo: "Mix de " + g.nombre)) {
+                            Image(systemName: "sparkles").font(.title2)
+                        }
                     }
                     ListaCanciones(canciones: g.canciones, contexto: "genero")
                 }
@@ -422,8 +459,11 @@ struct GeneroVista: View {
 struct MixVista: View {
     let id: String
     let titulo: String
+    @State private var version = 0
+    @State private var guardando = false
+    private var clave: String { version == 0 || id.hasPrefix("genero:") || id.hasPrefix("artista:") ? id : "aleatorio" }
     var body: some View {
-        Cargador(cargar: { () async throws -> [Cancion] in try await API.get("/api/mixes/\(API.segmento(id))?cantidad=40") }) { cs, recargar in
+        Cargador(cargar: { () async throws -> [Cancion] in try await API.get("/api/mixes/\(API.segmento(clave))?cantidad=40") }) { cs, recargar in
             ScrollView {
                 VStack(spacing: 22) {
                     Encabezado(titulo: titulo, detalle: "Mix hecho para ti · \(Formato.canciones(cs.count))", canciones: cs, contexto: "mix") {
@@ -434,12 +474,23 @@ struct MixVista: View {
                             Image(systemName: "text.badge.plus").font(.title2)
                         }
                     }
+                    Button("Guardar este mix como playlist") {
+                        Task {
+                            guard !guardando else { return }; guardando = true; defer { guardando = false }
+                            do {
+                                let nueva = try await Biblioteca.compartida.crearPlaylist(nombre: titulo, canciones: cs.map(\.id))
+                                Navegacion.compartida.ir(.playlist(nueva.id))
+                            } catch { Avisos.compartido.error(error) }
+                        }
+                    }.disabled(guardando || cs.isEmpty)
                     ListaCanciones(canciones: cs, contexto: "mix")
                 }
                 .padding(.bottom, 20)
             }
             .refreshable { await recargar() }
         }
+        .id(version)
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Renovar mix") { version += 1 } } }
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -521,6 +572,18 @@ struct DescargasVista: View {
                     Label("Descargando \(Formato.canciones(descargas.enCurso.count))…", systemImage: "arrow.down.circle")
                         .font(.subheadline).foregroundStyle(Tema.celeste).padding(.horizontal)
                 }
+                if !descargas.enCurso.isEmpty {
+                    Button("Cancelar descargas pendientes", role: .destructive) { descargas.cancelarPendientes() }.padding(.horizontal)
+                }
+                if !descargas.fallidas.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("No se pudieron descargar \(descargas.fallidas.count) canciones").foregroundStyle(Tema.rosa)
+                        ForEach(Array(descargas.fallidas.values).sorted { $0.nombre < $1.nombre }) { c in
+                            Text("\(c.nombre): \(descargas.errores[c.id] ?? "Error de descarga")").font(.caption)
+                        }
+                        Button("Reintentar descargas") { descargas.reintentar() }
+                    }.padding(.horizontal)
+                }
                 if descargas.canciones.isEmpty {
                     EstadoVista(icono: "arrow.down.circle", titulo: "Sin descargas",
                                 texto: "Descarga canciones, álbumes o playlists para escucharlos sin conexión.")
@@ -537,7 +600,7 @@ struct DescargasVista: View {
         .onChange(of: descargas.canciones.count) { _, _ in espacio = descargas.espacio() }
         .confirmationDialog("¿Borrar todas las descargas de este iPhone?", isPresented: $confirmar, titleVisibility: .visible) {
             Button("Borrar", role: .destructive) {
-                for c in descargas.canciones { descargas.borrar(c) }
+                descargas.borrarTodo()
             }
         }
     }

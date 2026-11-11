@@ -23,6 +23,8 @@ enum Destino: Hashable {
     case cuenta
     case admin
     case subir
+    case soporte, generosAdmin, bibliotecaAdmin, resumenAdmin
+    case usuarioAdmin(Int)
     case albumes
     case artistas
 }
@@ -73,7 +75,24 @@ final class Navegacion {
         case "perfil": pestana = .perfil
         case "estadisticas": ir(.estadisticas)
         case "favoritos": ir(.favoritos)
-        case "admin": if Sesion.compartida.esAdmin { ir(.admin) }
+        case "mix": if let v = valor { ir(.mix(id: v, titulo: "Mix")) }
+        case "descargas": ir(.descargas)
+        case "historial": ir(.historial)
+        case "albumes": ir(.albumes)
+        case "artistas": ir(.artistas)
+        case "biblioteca": pestana = .biblioteca
+        case "buscar": pestana = .buscar
+        case "inicio": pestana = .inicio
+        case "subir": if Sesion.compartida.puedeEditar { ir(.subir) }
+        case "admin":
+            guard Sesion.compartida.esAdmin else { return }
+            let consulta = URLComponents(string: "https://local/" + limpia)?.queryItems
+            switch consulta?.first(where: { $0.name == "tab" })?.value {
+            case "soporte": ir(.soporte)
+            case "generos": ir(.generosAdmin)
+            case "biblioteca": ir(.bibliotecaAdmin)
+            default: ir(.admin)
+            }
         default: break
         }
     }
@@ -103,6 +122,11 @@ struct VistaDestino: View {
             case .cuenta: CuentaVista()
             case .admin: AdminVista()
             case .subir: SubirVista()
+            case .soporte: SoporteVista()
+            case .generosAdmin: GenerosAdminVista()
+            case .bibliotecaAdmin: BibliotecaAdminVista()
+            case .resumenAdmin: ResumenAdminVista()
+            case .usuarioAdmin(let id): UsuarioAdminVista(id: id)
             case .albumes: TodosAlbumesVista()
             case .artistas: TodosArtistasVista()
             }

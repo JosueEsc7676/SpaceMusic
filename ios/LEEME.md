@@ -18,6 +18,15 @@ App nativa (SwiftUI) que usa la misma API del servidor que la web. No abre la we
 - La radio descarta respuestas de una cola anterior y el control de tiempo se reinicia al cambiar de canción.
 - Pendiente: compilar con el flujo **App iPhone** y comprobar estos cambios en el iPhone real.
 
+## Ampliación de funciones
+
+- Administración: soporte, errores, detalle de usuarios, géneros y mantenimiento.
+- Letras: importar LRC/TXT, buscar y borrar con confirmación. Perfil: biografía y ajuste del banner.
+- Playlists: recomendaciones. Mixes: renovar y guardar. Listas: filtrar y agregar en grupo.
+- Reproductor: temporizador y recuperación de cola/posición al abrir, sin iniciar audio automáticamente.
+- Copias por cuenta para abrir sin conexión. Descargas: cancelar, ver errores y reintentar.
+- La compilación final ejecutará pruebas de modelos y letras. Consulta REVISION-IOS.md para cobertura, límites y pruebas en el teléfono.
+
 ## Qué incluye
 
 - **Entrar, crear cuenta y recuperar contraseña.** Se puede cambiar la dirección del servidor (por defecto `https://spacemusic.tail8ccfdf.ts.net`).

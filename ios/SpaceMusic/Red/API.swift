@@ -109,12 +109,28 @@ enum API {
         }
         texto("--\(limite)--\r\n")
         let (datos, resp) = try await traer { try await sesionURL.upload(for: r, from: cuerpo) }
-        return try interpretar(datos, resp, ruta: ruta)
+        return try interpretar(datos, resp, ruta: ruta, tokenPeticion: r.value(forHTTPHeaderField: "Authorization"))
     }
 
     private static func ejecutar<T: Decodable>(_ r: URLRequest) async throws -> T {
-        let (datos, resp) = try await traer { try await sesionURL.data(for: r) }
-        return try interpretar(datos, resp, ruta: r.url?.path ?? "")
+        let ruta = r.url?.path ?? ""
+        let copia = r.httpMethod == "GET" && CopiaLocal.admite(ruta) ? CopiaLocal.archivo(r.url?.absoluteString ?? ruta) : nil
+        let sinRed = await MainActor.run { !Conexion.compartida.disponible }
+        if sinRed, let copia, let datos = try? Data(contentsOf: copia), let valor = try? JSONDecoder().decode(T.self, from: datos) {
+            await MainActor.run { Conexion.compartida.mostrandoCopia = true }
+            return valor
+        }
+        do {
+            let (datos, resp) = try await traer { try await sesionURL.data(for: r) }
+            let valor: T = try interpretar(datos, resp, ruta: ruta, tokenPeticion: r.value(forHTTPHeaderField: "Authorization"))
+            CopiaLocal.guardar(datos, en: copia)
+            return valor
+        } catch let error as ErrorAPI where error.estado == 0 {
+            guard let copia, let datos = try? Data(contentsOf: copia),
+                  let valor = try? JSONDecoder().decode(T.self, from: datos) else { throw error }
+            Task { @MainActor in Conexion.compartida.mostrandoCopia = true }
+            return valor
+        }
     }
 
     private static func traer(_ f: () async throws -> (Data, URLResponse)) async throws -> (Data, URLResponse) {
@@ -131,10 +147,14 @@ enum API {
         }
     }
 
-    private static func interpretar<T: Decodable>(_ datos: Data, _ resp: URLResponse, ruta: String) throws -> T {
+    private static func interpretar<T: Decodable>(_ datos: Data, _ resp: URLResponse, ruta: String, tokenPeticion: String?) throws -> T {
         let estado = (resp as? HTTPURLResponse)?.statusCode ?? 0
         if estado == 401 && !ruta.hasPrefix("/api/auth/login") {
-            Task { @MainActor in Sesion.compartida.cerrar(motivo: "Tu sesión expiró. Vuelve a entrar.") }
+            Task { @MainActor in
+                if let token = Sesion.compartida.token, tokenPeticion == "Bearer " + token {
+                    Sesion.compartida.cerrar(motivo: "Tu sesión expiró. Vuelve a entrar.")
+                }
+            }
             throw ErrorAPI(mensaje: "Tu sesión expiró", estado: 401)
         }
         if !(200..<300).contains(estado) {
@@ -153,7 +173,7 @@ enum API {
         if T.self == Vacio.self { return Vacio() as! T }
         let cuerpo = datos.isEmpty ? Data("{}".utf8) : datos
         do {
-            return try decodificador.decode(T.self, from: cuerpo)
+            return try JSONDecoder().decode(T.self, from: cuerpo)
         } catch {
             #if DEBUG
             print("No se pudo leer \(ruta): \(error)")

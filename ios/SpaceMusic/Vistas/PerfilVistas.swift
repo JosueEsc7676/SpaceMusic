@@ -80,6 +80,9 @@ struct PerfilVista: View {
     @State private var eligiendo = false
     /// true si la foto elegida es para la portada, false para la foto de perfil.
     @State private var paraPortada = false
+    @State private var ajustandoPortada = false
+    @State private var posicionPortada = 50.0
+    @State private var guardandoPortada = false
     @State private var editandoNombre = false
     @State private var nombre = ""
 
@@ -99,6 +102,34 @@ struct PerfilVista: View {
         .task { if perfil == nil { await cargar() } }
         .photosPicker(isPresented: $eligiendo, selection: $foto, matching: .images)
         .onChange(of: foto) { _, i in if let i { Task { await subir(i, portada: paraPortada) } } }
+        .sheet(isPresented: $ajustandoPortada) {
+            NavigationStack {
+                VStack(spacing: 24) {
+                    ImagenRemota(ruta: perfil?.banner, icono: "photo", posicionVertical: CGFloat(posicionPortada / 100))
+                        .frame(height: 170).clipped()
+                    Text("Elige qué parte de la foto se muestra").font(.headline)
+                    Slider(value: $posicionPortada, in: 0...100).accessibilityLabel("Posición vertical de la portada")
+                    if let error { Text(error).foregroundStyle(Tema.peligro) }
+                    Spacer()
+                }
+                .padding().navigationTitle("Ajustar portada").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { ajustandoPortada = false } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Guardar") {
+                            Task {
+                                guard !guardandoPortada else { return }; guardandoPortada = true
+                                defer { guardandoPortada = false }
+                                do {
+                                    try await API.hacer("PUT", "/api/perfiles/yo/banner/posicion", ["pos": Int(posicionPortada.rounded())])
+                                    await cargar(); ajustandoPortada = false
+                                } catch { self.error = error.localizedDescription }
+                            }
+                        }.disabled(guardandoPortada)
+                    }
+                }
+            }.presentationDetents([.medium, .large])
+        }
         .alert("Tu nombre", isPresented: $editandoNombre) {
             TextField("Nombre", text: $nombre)
             Button("Guardar") { Task { await guardarNombre() } }
@@ -218,7 +249,7 @@ struct PerfilVista: View {
             ZStack(alignment: .bottomLeading) {
                 Group {
                     if let b = p.banner, !b.isEmpty {
-                        ImagenRemota(ruta: b, icono: "photo")
+                        ImagenRemota(ruta: b, icono: "photo", posicionVertical: CGFloat(p.bannerPos / 100))
                     } else {
                         LinearGradient(colors: [Tema.lila.opacity(0.6), Tema.celeste.opacity(0.4), Tema.rosa.opacity(0.5)],
                                        startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -232,6 +263,7 @@ struct PerfilVista: View {
                         Menu {
                             Button { paraPortada = true; eligiendo = true } label: { Label("Cambiar portada", systemImage: "photo") }
                             if p.banner != nil {
+                                Button("Ajustar posición") { posicionPortada = p.bannerPos; ajustandoPortada = true }
                                 Button(role: .destructive) { Task { await quitarPortada() } } label: {
                                     Label("Quitar portada", systemImage: "trash")
                                 }

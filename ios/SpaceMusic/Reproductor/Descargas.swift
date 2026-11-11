@@ -14,6 +14,11 @@ final class Descargas {
 
     @ObservationIgnored private var ids: Set<Int> = []
     @ObservationIgnored private var usuarioCargado: Int?
+    @ObservationIgnored private var pendientes: [Cancion] = []
+    @ObservationIgnored private var tarea: Task<Void, Never>?
+    @ObservationIgnored private var generacion = UUID()
+    private(set) var fallidas: [Int: Cancion] = [:]
+    private(set) var errores: [Int: String] = [:]
 
     private var carpeta: URL? {
         guard let uid = Sesion.compartida.usuario?.id else { return nil }
@@ -63,18 +68,31 @@ final class Descargas {
     func descargar(_ lista: [Cancion]) {
         for c in lista where !ids.contains(c.id) && enCurso[c.id] == nil {
             enCurso[c.id] = 0
+            fallidas[c.id] = nil; errores[c.id] = nil
+            pendientes.append(c)
         }
-        Task { await procesarPendientes(lista) }
+        guard tarea == nil else { return }
+        let version = generacion
+        tarea = Task { await procesarPendientes(version) }
     }
 
     /// De una en una, para no ocupar la conexión de la música que suena.
-    private func procesarPendientes(_ lista: [Cancion]) async {
-        for c in lista where enCurso[c.id] == 0 {
-            await bajar(c)
+    private func procesarPendientes(_ version: UUID) async {
+        defer { if version == generacion { tarea = nil } }
+        while !pendientes.isEmpty, !Task.isCancelled, version == generacion {
+            let c = pendientes.removeFirst()
+            await bajar(c, version: version)
         }
     }
 
-    private func bajar(_ c: Cancion) async {
+    func cancelarPendientes() {
+        generacion = UUID(); tarea?.cancel(); tarea = nil
+        pendientes = []; enCurso = [:]
+    }
+
+    func reintentar() { descargar(Array(fallidas.values)) }
+
+    private func bajar(_ c: Cancion, version: UUID) async {
         guard let origen = API.descargaURL(c.id), let destino = ruta(de: c) else {
             enCurso[c.id] = nil
             return
@@ -82,6 +100,9 @@ final class Descargas {
         enCurso[c.id] = 0.01
         do {
             let (temporal, resp) = try await API.sesionURL.download(from: origen)
+            guard !Task.isCancelled, version == generacion else {
+                try? FileManager.default.removeItem(at: temporal); return
+            }
             guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw ErrorAPI(mensaje: "Error", estado: 0) }
             try? FileManager.default.removeItem(at: destino)
             try FileManager.default.moveItem(at: temporal, to: destino)
@@ -90,9 +111,9 @@ final class Descargas {
             ids.insert(c.id)
             guardarIndice()
         } catch {
-            #if DEBUG
-            print("Descarga fallida \(c.id): \(error)")
-            #endif
+            guard version == generacion, !Task.isCancelled else { return }
+            fallidas[c.id] = c
+            errores[c.id] = error.localizedDescription
         }
         enCurso[c.id] = nil
     }
@@ -105,11 +126,13 @@ final class Descargas {
     }
 
     func borrarTodo() {
+        cancelarPendientes()
         if let dir = carpeta { try? FileManager.default.removeItem(at: dir) }
         canciones = []
         ids = []
         enCurso = [:]
         usuarioCargado = nil
+        fallidas = [:]; errores = [:]
     }
 
     /// Espacio que ocupan las descargas, en bytes.

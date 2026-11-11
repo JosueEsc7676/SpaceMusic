@@ -6,6 +6,7 @@ struct Principal: View {
     @State private var eventos = Eventos.compartido
     @State private var reproductor = Reproductor.compartido
     @State private var avisos = Avisos.compartido
+    @State private var conexion = Conexion.compartida
 
     var body: some View {
         TabView(selection: $nav.pestana) {
@@ -34,6 +35,8 @@ struct Principal: View {
         .hojasGlobales(activas: !nav.reproductorAbierto)
         .task {
             Descargas.compartido.cargar()
+            Reproductor.compartido.restaurar()
+            if !conexion.disponible { nav.pestana = .biblioteca; nav.ir(.descargas) }
             await Biblioteca.compartida.renovarSesionSiHaceFalta()
             guard !Task.isCancelled, Sesion.compartida.conectado else { return }
             Eventos.compartido.conectar()
@@ -49,6 +52,11 @@ struct Principal: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 8) {
+                if !conexion.disponible || conexion.mostrandoCopia {
+                    NavigationLink(value: Destino.descargas) {
+                        Label("Sin conexión · Abrir descargas", systemImage: "wifi.slash").font(.caption)
+                    }
+                }
                 if let t = avisos.texto {
                     Text(t)
                         .font(.subheadline.weight(.medium))

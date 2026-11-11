@@ -13,6 +13,7 @@ struct SpaceMusicApp: App {
                 .tint(Tema.celeste)
         }
         .onChange(of: fase) { _, nueva in
+            if nueva != .active { Reproductor.compartido.guardarEstado() }
             Eventos.compartido.appActiva = nueva == .active
             if nueva == .active {
                 Eventos.compartido.conectar()

@@ -16,7 +16,20 @@ struct ReproductorVista: View {
         GeometryReader { espacio in
           ZStack {
             if let c = r.actual {
-                VStack(spacing: 0) {
+                if espacio.size.height < 430 {
+                    VStack(spacing: 8) {
+                        cabecera(c)
+                        HStack(spacing: 24) {
+                            contenidoPanel(c)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
+                            ScrollView { controles(c).padding(.bottom, 8) }
+                                .frame(width: max(220, espacio.size.width * 0.5))
+                        }
+                    }
+                    .padding(.horizontal, 22)
+                    .frame(width: espacio.size.width, height: espacio.size.height)
+                } else {
+                  VStack(spacing: 0) {
                     cabecera(c)
                     Group {
                         switch panel {
@@ -33,6 +46,7 @@ struct ReproductorVista: View {
                 .padding(.horizontal, 22)
                 .padding(.bottom, 8)
                 .frame(width: espacio.size.width, height: espacio.size.height)
+                }
             } else {
                 EstadoVista(icono: "music.note", titulo: "No suena nada")
             }
@@ -43,6 +57,14 @@ struct ReproductorVista: View {
         }
         .onChange(of: r.actual?.id) { _, _ in arrastrando = nil }
         .hojasGlobales()
+    }
+
+    @ViewBuilder private func contenidoPanel(_ c: Cancion) -> some View {
+        switch panel {
+        case .portada: portada(c)
+        case .letra: LetraCompleta()
+        case .cola: ColaVista()
+        }
     }
 
     private var fondo: some View {
@@ -164,6 +186,17 @@ struct ReproductorVista: View {
 
             HStack {
                 SelectorSalida().frame(width: 36, height: 36)
+                Spacer()
+                Menu {
+                    ForEach([5, 10, 15, 30, 45, 60], id: \.self) { minutos in
+                        Button("\(minutos) minutos") { r.programarSueno(minutos: minutos) }
+                    }
+                    Button("Al terminar esta canción") { r.programarSueno(minutos: nil); r.dormirAlTerminar = true }
+                    Button("Desactivar", role: .cancel) { r.programarSueno(minutos: nil) }
+                } label: {
+                    Image(systemName: "moon.zzz").foregroundStyle(r.finTemporizador != nil || r.dormirAlTerminar ? Tema.celeste : Tema.texto)
+                }
+                .accessibilityLabel("Temporizador para dormir")
                 Spacer()
                 Button { hojas.enviarCancion = c } label: { Image(systemName: "paperplane") }
                 Spacer()

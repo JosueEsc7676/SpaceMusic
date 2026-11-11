@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 /// Usa las mismas rutas y permisos de edición que la web.
 struct EditarCancionHoja: View {
@@ -17,6 +18,8 @@ struct EditarCancionHoja: View {
     @State private var cargandoLetra = true
     @State private var error: String?
     @State private var actualizada: Cancion?
+    @State private var importar = false
+    @State private var confirmarBorrado = false
 
     var body: some View {
         NavigationStack {
@@ -43,6 +46,9 @@ struct EditarCancionHoja: View {
                     Text("Pega texto o una letra sincronizada LRC: [01:23.45] línea.")
                         .font(.footnote).foregroundStyle(Tema.secundario)
                     TextEditor(text: $letra).frame(minHeight: 200)
+                    Button("Importar archivo LRC o TXT") { importar = true }
+                    Button("Buscar letra en internet") { Task { await buscarLetra() } }
+                    Button("Borrar letra", role: .destructive) { confirmarBorrado = true }
                     Button("Guardar letra") { Task { await guardarLetra() } }
                         .disabled(cargandoLetra)
                 }
@@ -68,6 +74,19 @@ struct EditarCancionHoja: View {
                 } catch {
                     self.error = "No se pudo cargar la letra: \(error.localizedDescription)"
                 }
+            }
+            .fileImporter(isPresented: $importar, allowedContentTypes: [.plainText, UTType(filenameExtension: "lrc") ?? .data]) { resultado in
+                do {
+                    let url = try resultado.get()
+                    let permiso = url.startAccessingSecurityScopedResource()
+                    defer { if permiso { url.stopAccessingSecurityScopedResource() } }
+                    let datos = try Data(contentsOf: url)
+                    guard let texto = String(data: datos, encoding: .utf8) ?? String(data: datos, encoding: .isoLatin1) else { return }
+                    letra = texto
+                } catch { self.error = error.localizedDescription }
+            }
+            .confirmationDialog("¿Borrar la letra de esta canción?", isPresented: $confirmarBorrado, titleVisibility: .visible) {
+                Button("Borrar letra", role: .destructive) { Task { await borrarLetra() } }
             }
             .onChange(of: foto) { _, nueva in
                 guard let nueva else { return }
@@ -113,6 +132,29 @@ struct EditarCancionHoja: View {
             actualizada = c
             Reproductor.compartido.actualizar(c)
             Avisos.compartido.mostrar("Portada guardada")
+        } catch { self.error = error.localizedDescription }
+    }
+
+    private func buscarLetra() async {
+        guard !ocupada else { return }; ocupada = true; error = nil
+        defer { ocupada = false }
+        do {
+            let resultado: Letra = try await API.enviar("POST", "/api/letras/\(cancion.id)/buscar?forzar=true")
+            if resultado.encontrada == false { error = resultado.message ?? "No se encontró letra"; return }
+            letra = resultado.letraSincronizada.isEmpty ? resultado.letra : resultado.letraSincronizada
+            if Reproductor.compartido.actual?.id == cancion.id {
+                Letras.compartido.cargar(actualizada ?? cancion, forzar: true)
+            }
+        } catch { self.error = error.localizedDescription }
+    }
+
+    private func borrarLetra() async {
+        guard !ocupada else { return }; ocupada = true; error = nil
+        defer { ocupada = false }
+        do {
+            try await API.hacer("DELETE", "/api/letras/\(cancion.id)")
+            letra = ""
+            if Reproductor.compartido.actual?.id == cancion.id { Letras.compartido.cargar(cancion, forzar: true) }
         } catch { self.error = error.localizedDescription }
     }
 

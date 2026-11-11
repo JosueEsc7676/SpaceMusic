@@ -51,6 +51,7 @@ final class Reproductor {
     @ObservationIgnored private var anteriores: [Int] = []
     @ObservationIgnored private var portadaNowPlaying: (id: Int, arte: MPMediaItemArtwork)?
     @ObservationIgnored private var saltosSeguidos = 0
+    @ObservationIgnored private var intencionSonar = false
 
     private init() {
         radioAutomatica = UserDefaults.standard.object(forKey: "radioAutomatica") as? Bool ?? true
@@ -61,6 +62,55 @@ final class Reproductor {
         observar()
     }
 
+    private struct EstadoGuardado: Codable {
+        let cola: [Cancion]
+        let original: [Cancion]
+        let indice: Int
+        let tiempo: Double
+        let contexto: String
+        let aleatorio: Bool
+        let repetir: Int
+    }
+    var finTemporizador: Date?
+    var dormirAlTerminar = false
+    @ObservationIgnored private var temporizador: Task<Void, Never>?
+    @ObservationIgnored private var ultimoGuardado = Date.distantPast
+    @ObservationIgnored private var restaurando = false
+    @ObservationIgnored private var reanudarTrasInterrupcion = false
+
+    func programarSueno(minutos: Int?) {
+        temporizador?.cancel()
+        finTemporizador = nil
+        dormirAlTerminar = false
+        guard let minutos else { return }
+        finTemporizador = Date().addingTimeInterval(Double(minutos) * 60)
+        temporizador = Task {
+            try? await Task.sleep(for: .seconds(Double(minutos) * 60))
+            guard !Task.isCancelled else { return }
+            pausar(); finTemporizador = nil
+        }
+    }
+
+    func guardarEstado() {
+        guard !restaurando, !cola.isEmpty else { return }
+        let estado = EstadoGuardado(cola: cola, original: ordenOriginal, indice: indice, tiempo: tiempo,
+                                    contexto: contexto, aleatorio: aleatorio, repetir: repetir.rawValue)
+        if let datos = try? JSONEncoder().encode(estado) { CopiaLocal.guardar(datos, en: CopiaLocal.archivo("reproductor")) }
+    }
+
+    func restaurar() {
+        guard cola.isEmpty, let url = CopiaLocal.archivo("reproductor"),
+              let datos = try? Data(contentsOf: url), let estado = try? JSONDecoder().decode(EstadoGuardado.self, from: datos),
+              estado.cola.indices.contains(estado.indice), estado.tiempo.isFinite else { return }
+        restaurando = true
+        cola = estado.cola; ordenOriginal = estado.original; indice = estado.indice
+        contexto = estado.contexto; aleatorio = estado.aleatorio
+        repetir = ModoRepetir(rawValue: estado.repetir) ?? .no
+        cargarActual(reproducir: false)
+        buscar(estado.tiempo)
+        restaurando = false
+    }
+
     // MARK: - Reproducir
 
     /// Empieza una lista desde una canción. `contexto` se registra en el servidor (album, playlist, buscar…).
@@ -69,8 +119,9 @@ final class Reproductor {
         registrarEscucha()
         self.contexto = contexto
         versionCola = UUID()
-        ordenOriginal = canciones
-        var lista = canciones
+        let vigentes = canciones.map { CancionesEditadas.compartidas.actual($0) }
+        ordenOriginal = vigentes
+        var lista = vigentes
         var inicio = min(max(i, 0), canciones.count - 1)
         if mezclar || aleatorio {
             aleatorio = true
@@ -88,7 +139,7 @@ final class Reproductor {
     /// Una canción suelta: suena y después sigue la radio con canciones parecidas.
     func reproducirSuelta(_ c: Cancion, contexto: String = "otro") {
         reproducir([c], desde: 0, contexto: contexto)
-        Task { await pedirRadio(cantidad: 30) }
+        if radioAutomatica || contexto == "radio" { Task { await pedirRadio(cantidad: 30) } }
     }
 
     func alternar() {
@@ -98,8 +149,10 @@ final class Reproductor {
 
     /// Refleja las ediciones en la cola y en la pantalla bloqueada.
     func actualizar(_ cancion: Cancion) {
+        CancionesEditadas.compartidas.guardar(cancion)
         for i in cola.indices where cola[i].id == cancion.id { cola[i] = cancion }
         for i in ordenOriginal.indices where ordenOriginal[i].id == cancion.id { ordenOriginal[i] = cancion }
+        NotificationCenter.default.post(name: .cancionActualizada, object: cancion)
         if actual?.id == cancion.id {
             actualizarNowPlaying()
             cargarPortadaNowPlaying(cancion)
@@ -107,11 +160,14 @@ final class Reproductor {
     }
 
     func pausar() {
+        intencionSonar = false
         jugador.pause()
+        guardarEstado()
         avisarActividad()
     }
 
     func continuar() {
+        intencionSonar = true
         if jugador.currentItem == nil, actual != nil {
             cargarActual(reproducir: true)
             return
@@ -130,8 +186,11 @@ final class Reproductor {
             indice = j
             cargarActual(reproducir: true)
         } else if radioAutomatica {
+            let version = versionCola
+            let posicion = indice
             Task {
                 await pedirRadio(cantidad: 20)
+                guard version == versionCola, posicion == indice else { return }
                 if indice + 1 < cola.count {
                     registrarEscucha()
                     indice += 1
@@ -170,7 +229,10 @@ final class Reproductor {
     }
 
     func detener() {
+        intencionSonar = false
         registrarEscucha()
+        programarSueno(minutos: nil)
+        if let url = CopiaLocal.archivo("reproductor") { try? FileManager.default.removeItem(at: url) }
         jugador.pause()
         jugador.removeAllItems()
         itemActual = nil
@@ -262,6 +324,7 @@ final class Reproductor {
     }
 
     private func cargarActual(reproducir: Bool) {
+        intencionSonar = reproducir
         guard let c = actual, let item = elemento(para: c) else { return }
         error = nil
         jugador.removeAllItems()
@@ -321,6 +384,8 @@ final class Reproductor {
             return
         }
         guard nuevo === itemSiguiente, let j = indiceSiguiente else { return }
+        let dormir = dormirAlTerminar
+        if dormir { jugador.pause(); intencionSonar = false; dormirAlTerminar = false }
         registrarEscucha()
         indice = j
         itemActual = nuevo
@@ -343,6 +408,7 @@ final class Reproductor {
         cargarPortadaNowPlaying(c)
         avisarActividad()
         Letras.compartido.cargar(c)
+        guardarEstado()
     }
 
     /// Pide canciones parecidas al servidor y las agrega a la cola.
@@ -362,6 +428,11 @@ final class Reproductor {
         let filtradas = nuevas.filter { !ids.contains($0.id) }
         guard !filtradas.isEmpty else { return }
         cola.append(contentsOf: filtradas)
+        if jugador.currentItem == nil, intencionSonar, indice + 1 < cola.count {
+            indice += 1
+            cargarActual(reproducir: true)
+            return
+        }
         if itemSiguiente == nil, jugador.currentItem != nil { prepararSiguiente() }
     }
 
@@ -402,7 +473,7 @@ final class Reproductor {
     }
 
     private func observarEstado(de item: AVPlayerItem) {
-        obsEstado = item.observe(\.status, options: [.new]) { [weak self] it, _ in
+        obsEstado = item.observe(\.status, options: [.initial, .new]) { [weak self] it, _ in
             let estado = it.status
             let dur = it.duration.seconds
             Task { @MainActor in
@@ -426,7 +497,8 @@ final class Reproductor {
             indice = calcularSiguiente(manual: true)!
             cargarActual(reproducir: true)
         } else {
-            jugador.pause()
+            pausar()
+            cargando = false
         }
     }
 
@@ -438,6 +510,7 @@ final class Reproductor {
         ultimoTick = t
         let umbral = duracion > 0 ? min(30, duracion * 0.5) : 30
         if !registrada, escuchado >= umbral { registrarEscucha(forzar: true) }
+        if Date().timeIntervalSince(ultimoGuardado) >= 5 { guardarEstado(); ultimoGuardado = Date() }
     }
 
     private func reiniciarConteo() {
@@ -466,7 +539,11 @@ final class Reproductor {
     private func interrupcion(_ info: [AnyHashable: Any]?) {
         guard let raw = info?[AVAudioSessionInterruptionTypeKey] as? UInt,
               let tipo = AVAudioSession.InterruptionType(rawValue: raw) else { return }
-        if tipo == .ended, let o = info?[AVAudioSessionInterruptionOptionKey] as? UInt,
+        if tipo == .began {
+            reanudarTrasInterrupcion = sonando || cargando
+            pausar()
+        }
+        if tipo == .ended, reanudarTrasInterrupcion, let o = info?[AVAudioSessionInterruptionOptionKey] as? UInt,
            AVAudioSession.InterruptionOptions(rawValue: o).contains(.shouldResume) {
             continuar()
         }
@@ -491,7 +568,15 @@ final class Reproductor {
             MainActor.assumeIsolated { self?.buscar(e.positionTime) }
             return .success
         }
-        cc.likeCommand.isEnabled = false
+        cc.likeCommand.isEnabled = true
+        cc.likeCommand.localizedTitle = "Me gusta"
+        cc.likeCommand.addTarget { [weak self] _ in
+            Task { @MainActor in
+                guard let c = self?.actual else { return }
+                Biblioteca.compartida.alternarFavorito(c)
+            }
+            return .success
+        }
         cc.dislikeCommand.isEnabled = false
     }
 
@@ -500,6 +585,7 @@ final class Reproductor {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             return
         }
+        MPRemoteCommandCenter.shared().likeCommand.isActive = Biblioteca.compartida.esFavorita(c.id)
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: c.nombre,
             MPMediaItemPropertyArtist: c.artista,
