@@ -50,7 +50,15 @@ App nativa (SwiftUI) que usa la misma API del servidor que la web. No abre la we
   - buscar canciones nuevas o géneros que faltan;
   - enviar avisos a todos.
 
-## Cómo instalarla en tu iPhone
+## Instalar la última versión sin Mac (recomendado)
+
+GitHub compila la app solo cada vez que se suben cambios en `ios/` (flujo **App iPhone** en `.github/workflows/ios.yml`).
+
+1. En GitHub: repositorio **SpaceMusic** → pestaña **Actions** → **App iPhone** → la ejecución más reciente con ✓ verde.
+2. En **Artifacts**, descarga **SpaceMusic-ipa** y descomprímelo.
+3. Instala `SpaceMusic.ipa` con **Sideloadly** (Windows o Mac), con el iPhone conectado por cable.
+
+## Cómo instalarla en tu iPhone con Xcode
 
 1. **Instala Xcode** desde la App Store de la Mac. Esta Mac tiene macOS 14.7, así que la versión más nueva que funciona es **Xcode 16.2**. Si la App Store ofrece una que pide macOS 15, descarga la 16.2 desde developer.apple.com/download/all.
 2. Abre `ios/SpaceMusic.xcodeproj`.

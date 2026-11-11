@@ -43,6 +43,35 @@ ios/
 
 ## Compilar y comprobar
 
+### Lo normal: GitHub Actions (sirve desde Windows)
+
+El dueño trabaja casi siempre **desde Windows con Codex**, donde no se puede compilar una app de iPhone. Por eso la compila **GitHub Actions** en una Mac de GitHub: `.github/workflows/ios.yml`, flujo **"App iPhone"**.
+
+- Corre solo cada vez que se sube a GitHub un cambio dentro de `ios/` (cualquier rama), y en cada pull request.
+- Si compila, deja **`SpaceMusic.ipa`** para descargar (dura 14 días).
+- Si falla, el paso **"Mostrar errores"** lista los errores de Swift.
+
+Cómo trabajar:
+
+1. Haz los cambios en la rama `app-ios` (o en una rama nueva que salga de ella).
+2. **Escribe Swift que compile con Xcode 16** (Swift 5, iOS 17). Como no puedes compilar, revisa con cuidado los tipos, los `import`, los `init` de los modelos y que cada caso nuevo de `Destino` tenga su vista en `VistaDestino`.
+3. Sube los cambios. Si tienes acceso a la terminal con `gh`, revisa el resultado:
+   ```bash
+   gh run list --workflow ios.yml --limit 3
+   gh run watch            # espera a que termine
+   gh run view --log-failed  # si falló: muestra los errores
+   ```
+   Si falla, corrige y vuelve a subir hasta que pase. **No des un cambio por terminado si "App iPhone" está en rojo.**
+4. Si no tienes `gh` (por ejemplo, Codex en la nube), dile al dueño que revise la pestaña **Actions** de GitHub y que te pegue los errores si sale en rojo.
+
+Para el dueño (instalar la versión nueva en el iPhone desde Windows o Mac):
+
+1. Abre GitHub → repositorio SpaceMusic → pestaña **Actions** → **App iPhone** → la ejecución más reciente con ✓ verde.
+2. Abajo, en **Artifacts**, descarga **SpaceMusic-ipa**. Es un `.zip`: descomprímelo y sale `SpaceMusic.ipa`.
+3. Ábrelo con **Sideloadly** (en Windows también existe; pide tener iTunes instalado desde apple.com, no el de la Microsoft Store) con el iPhone conectado por cable → **Start**.
+
+### En la Mac (opcional)
+
 La Mac del dueño es una **MacBook Air 2015–2017 con macOS 14 parcheado**: solo corre **Xcode 16.2** (SDK iOS 18.2) y tiene poco disco.
 
 ```bash

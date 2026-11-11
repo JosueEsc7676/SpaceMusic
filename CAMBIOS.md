@@ -5,6 +5,7 @@
 - Reproductor del sistema: pantalla bloqueada, Centro de control, AirPlay, siguiente canción precargada y radio automática al terminar la lista.
 - Letra sincronizada (completa y en miniatura) y descargas para escuchar sin conexión.
 - Instrucciones para instalarla en `ios/LEEME.md`.
+- GitHub Actions compila la app en cada cambio de `ios/` y deja `SpaceMusic.ipa` para descargar (flujo "App iPhone"), así se puede trabajar desde Windows.
 
 ## Versión 2.7 (app Android 1.5)
 - **Buscar por género o ánimo:** "banda", "bachata", "reggaetón", "música relajante", "para el gym"… muestran esa música lista para escuchar (`GeneroService.buscarPorEstilo`, campo `estilo` en `/api/buscar`).
