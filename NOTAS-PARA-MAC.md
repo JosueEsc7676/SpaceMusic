@@ -9,9 +9,10 @@ Servidor de música propio (como Spotify), con:
 
 - **Web** (también se instala en el iPhone desde Safari);
 - **app Android** para teléfono (WebView que abre la web);
-- **app Android TV**.
+- **app Android TV**;
+- **app nativa de iPhone** (SwiftUI, en `ios/`, rama `app-ios`).
 
-Versión actual: **web 2.7**, **app Android 1.5 (code 6)**, **TV 1.0**. El historial completo está en `CAMBIOS.md`.
+Versión actual: **web 2.7**, **app Android 1.5 (code 6)**, **TV 1.0**, **iPhone 1.0**. El historial completo está en `CAMBIOS.md`.
 
 ## Cómo está armado
 
@@ -22,6 +23,7 @@ Versión actual: **web 2.7**, **app Android 1.5 (code 6)**, **TV 1.0**. El histo
 | Service worker | `src/main/resources/sw/sw.js` | lo sirve `ServiceWorkerController`; caché sin conexión y descargas |
 | App Android | `android-movil/` | Java sin Gradle; se compila con `compilar.sh` |
 | App TV | `android-tv/` | igual; interfaz de TV en `static/js/tv.js` |
+| App iPhone | `ios/` | SwiftUI nativo, iOS 17+, sin librerías externas. Instrucciones en `ios/LEEME.md` |
 | Descargar música al servidor | `scripts/descargar` y `scripts/Descargar musica.bat` | |
 
 Detalles importantes:
@@ -78,4 +80,4 @@ Detalles importantes:
   - que Mensajes abra con datos móviles.
 - La app Android no se ha probado en un teléfono (el usuario no tiene Android).
 - App de TV: actualizarla otro día (sigue en 1.0).
-- Idea posible: app nativa de iPhone (Xcode, en la Mac).
+- App de iPhone: escrita y revisada con el compilador, pero falta instalar Xcode 16.2 para compilarla y probarla en el iPhone (ver `ios/LEEME.md`).

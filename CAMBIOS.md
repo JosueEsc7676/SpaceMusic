@@ -1,5 +1,11 @@
 # Registro de cambios
 
+## App de iPhone 1.0 (nativa)
+- Nueva app nativa para iPhone en `ios/` (SwiftUI, iOS 17 o más nuevo), con las mismas funciones que la web: inicio, buscar (también por ánimo), biblioteca, playlists, álbumes, artistas, géneros, mixes, perfiles, mensajes en tiempo real, notificaciones, estadísticas, cuenta, subir canciones y administración.
+- Reproductor del sistema: pantalla bloqueada, Centro de control, AirPlay, siguiente canción precargada y radio automática al terminar la lista.
+- Letra sincronizada (completa y en miniatura) y descargas para escuchar sin conexión.
+- Instrucciones para instalarla en `ios/LEEME.md`.
+
 ## Versión 2.7 (app Android 1.5)
 - **Buscar por género o ánimo:** "banda", "bachata", "reggaetón", "música relajante", "para el gym"… muestran esa música lista para escuchar (`GeneroService.buscarPorEstilo`, campo `estilo` en `/api/buscar`).
 - **Letra en miniatura** en el reproductor del celular, debajo del artista (línea actual y siguiente). Al tocarla se abre la letra completa.
