@@ -17,7 +17,7 @@
         ],
         "NSPhotoLibraryUsageDescription": "Permite elegir fotos para tu perfil, playlists y portadas.",
         "NSCameraUsageDescription": "Permite tomar fotos para tu perfil y portadas.",
-        "NSLocalNetworkUsageDescription": "Conectarse a tu servidor de m\u00fasica en la red local.",
+        "NSLocalNetworkUsageDescription": "Conectarse a tu servidor de música en la red local.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -45,7 +45,8 @@
           "enableRemoteNotifications": false,
           "enableBackgroundRemoteNotifications": false
         }
-      ]
+      ],
+      "expo-image"
     ],
     "updates": {
       "enabled": false

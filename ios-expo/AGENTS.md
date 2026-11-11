@@ -1,7 +1,8 @@
 # SpaceMusic iPhone: React Native, Expo y TypeScript
 
 - Trabajar en español y en `app-ios`. La app activa es esta carpeta. `../ios/` conserva la versión SwiftUI anterior como referencia.
-- La interfaz es la web móvil real del servidor dentro de `react-native-webview`: conserva sus pantallas, CSS, formularios y API. No describirla como una reescritura completa de vistas nativas.
+- La interfaz es la web móvil real del servidor dentro de `react-native-webview`, salvo el reproductor (mini, completo, letras y cola), que ya es nativo en `src/player/`. Se migra por bloques completos; mantener la tabla “Migración a pantallas nativas” del README con su estado real. No describir la app como una reescritura completa de vistas nativas.
+- El reproductor nativo no tiene su propia cola: lee el estado del motor y pide a la web (`__smCmd`, lista cerrada en `protocol.ts` y `web/bridge.ts`) las reglas de cola, Me gusta y preferencias.
 - Expo Audio gestiona una cola nativa y los controles bloqueados; el puente conecta el reproductor de la web con ese motor y mantiene una única reproducción.
 - Toda orden de la web se valida en `src/protocol.ts`. Solo aceptar el servidor HTTPS elegido, sin credenciales en URL; no exponer la sesión a enlaces externos.
 - Sesiones en SecureStore; descargas y cola separadas por servidor y usuario. Nunca imprimir tokens ni guardarlos en git.

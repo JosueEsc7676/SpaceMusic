@@ -21,7 +21,23 @@ export type BridgeMessage =
   | { type: 'removeDownload'; id: number }
   | { type: 'clearDownloads' }
   | { type: 'notify'; title: string; body: string; route: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'openPlayer'; tab: PlayerTab }
+  | { type: 'ui'; ui: PlayerUi };
+export type PlayerTab = 'letra' | 'cola' | null;
+export type Rect = { top: number; left: number; width: number; height: number };
+/** Estado de la web que el reproductor nativo necesita mostrar: reglas de cola y preferencias. */
+export type PlayerUi = { songId: number; fav: boolean; shuffle: boolean; repeat: 'off' | 'all' | 'one'; autoRadio: boolean; bar: Rect | null };
+/** Órdenes que el reproductor nativo puede pedir a la web (allowlist; el puente ignora el resto). */
+export type WebCommand = 'shuffle' | 'repeat' | 'autoRadio' | 'fav' | 'remove' | 'move' | 'clear' | 'sleep' | 'radio' | 'artist' | 'album' | 'download' | 'removeDownload' | 'menu';
+export function webCommand(name: WebCommand, arg?: unknown): string {
+  return `window.__smCmd?.(${JSON.stringify(name)},${JSON.stringify(arg ?? null)})`;
+}
+const finite = (v: unknown, min: number, max: number) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
+export function isRect(v: unknown): v is Rect {
+  const r = v as Rect;
+  return !!r && typeof r === 'object' && finite(r.top, -10000, 10000) && finite(r.left, -10000, 10000) && finite(r.width, 1, 10000) && finite(r.height, 1, 1000);
+}
 
 export function normalizeServer(value: string): string {
   const u = new URL(value.trim());
@@ -70,6 +86,13 @@ export function parseMessage(raw: string, server: string): BridgeMessage | null 
         return path === `/api/canciones/${m.song.id}/audio` || path === `/api/canciones/${m.song.id}/descargar` ? m : null;
       }
       case 'notify': return typeof m.title === 'string' && m.title.length <= 200 && typeof m.body === 'string' && m.body.length <= 1000 && typeof m.route === 'string' && /^#\/[\w\-/%?=&.]*$/.test(m.route) ? m : null;
+      case 'openPlayer': return m.tab === null || m.tab === 'letra' || m.tab === 'cola' ? m : null;
+      case 'ui': {
+        const u = m.ui;
+        return u && typeof u === 'object' && Number.isSafeInteger(u.songId) && u.songId >= 0 && typeof u.fav === 'boolean' && typeof u.shuffle === 'boolean' &&
+          ['off', 'all', 'one'].includes(u.repeat) && typeof u.autoRadio === 'boolean' && (u.bar === null || isRect(u.bar))
+          ? { type: 'ui', ui: { songId: u.songId, fav: u.fav, shuffle: u.shuffle, repeat: u.repeat, autoRadio: u.autoRadio, bar: u.bar } } : null;
+      }
       default: return null;
     }
   } catch { return null; }

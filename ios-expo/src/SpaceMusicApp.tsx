@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Image, KeyboardAvoidingView, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -8,7 +8,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { AudioEngine } from './audio';
 import { bootstrap } from './bootstrap';
 import { bridgeScript } from './generated/bridge';
-import { normalizeServer, parseMessage, queueKeys, sameOrigin, type Session, type Snapshot } from './protocol';
+import { normalizeServer, parseMessage, queueKeys, sameOrigin, webCommand, type PlayerTab, type PlayerUi, type Session, type Snapshot } from './protocol';
+import type { PlayerActions } from './player/actions';
+import { FullPlayer } from './player/FullPlayer';
+import { MiniPlayer } from './player/MiniPlayer';
+import { createStore, emptyPlayback, emptyUi, type Playback } from './player/store';
 import { Storage, readServer, readSession, saveServer, saveSession } from './storage';
 import { styles as s } from './styles';
 
@@ -32,7 +36,10 @@ function SpaceMusic() {
   const [webVersion, setWebVersion] = useState(0);
   const [offline, setOffline] = useState(false);
   const [, refreshDownloads] = useState(0);
-  const [playing, setPlaying] = useState<Snapshot | null>(null);
+  const playback = useRef(createStore<Playback>(emptyPlayback)).current;
+  const uiStore = useRef(createStore<PlayerUi>(emptyUi)).current;
+  const [playerOpen, setPlayerOpen] = useState(false);
+  const [playerTab, setPlayerTab] = useState<PlayerTab>(null);
   const chain = useRef(Promise.resolve());
   const ready = useRef(false), visible = useRef(true), lastStatus = useRef(0);
   const lastQueueSent = useRef('');
@@ -48,7 +55,9 @@ function SpaceMusic() {
     const audio = new AudioEngine(storage); engine.current = audio; audio.onError = toast;
     audio.onStatus = status => {
       if (disposed) return;
-      if (showNativeControls.current) setPlaying(audio.snapshot());
+      const intended = status.playing || (status.isBuffering && status.intendedPlaying);
+      playback.set({ items: status.items, count: status.items.length, index: status.currentIndex, time: status.currentTime, duration: status.duration,
+        playing: intended, buffering: intended && (status.isBuffering || !status.isLoaded), sleepUntil: status.sleepUntil, sleepEnd: status.sleepEnd, context: audio.snapshot()?.context });
       if (ready.current && visible.current && Date.now() - lastStatus.current > 450) {
         lastStatus.current = Date.now();
         const signature = queueKeys(status.items).join('|');
@@ -92,7 +101,7 @@ function SpaceMusic() {
     switch (m.type) {
       case 'session': {
         if (JSON.stringify(account.current) === JSON.stringify(m.session)) break;
-        if (!m.session && account.current) { audio.stop(); await storage.clear(); }
+        if (!m.session && account.current) { audio.stop(); resetPlayer(); await storage.clear(); }
         account.current = m.session;
         await saveSession(server, m.session); await storage.setScope(server, m.session);
         audio.configure(server, m.session); setSession(m.session);
@@ -119,6 +128,8 @@ function SpaceMusic() {
       case 'download': if (account.current) storage.download(m.url, m.song, !!m.exportFile); break;
       case 'removeDownload': await storage.remove(m.id); break;
       case 'clearDownloads': await storage.clear(); break;
+      case 'ui': uiStore.set(m.ui); break;
+      case 'openPlayer': setPlayerTab(m.tab); setPlayerOpen(true); break;
       case 'error': toast(m.message); setLoading(false); setFailed(true); break;
       case 'notify': {
         let permission = await Notifications.getPermissionsAsync();
@@ -127,19 +138,34 @@ function SpaceMusic() {
       }
     }
   }
-  function reload() { ready.current = false; setFailed(false); setOffline(false); setLoading(true); setWebVersion(v => v + 1); }
+  function resetPlayer() { playback.set(emptyPlayback); uiStore.set(emptyUi); setPlayerOpen(false); }
+  function reload() { uiStore.set({ bar: null }); ready.current = false; setFailed(false); setOffline(false); setLoading(true); setWebVersion(v => v + 1); }
   async function changeServer() {
     try {
       const address = normalizeServer(draft); if (address === server) { setSettings(false); return; }
-      engine.current?.stop(); await saveServer(address);
+      engine.current?.stop(); resetPlayer(); await saveServer(address);
       const saved = await readSession(address); await storage.setScope(address, saved);
       account.current = saved; engine.current?.configure(address, saved);
       activeServer.current = address; setServer(address); setSession(saved); setSettings(false); reload();
     } catch (error) { toast(error instanceof Error ? error.message : 'Dirección incorrecta'); }
   }
+  const closePlayer = useCallback(() => setPlayerOpen(false), []);
+  const openPlayer = useCallback(() => { setPlayerTab(null); setPlayerOpen(true); }, []);
+  const actions = useMemo<PlayerActions>(() => {
+    const webReady = () => ready.current && !!web.current && !showNativeControls.current;
+    return {
+      server, ui: uiStore, webReady,
+      token: () => account.current?.token ?? null,
+      isDownloaded: id => !!storage.local(id),
+      play: () => engine.current?.play(), pause: () => engine.current?.pause(),
+      seek: time => { void engine.current?.seek(time); },
+      next: () => engine.current?.next(), previous: () => engine.current?.previous(), jump: index => engine.current?.jump(index),
+      web: (command, arg) => { if (webReady()) inject(webCommand(command, arg)); },
+    };
+  }, [server]);
   return <SafeAreaView style={s.root} edges={['top', 'bottom']}>
     <StatusBar style="light" />
-    {!!server && !failed && !offline && <WebView<{}> ref={web} key={`${server}:${webVersion}`} source={{ uri: server + '/' }} style={s.web}
+    {!!server && !failed && !offline && <View style={s.web}><WebView<{}> ref={web} key={`${server}:${webVersion}`} source={{ uri: server + '/' }} style={s.web}
       originWhitelist={[server]} javaScriptEnabled domStorageEnabled cacheEnabled sharedCookiesEnabled={false} thirdPartyCookiesEnabled={false}
       allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsBackForwardNavigationGestures contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false}
       setSupportMultipleWindows={false} javaScriptCanOpenWindowsAutomatically={false} webviewDebuggingEnabled={__DEV__} allowsLinkPreview={false}
@@ -149,13 +175,14 @@ function SpaceMusic() {
         chain.current = chain.current.then(() => receive(captured)).catch(() => toast('No se pudo completar la operación. Inténtalo de nuevo.'));
       }}
       onLoadStart={() => {
-        ready.current = false; setLoading(true);
+        ready.current = false; setLoading(true); uiStore.set({ bar: null });
         if (loadTimer.current) clearTimeout(loadTimer.current);
         loadTimer.current = setTimeout(() => { if (!ready.current) { setLoading(false); setFailed(true); } }, 25000);
       }} onLoadProgress={e => setProgress(e.nativeEvent.progress)} onLoadEnd={() => { if (ready.current) setLoading(false); }}
       onError={() => { setLoading(false); setFailed(true); }} onHttpError={e => { if (e.nativeEvent.statusCode >= 500) toast('El servidor no está respondiendo.'); }}
       onContentProcessDidTerminate={reload}
-      onShouldStartLoadWithRequest={r => { if (r.url === 'about:blank' || sameOrigin(r.url, server)) return true; if (/^(https:|mailto:)/.test(r.url)) void Linking.openURL(r.url); return false; }} />}
+      onShouldStartLoadWithRequest={r => { if (r.url === 'about:blank' || sameOrigin(r.url, server)) return true; if (/^(https:|mailto:)/.test(r.url)) void Linking.openURL(r.url); return false; }} />
+      <MiniPlayer playback={playback} actions={actions} mode="web" onOpen={openPlayer} /></View>}
     {loading && !failed && !offline && <View style={s.loading}>
       <Image source={require('../assets/spacemusic.png')} style={s.logo} /><Text style={s.brand}>SpaceMusic</Text><ActivityIndicator color="#b4a5ff" style={{ marginTop: 24 }} />
       <View style={s.progress}><View style={[s.progressFill, { width: `${Math.max(3, progress * 100)}%` }]} /></View>
@@ -171,8 +198,9 @@ function SpaceMusic() {
           void engine.current?.apply({ items: storage.downloads.map(d => d.song), index, time: 0, playing: true, repeat: 'off', volume: 0.8, sleepUntil: 0, sleepEnd: false, autoRadio: false, context: { type: 'descargas', label: 'Descargas' } }, 'load');
         }}><View style={s.art}><Text style={{ color: '#b4a5ff', fontSize: 24 }}>♫</Text></View><View style={{ flex: 1 }}><Text style={s.songTitle} numberOfLines={1}>{d.song.nombre}</Text><Text style={s.muted} numberOfLines={1}>{d.song.artista}</Text></View><Text style={s.link}>▶</Text></Pressable>)}
       </ScrollView>
-      {playing && <View style={s.song}><Text style={[s.songTitle, { flex: 1 }]} numberOfLines={1}>{playing.items[playing.index]?.nombre}</Text><Pressable onPress={() => playing.playing ? engine.current?.pause() : engine.current?.play()}><Text style={s.link}>{playing.playing ? 'Pausar' : 'Reproducir'}</Text></Pressable></View>}
+      <MiniPlayer playback={playback} actions={actions} mode="docked" onOpen={openPlayer} style={{ marginHorizontal: 0 }} />
     </View>}
+    <FullPlayer visible={playerOpen} tab={playerTab} setTab={setPlayerTab} onClose={closePlayer} playback={playback} actions={actions} />
     {!!message && <Pressable style={s.toast} onPress={() => setMessage('')}><Text style={s.text}>{message}</Text></Pressable>}
     <Modal visible={settings} transparent animationType="slide" onRequestClose={() => setSettings(false)}><KeyboardAvoidingView behavior="padding" style={s.backdrop}><SafeAreaView style={s.sheet}>
       <View style={s.header}><Text style={s.title}>SpaceMusic</Text><Pressable onPress={() => setSettings(false)}><Text style={s.link}>Cerrar</Text></Pressable></View>

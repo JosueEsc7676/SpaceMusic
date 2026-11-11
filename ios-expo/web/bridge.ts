@@ -189,10 +189,83 @@ async function connect() {
       if (song) send('download', { url, song, exportFile: true });
     }, 0);
   };
+  try { nativePlayer({ player, sleep, prefs, bus, offline }); }
+  catch { if (typeof document !== 'undefined') document.getElementById?.('sm-native-player')?.remove(); } // Si falla la presentación nativa, la web conserva su reproductor.
   // Estado inicial del reproductor restaurado por la web, sin iniciar audio por sí solo.
   if (player.current) snapshot('restore');
   send('ready');
 }
-connect().catch(() => send('error', { message: 'No se pudo conectar la interfaz con el audio nativo. Recarga la app.' }));
+// El mini reproductor y "Reproduciendo ahora" son nativos: la web conserva la cola y sus reglas, pero cede la presentación.
+function nativePlayer({ player, sleep, prefs, bus, offline }: any) {
+  const doc = typeof document !== 'undefined' && typeof document.getElementById === 'function' ? document : null;
+  const raf: (cb: () => void) => unknown = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : cb => setTimeout(cb, 16);
+  if (doc && !doc.getElementById('sm-native-player')) {
+    const style = doc.createElement('style'); style.id = 'sm-native-player';
+    // El hueco del reproductor web se conserva: el nativo se coloca exactamente encima y el contenido nunca queda tapado.
+    style.textContent = '#playerBar{visibility:hidden!important;pointer-events:none!important}#playerBar *{visibility:hidden!important}.np,.drawer{display:none!important}';
+    (doc.head ?? doc.documentElement).append(style);
+  }
+  let lib: any = null, songMenu: any = null;
+  let frame = false, last = '';
+  const report = () => {
+    if (frame) return; frame = true;
+    raf(() => {
+      frame = false;
+      const song = player.current, id = Number(song?.id) || 0;
+      let bar: { top: number; left: number; width: number; height: number } | null = null;
+      const el = doc?.getElementById('playerBar');
+      if (el && song && getComputedStyle(el).display !== 'none') {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) bar = { top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width), height: Math.round(r.height) };
+      }
+      const ui = { songId: id, fav: !!(id && lib?.isFav?.(id)), shuffle: !!player.shuffle, repeat: ['off', 'all', 'one'].includes(player.repeat) ? player.repeat : 'off', autoRadio: !!prefs.autoRadio, bar };
+      const json = JSON.stringify(ui);
+      if (json !== last) { last = json; send('ui', { ui }); }
+    });
+  };
+  const open = (tab?: unknown) => {
+    if (!player.current) { bus.emit('toast', { msg: 'Reproduce una canción primero' }); return; }
+    send('openPlayer', { tab: tab === 'letra' || tab === 'cola' ? tab : null });
+  };
+  void Promise.all([
+    import(/* @vite-ignore */ `${location.origin}/js/state.js`).catch(() => ({})),
+    import(/* @vite-ignore */ `${location.origin}/js/nowplaying.js`).catch(() => ({})),
+    import(/* @vite-ignore */ `${location.origin}/js/ui.js`).catch(() => ({})),
+  ]).then(([state, now, ui]: any[]) => {
+    lib = state.lib ?? null; songMenu = ui.songMenu ?? null;
+    if (now.np) { now.np.open = (tab?: string) => open(tab); now.np.toggle = (tab?: string) => open(tab); }
+    if (now.queueDrawer) { now.queueDrawer.open = () => open('cola'); now.queueDrawer.toggle = () => open('cola'); }
+    report();
+  });
+  w.__smCmd = (name: string, arg?: any) => {
+    const song = player.current;
+    const fail = () => bus.emit('toast', { msg: 'No se pudo completar la acción. Inténtalo de nuevo.', error: true });
+    switch (name) {
+      case 'shuffle': player.toggleShuffle(); break;
+      case 'repeat': player.cycleRepeat(); break;
+      case 'autoRadio': prefs.autoRadio = !!arg; prefs.save(); break;
+      case 'fav': if (song && lib) Promise.resolve(lib.toggleFav(song.id)).catch(fail); break;
+      case 'remove': player.removeAt(Number(arg)); break;
+      case 'move': player.move(Number(arg?.from), Number(arg?.to)); break;
+      case 'clear': player.clearUpcoming(); break;
+      case 'sleep': sleep.set(arg === 'end' ? 'end' : Math.max(0, Number(arg) || 0)); break;
+      case 'radio': if (song) Promise.resolve(player.startRadio(song)).catch(fail); break;
+      case 'artist': if (song) location.hash = '#/artista/' + encodeURIComponent(song.artista); break;
+      case 'album': if (song?.album) location.hash = '#/album/' + encodeURIComponent(song.album); break;
+      case 'download': if (song && offline.descargar) offline.descargar([song], { archivo: false }); break;
+      case 'removeDownload': if (song && offline.quitarDescarga) offline.quitarDescarga(song.id); break;
+      case 'menu': if (song && songMenu && doc) songMenu(doc.body, song); break;
+    }
+    report();
+  };
+  for (const event of ['favs', 'player:song', 'player:mode', 'player:queue', 'prefs', 'sleep']) bus.on(event, report);
+  if (typeof addEventListener === 'function') { addEventListener('resize', report); addEventListener('hashchange', report); }
+  if (doc && typeof MutationObserver === 'function') new MutationObserver(report).observe(doc.body, { attributes: true, attributeFilter: ['class', 'style'], subtree: false });
+  const bar = doc?.getElementById('playerBar');
+  if (bar && typeof MutationObserver === 'function') new MutationObserver(report).observe(bar, { attributes: true, attributeFilter: ['class'] });
+  (w.visualViewport as any)?.addEventListener?.('resize', report);
+  report();
+}
+connect().catch(() => send('error',{ message: 'No se pudo conectar la interfaz con el audio nativo. Recarga la app.' }));
 
 export {};

@@ -82,6 +82,26 @@ export class AudioEngine {
   play() { this.wantsPlay = true; this.playlist?.play(); }
   pause() { this.wantsPlay = false; this.playlist?.pause(); }
   seek(time: number) { return this.playlist?.seekTo(time); }
+  /** Saltos directos en la cola nativa: responden al instante y la web se sincroniza con el siguiente estado. */
+  jump(index: number) {
+    const p = this.playlist, state = this.state;
+    if (!p || !state || index < 0 || index >= state.items.length) return;
+    this.loadDeadline = Date.now() + 20000; this.exhausted = false; this.wantsPlay = true;
+    if (p.currentIndex !== index) p.skipTo(index); else void p.seekTo(0);
+    p.play(); this.metadata();
+  }
+  next() {
+    const p = this.playlist, state = this.state;
+    if (!p || !state) return;
+    if (p.currentIndex + 1 < state.items.length) this.jump(p.currentIndex + 1);
+    else if (state.repeat === 'all' && state.items.length) this.jump(0);
+  }
+  previous() {
+    const p = this.playlist;
+    if (!p || !this.state) return;
+    if (p.currentTime > 3 || p.currentIndex <= 0) void p.seekTo(0);
+    else this.jump(p.currentIndex - 1);
+  }
   volume(value: number) { if (this.playlist) this.playlist.volume = value; if (this.state) this.state.volume = value; }
   stop() {
     this.version++; this.wantsPlay = false;

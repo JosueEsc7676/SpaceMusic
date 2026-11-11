@@ -2,8 +2,8 @@ import { transform } from 'esbuild';
 import { readdir, readFile, writeFile, mkdir, copyFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 const files = (await readdir(new URL('../tests/', import.meta.url))).filter(f => f.endsWith('.test.ts'));
-for (const dir of ['src', 'tests', 'web', 'shared']) await mkdir(new URL(`../.test-build/${dir}/`, import.meta.url), { recursive: true });
-const sources = ['src/protocol.ts', 'src/bootstrap.ts', 'src/audio.ts', ...['player', 'util', 'api', 'icons'].map(n => `shared/${n}.js`), ...((await readdir(new URL('../tests/', import.meta.url))).filter(f => f.endsWith('.ts')).map(f => `tests/${f}`))];
+for (const dir of ['src', 'src/player', 'tests', 'web', 'shared']) await mkdir(new URL(`../.test-build/${dir}/`, import.meta.url), { recursive: true });
+const sources = ['src/protocol.ts', 'src/bootstrap.ts', 'src/audio.ts', 'src/player/lrc.ts', 'src/player/store.ts', ...['player', 'util', 'api', 'icons'].map(n => `shared/${n}.js`), ...((await readdir(new URL('../tests/', import.meta.url))).filter(f => f.endsWith('.ts')).map(f => `tests/${f}`))];
 for (const file of sources) {
   const input = file.startsWith('shared/') ? new URL(`../../src/main/resources/static/js/${file.slice(7)}`, import.meta.url) : new URL(`../${file}`, import.meta.url);
   let source = await readFile(input, 'utf8');
