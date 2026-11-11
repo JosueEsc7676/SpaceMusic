@@ -51,10 +51,44 @@ struct InicioVista: View {
         }
     }
 
+    /// Mezcla del día (`/api/shuffle/diario`) y aleatorio de toda la biblioteca (`/api/shuffle/cola`).
+    private var mezclasRapidas: some View {
+        HStack(spacing: 10) {
+            botonMezcla("Mezcla del día", icono: "sun.max.fill", colores: [Tema.lila, Tema.rosa], ruta: "/api/shuffle/diario?cantidad=40", contexto: "mix")
+            botonMezcla("Aleatorio de todo", icono: "shuffle", colores: [Tema.celeste, Tema.lila], ruta: "/api/shuffle/cola?cantidad=50", contexto: "otro")
+        }
+        .padding(.horizontal)
+    }
+
+    private func botonMezcla(_ titulo: String, icono: String, colores: [Color], ruta: String, contexto: String) -> some View {
+        Button {
+            Task {
+                do {
+                    let canciones: [Cancion] = try await API.get(ruta)
+                    if canciones.isEmpty { Avisos.compartido.mostrar("Todavía no hay canciones para esta mezcla") }
+                    else { Reproductor.compartido.reproducir(canciones, contexto: contexto) }
+                } catch { Avisos.compartido.error(error) }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: icono).font(.headline).foregroundStyle(.black)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(LinearGradient(colors: colores, startPoint: .topLeading, endPoint: .bottomTrailing)))
+                Text(titulo).font(.subheadline.weight(.semibold)).lineLimit(2).minimumScaleFactor(0.85)
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Tema.tarjeta))
+        }
+        .buttonStyle(.plain)
+    }
+
     @ViewBuilder
     private func contenido(_ i: Inicio) -> some View {
         LazyVStack(alignment: .leading, spacing: 30) {
             if !i.recientes.isEmpty { accesosRapidos(Array(i.recientes.prefix(6))) }
+            mezclasRapidas
 
             if !amigos.isEmpty {
                 Carrusel(titulo: "Lo que escuchan tus amigos") {

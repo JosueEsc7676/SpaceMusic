@@ -43,4 +43,27 @@ final class ModelosTests: XCTestCase {
         XCTAssertTrue(LectorLRC.leer("[ar:Artista]\nLetra sin sincronización").isEmpty)
         XCTAssertTrue(LectorLRC.leer("").isEmpty)
     }
+
+    func testLRCAplicaDesfaseOcultaCreditosYMarcaInterludios() {
+        let l = LectorLRC.leer("[offset:+500]
+[00:01.00]Letra: Alguien
+[00:10.00][00:40.00]Coro
+[00:20.50]Verso")
+        XCTAssertFalse(l.contains { $0.texto == "Letra: Alguien" })
+        XCTAssertTrue(l[0].interludio, "antes del primer verso hay un interludio")
+        XCTAssertEqual(l.filter { !$0.interludio }.map(\.texto), ["Coro", "Verso", "Coro"])
+        XCTAssertEqual(l.first { $0.texto == "Coro" }!.tiempo, 9.5, accuracy: 0.001)
+        XCTAssertEqual(LectorLRC.indice(l, en: 21).map { l[$0].texto }, "Verso")
+        XCTAssertTrue(LectorLRC.indice(l, en: 30).map { l[$0].interludio } ?? false, "pausa larga tras el verso")
+        XCTAssertNil(LectorLRC.indice([], en: 5))
+        XCTAssertEqual(l[0].fin, l[1].tiempo, accuracy: 0.001)
+    }
+
+    func testLRCMejoradoLeeTiemposPorPalabra() {
+        let l = LectorLRC.leer("[00:05.00]<00:05.00>Tú <00:05.40>no <00:05.80>te <00:06.20>vas")
+        XCTAssertEqual(l.count, 1)
+        XCTAssertEqual(l[0].texto, "Tú no te vas")
+        XCTAssertEqual(l[0].palabras.map(\.texto), ["Tú ", "no ", "te ", "vas"])
+        XCTAssertEqual(l[0].palabras[2].tiempo, 5.8, accuracy: 0.001)
+    }
 }

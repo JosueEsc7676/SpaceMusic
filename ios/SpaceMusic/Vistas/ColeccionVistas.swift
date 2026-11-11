@@ -445,6 +445,17 @@ struct GeneroVista: View {
                         NavigationLink(value: Destino.mix(id: "genero:" + g.nombre, titulo: "Mix de " + g.nombre)) {
                             Image(systemName: "sparkles").font(.title2)
                         }
+                        .accessibilityLabel("Mix de \(g.nombre)")
+                        // Aleatorio con todo el género del servidor, no solo las canciones cargadas (`/api/shuffle/genero`).
+                        Button {
+                            Task {
+                                if let cs: [Cancion] = try? await API.get("/api/shuffle/genero/\(API.segmento(g.nombre))?cantidad=50"), !cs.isEmpty {
+                                    Reproductor.compartido.reproducir(cs, contexto: "genero")
+                                } else { Avisos.compartido.mostrar("No se pudo crear la mezcla") }
+                            }
+                        } label: { Image(systemName: "dice").font(.title2) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Aleatorio de todo el género")
                     }
                     ListaCanciones(canciones: g.canciones, contexto: "genero")
                 }

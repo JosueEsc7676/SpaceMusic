@@ -13,6 +13,7 @@ struct AdminVista: View {
     @State private var rutaAviso = ""
     @State private var mensaje: String?
     @State private var trabajando = false
+    @State private var aprobandoEnlace = false
 
     var body: some View {
         List {
@@ -24,6 +25,7 @@ struct AdminVista: View {
                 NavigationLink("Soporte y errores", value: Destino.soporte)
                 NavigationLink("Géneros y artistas", value: Destino.generosAdmin)
                 NavigationLink("Mantenimiento de biblioteca", value: Destino.bibliotecaAdmin)
+                Button { aprobandoEnlace = true } label: { Label("Aprobar cuenta con el enlace del correo", systemImage: "envelope.badge") }
             }
             if let r = resumen {
                 Section("Resumen") {
@@ -108,6 +110,7 @@ struct AdminVista: View {
             Button("Enviar aviso") { Task { await enviarAviso() } }
         }
         .navigationTitle("Administración")
+        .sheet(isPresented: $aprobandoEnlace, onDismiss: { Task { await cargar() } }) { AprobarConEnlaceHoja() }
         .refreshable { await cargar() }
         .task { await cargar() }
     }

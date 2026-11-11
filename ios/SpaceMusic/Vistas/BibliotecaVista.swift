@@ -103,9 +103,13 @@ struct BibliotecaVista: View {
 
     private func recargar() async {
         await biblioteca.cargar()
-        // Playlists guardadas de otras personas
-        let ids = biblioteca.playlistsGuardadas
-        guardadas = await withTaskGroup(of: (Int, Playlist?).self) { grupo in
+        // Playlists guardadas de otras personas: como la web, una sola petición a las públicas;
+        // solo se piden una por una las guardadas que ya no aparecen ahí.
+        let todas = biblioteca.playlistsGuardadas
+        let publicas: [Playlist] = (try? await API.get("/api/playlists/publicas")) ?? []
+        let porId = Dictionary(publicas.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let ids = todas.filter { porId[$0] == nil }
+        let sueltas = await withTaskGroup(of: (Int, Playlist?).self) { grupo in
             var indice = 0
             var resultados: [Int: Playlist] = [:]
             for i in 0..<min(4, ids.count) {
@@ -123,6 +127,8 @@ struct BibliotecaVista: View {
             }
             return resultados.keys.sorted().compactMap { resultados[$0] }
         }
+        let porIdSueltas = Dictionary(sueltas.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        guardadas = todas.compactMap { porId[$0] ?? porIdSueltas[$0] }
         // Álbumes guardados: se leen de la lista de álbumes
         let nombres = biblioteca.albumesGuardados
         if !nombres.isEmpty, let todos: [Album] = try? await API.get("/api/albumes") {

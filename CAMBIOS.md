@@ -7,6 +7,12 @@
 - Mini reproductor con fondo hasta la barra de pestañas: las listas ya no asoman entre ambos.
 - Géneros con el color de la web y portada girada en la esquina, sin recortes del nombre; botón Atrás solo con la flecha.
 - Matriz de paridad con la web en `ios/PARIDAD.md`.
+- Reproductor rediseñado al estilo Apple Music: portada a todo el ancho fundida con el color de la canción, tres controles, volumen del sistema y abajo Letra · AirPlay · Cola; temporizador y opciones en «…»; aleatorio, repetir y radio dentro de la cola.
+- Letra sincronizada estilo Apple Music: líneas grandes a la izquierda, la actual iluminada (palabra por palabra si la letra trae tiempos), interludios y desfase como en la web.
+- Las listas de todas las pestañas terminan encima del mini reproductor: el último elemento ya se puede tocar sin arrastrar.
+- Buscador como la web: pestañas Todo/Canciones/Artistas/Álbumes/Playlists/Personas, «Resultado principal» y «Mostrar todo»; etiqueta LRC.
+- Entrada: restablecer contraseña con el enlace del correo, reenviar verificación y crear el primer administrador. Administración: aprobar cuentas con el enlace del correo, géneros y canciones por mes. Inicio: mezcla del día y aleatorio de todo; género: aleatorio con todo el género.
+- Playlists guardadas con una sola petición a las públicas (antes una por playlist).
 
 ## App de iPhone 2.0 (React Native + Expo, archivada)
 - Nueva app en TypeScript que comparte la interfaz web móvil real, con cola de audio nativa de Expo, controles bloqueados, radio, temporizador, sesión protegida y descargas persistentes por cuenta. GitHub Actions genera el nuevo IPA; se conserva SwiftUI como versión anterior. Arquitectura híbrida y límites documentados en ios-expo/README.md.

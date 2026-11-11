@@ -66,6 +66,8 @@ struct ResumenAdminVista: View {
     @State private var datos: ValorAdmin?
     @State private var tendencias: [Cancion] = []
     @State private var artistas: [ValorAdmin] = []
+    @State private var generos: [ValorAdmin] = []
+    @State private var porMes: [ValorAdmin] = []
     @State private var error: String?
     var body: some View {
         List {
@@ -87,6 +89,22 @@ struct ResumenAdminVista: View {
                         NavigationLink(a["artista"].texto, value: Destino.artista(a["artista"].texto))
                     }
                 }
+                if !generos.isEmpty {
+                    Section("Géneros en la biblioteca") {
+                        ForEach(Array(generos.prefix(15).enumerated()), id: \.offset) { _, g in
+                            NavigationLink(value: Destino.genero(g["genero"].texto)) {
+                                LabeledContent(g["genero"].texto, value: "\(g["canciones"].texto) · \(g["porcentaje"].texto) %")
+                            }
+                        }
+                    }
+                }
+                if !porMes.isEmpty {
+                    Section("Canciones agregadas por mes") {
+                        ForEach(Array(porMes.enumerated()), id: \.offset) { _, m in
+                            LabeledContent(m["etiqueta"].texto, value: m["cantidad"].texto)
+                        }
+                    }
+                }
             } else if error == nil { Cargando() }
         }
         .navigationTitle("Resumen del servidor").task { await cargar() }.refreshable { await cargar() }
@@ -97,6 +115,9 @@ struct ResumenAdminVista: View {
             async let t: [Cancion] = API.get("/api/estadisticas/tendencias?dias=7&limite=10")
             async let a: [ValorAdmin] = API.get("/api/estadisticas/top-artistas?limite=6")
             let r = try await (d, t, a); datos = r.0; tendencias = r.1; artistas = r.2; error = nil
+            // Composición de la biblioteca (rutas de estadísticas que la web antigua usaba).
+            generos = (try? await API.get("/api/estadisticas/top-generos")) ?? []
+            porMes = (try? await API.get("/api/estadisticas/por-mes")) ?? []
         } catch { if !Task.isCancelled { self.error = error.localizedDescription } }
     }
 }

@@ -299,11 +299,14 @@ struct Busqueda: Decodable {
         var titulo: String
         var canciones: [Cancion]
         var vacio: Bool
+        /// Canciones de ese estilo en el servidor (la lista trae solo una muestra).
+        var total: Int?
         init(from decoder: Decoder) throws {
             let c = try decoder.campos()
             titulo = c.texto("titulo") ?? ""
             canciones = c.lista("canciones")
             vacio = c.bool("vacio") ?? false
+            total = c.entero("total")
         }
     }
     var canciones: [Cancion]

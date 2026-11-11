@@ -64,12 +64,7 @@ final class Letras {
 
     /// Línea que corresponde al segundo dado.
     func indice(en t: Double) -> Int? {
-        guard !lineas.isEmpty else { return nil }
-        var r: Int?
-        for (i, l) in lineas.enumerated() {
-            if l.tiempo <= t + 0.25 { r = i } else { break }
-        }
-        return r
+        LectorLRC.indice(lineas, en: t + 0.25)
     }
 
     static func leerLRC(_ texto: String) -> [LineaLetra] { LectorLRC.leer(texto) }

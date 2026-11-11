@@ -210,3 +210,80 @@ struct GenerosAdminVista: View {
         } catch { self.error = error.localizedDescription }
     }
 }
+
+/// Igual que `aprobar.html` de la web: el administrador pega el enlace que le llegó por correo,
+/// ve la cuenta nueva y la aprueba o rechaza (`GET/POST /api/auth/aprobacion`).
+struct AprobarConEnlaceHoja: View {
+    @Environment(\.dismiss) private var cerrar
+    @State private var enlace = ""
+    @State private var cuenta: [String: String]?
+    @State private var mensaje: String?
+    @State private var error: String?
+    @State private var trabajando = false
+
+    private var token: String { Entrada.tokenDeEnlace(enlace) }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Enlace del correo", text: $enlace, axis: .vertical)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Button("Ver cuenta") { Task { await consultar() } }.disabled(token.isEmpty || trabajando)
+                } footer: { Text("Pega el enlace “Revisar cuenta” del correo de aviso de cuenta nueva.") }
+                if let cuenta {
+                    Section("Cuenta") {
+                        LabeledContent("Nombre", value: cuenta["nombre"] ?? "")
+                        LabeledContent("Usuario", value: "@" + (cuenta["username"] ?? ""))
+                        LabeledContent("Correo", value: cuenta["email"] ?? "")
+                        LabeledContent("Estado", value: (cuenta["estado"] ?? "") == "PENDIENTE" ? "Esperando aprobación" : (cuenta["estado"] ?? "").lowercased())
+                    }
+                    Section {
+                        Button("Aprobar cuenta") { Task { await resolver(true) } }
+                        Button("Rechazar", role: .destructive) { Task { await resolver(false) } }
+                    }
+                    .disabled(trabajando)
+                }
+                if let mensaje { Section { Text(mensaje).foregroundStyle(Tema.celeste) } }
+                if let error { Section { Text(error).foregroundStyle(Tema.peligro) } }
+            }
+            .navigationTitle("Aprobar con enlace")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cerrar") { cerrar() } } }
+        }
+    }
+
+    private func consultar() async {
+        trabajando = true; error = nil; mensaje = nil; cuenta = nil
+        defer { trabajando = false }
+        do {
+            let r: RespuestaJSON = try await API.get("/api/auth/aprobacion?token=\(API.codificar(token))")
+            if let e = r.valores["error"] { error = e; return }
+            cuenta = r.usuario
+        } catch { self.error = error.localizedDescription }
+    }
+
+    private func resolver(_ aprobar: Bool) async {
+        trabajando = true; error = nil
+        defer { trabajando = false }
+        do {
+            let r: RespuestaOK = try await API.enviar("POST", "/api/auth/aprobacion", ["token": token, "aprobar": aprobar])
+            mensaje = (r.message ?? (aprobar ? "Cuenta aprobada" : "Cuenta rechazada")) + ". Le avisamos por correo."
+            cuenta = nil
+        } catch { self.error = error.localizedDescription }
+    }
+}
+
+/// Respuesta con textos sueltos y un objeto `usuario` de textos (lectura tolerante).
+private struct RespuestaJSON: Decodable {
+    var valores: [String: String] = [:]
+    var usuario: [String: String] = [:]
+    init(from decoder: Decoder) throws {
+        let c = try decoder.campos()
+        for k in c.allKeys {
+            if k.stringValue == "usuario", let u = try? c.nestedContainer(keyedBy: ClaveJSON.self, forKey: k) {
+                for k2 in u.allKeys { if let v = u.texto(k2.stringValue) { usuario[k2.stringValue] = v } }
+            } else if let v = c.texto(k.stringValue) { valores[k.stringValue] = v }
+        }
+    }
+}

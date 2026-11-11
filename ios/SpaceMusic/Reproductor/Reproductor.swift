@@ -36,6 +36,11 @@ final class Reproductor {
     private(set) var error: String?
 
     var actual: Cancion? { cola.indices.contains(indice) ? cola[indice] : nil }
+    /// Tiempo exacto del audio para la letra palabra a palabra. Es una lectura directa: no provoca redibujos.
+    var tiempoExacto: Double {
+        let t = jugador.currentTime().seconds
+        return t.isFinite ? t : tiempo
+    }
     var siguientes: [Cancion] { indice + 1 < cola.count ? Array(cola[(indice + 1)...]) : [] }
 
     @ObservationIgnored private let jugador = AVQueuePlayer()

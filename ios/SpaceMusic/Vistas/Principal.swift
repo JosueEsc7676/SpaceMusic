@@ -7,6 +7,7 @@ struct Principal: View {
     @State private var reproductor = Reproductor.compartido
     @State private var avisos = Avisos.compartido
     @State private var conexion = Conexion.compartida
+    @State private var altoBarra: CGFloat = 0
 
     var body: some View {
         TabView(selection: $nav.pestana) {
@@ -50,10 +51,22 @@ struct Principal: View {
             raiz()
                 .destinos()
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // Las listas de cualquier pantalla (también las abiertas dentro de la pestaña) terminan por encima
+        // del mini reproductor: el margen se mide con la barra real, así el último elemento siempre se puede tocar.
+        .contentMargins(.bottom, altoBarra, for: .scrollContent)
+        .overlay(alignment: .bottom) {
+            barraInferior
+                .background { GeometryReader { g in Color.clear.preference(key: AltoBarraInferior.self, value: g.size.height) } }
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+        }
+        .onPreferenceChange(AltoBarraInferior.self) { altoBarra = $0 }
+    }
+
+    private var barraInferior: some View {
             VStack(spacing: 8) {
                 if !conexion.disponible || conexion.mostrandoCopia {
-                    NavigationLink(value: Destino.descargas) {
+                    // Botón (no NavigationLink): la barra queda fuera de la pila de navegación.
+                    Button { Navegacion.compartida.ir(.descargas) } label: {
                         Label("Sin conexión · Abrir descargas", systemImage: "wifi.slash").font(.caption)
                     }
                 }
@@ -80,8 +93,13 @@ struct Principal: View {
             }
             .animation(.spring(duration: 0.3), value: avisos.texto)
             .animation(.spring(duration: 0.3), value: reproductor.actual?.id)
-        }
     }
+}
+
+/// Alto de la barra inferior (aviso + mini reproductor) para reservar ese espacio en las listas.
+private struct AltoBarraInferior: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 /// Barra pequeña con la canción que suena.

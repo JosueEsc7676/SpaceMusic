@@ -45,6 +45,16 @@ struct FilaCancion: View {
                             .font(.body.weight(.medium))
                             .foregroundStyle(esActual ? Tema.celeste : Tema.texto)
                             .lineLimit(1)
+                        if cancion.letraSincronizada {
+                            // Igual que la etiqueta "LRC" de la web: tiene letra sincronizada.
+                            Text("LRC")
+                                .font(.system(size: 9, weight: .heavy))
+                                .foregroundStyle(Tema.secundario)
+                                .padding(.horizontal, 4).padding(.vertical, 1)
+                                .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Tema.secundario.opacity(0.6)))
+                                .fixedSize()
+                                .accessibilityLabel("Letra sincronizada")
+                        }
                     }
                     HStack(spacing: 4) {
                         if descargas.descargada(cancion.id) {
