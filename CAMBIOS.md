@@ -1,6 +1,7 @@
 # Registro de cambios
 
 ## App de iPhone 1.0 (nativa)
+- Mini reproductor colocado sobre las pestañas mediante el área segura, sin separación fija ni relleno duplicado; mensajes anteriores sin salto al final, protección contra envíos repetidos y conservación del borrador al enviar; limpieza de navegación y biblioteca al salir de la cuenta.
 - Correcciones de iOS: portadas cuadradas y adaptadas al espacio del reproductor, búsqueda e imágenes protegidas contra respuestas antiguas, radio que respeta los cambios de cola y barra de tiempo reiniciada al cambiar de canción.
 - Nueva app nativa para iPhone en `ios/` (SwiftUI, iOS 17 o más nuevo), con las mismas funciones que la web: inicio, buscar (también por ánimo), biblioteca, playlists, álbumes, artistas, géneros, mixes, perfiles, mensajes en tiempo real, notificaciones, estadísticas, cuenta, subir canciones y administración.
 - Reproductor del sistema: pantalla bloqueada, Centro de control, AirPlay, siguiente canción precargada y radio automática al terminar la lista.

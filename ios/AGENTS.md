@@ -37,7 +37,7 @@ ios/
 - Navegación: agrega un caso a `Destino` y su vista en `VistaDestino`. Se usa con `NavigationLink(value: Destino.x)` o `Navegacion.compartida.ir(.x)`. `Navegacion.abrir(ruta:)` traduce rutas de la web (`#/u/ana`, `#/playlist/3`…) que llegan en las notificaciones.
 - Mensajes breves al usuario: `Avisos.compartido.mostrar("…")` o `.error(error)`.
 - Menú de canción: `OpcionesCancion` (es el mismo en toda la app). Las hojas "Agregar a playlist" y "Enviar a un amigo" se abren con `Hojas.compartidas`.
-- Las listas largas llevan `.espacioReproductor()` para que el mini reproductor no tape el final.
+- `Principal` reserva el espacio del mini reproductor con `safeAreaInset` en cada pila de navegación. No agregues rellenos fijos a las listas ni posiciones calculadas para la barra de pestañas.
 - Swift 5 (`SWIFT_VERSION = 5.0`); hay avisos de concurrencia de Swift 6 que se pueden ir limpiando.
 - **Nada secreto en git:** el repositorio de GitHub es público. Sin contraseñas, tokens ni llaves.
 

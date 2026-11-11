@@ -51,6 +51,9 @@ final class Sesion {
         Reproductor.compartido.detener()
         Eventos.compartido.desconectar()
         Descargas.compartido.borrarTodo()
+        Biblioteca.compartida.limpiar()
+        Navegacion.compartida.reiniciar()
+        Eventos.compartido.limpiar()
         Llavero.borrar("token")
         UserDefaults.standard.removeObject(forKey: "usuario")
         token = nil

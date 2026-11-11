@@ -27,7 +27,27 @@ struct Principal: View {
                 .tag(Pestana.perfil)
                 .badge(eventos.notificacionesSinLeer)
         }
-        .overlay(alignment: .bottom) {
+        .sheet(isPresented: $nav.reproductorAbierto) {
+            ReproductorVista()
+                .presentationDragIndicator(.visible)
+        }
+        .hojasGlobales(activas: !nav.reproductorAbierto)
+        .task {
+            Descargas.compartido.cargar()
+            await Biblioteca.compartida.renovarSesionSiHaceFalta()
+            guard !Task.isCancelled, Sesion.compartida.conectado else { return }
+            Eventos.compartido.conectar()
+            Eventos.pedirPermiso()
+            await Biblioteca.compartida.cargar()
+        }
+    }
+
+    private func pila<V: View>(_ p: Pestana, @ViewBuilder _ raiz: () -> V) -> some View {
+        NavigationStack(path: nav.ruta(p)) {
+            raiz()
+                .destinos()
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 8) {
                 if let t = avisos.texto {
                     Text(t)
@@ -41,29 +61,9 @@ struct Principal: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .padding(.bottom, 54)
+            .padding(.vertical, avisos.texto != nil || (reproductor.actual != nil && eventos.chatAbierto == nil) ? 4 : 0)
             .animation(.spring(duration: 0.3), value: avisos.texto)
             .animation(.spring(duration: 0.3), value: reproductor.actual?.id)
-        }
-        .sheet(isPresented: $nav.reproductorAbierto) {
-            ReproductorVista()
-                .presentationDragIndicator(.visible)
-        }
-        .hojasGlobales(activas: !nav.reproductorAbierto)
-        .task {
-            Descargas.compartido.cargar()
-            await Biblioteca.compartida.cargar()
-            Eventos.compartido.conectar()
-            Eventos.pedirPermiso()
-            await Biblioteca.compartida.renovarSesionSiHaceFalta()
-        }
-    }
-
-    private func pila<V: View>(_ p: Pestana, @ViewBuilder _ raiz: () -> V) -> some View {
-        NavigationStack(path: nav.ruta(p)) {
-            raiz()
-                .espacioReproductor()
-                .destinos()
         }
     }
 }

@@ -4,6 +4,10 @@ App nativa (SwiftUI) que usa la misma API del servidor que la web. No abre la we
 
 ## Correcciones en revisión
 
+- El mini reproductor reserva su espacio sobre las pestañas automáticamente.
+- Cargar mensajes anteriores conserva la posición; los envíos se bloquean mientras hay otro pendiente y respetan lo escrito durante la espera.
+- Cerrar sesión limpia la biblioteca y las pantallas de la cuenta anterior.
+
 - Las portadas mantienen su tamaño cuadrado y se ajustan a la altura disponible del reproductor.
 - Buscar o cambiar de canción rápidamente ya no debe mostrar respuestas antiguas sobre la selección nueva.
 - La radio descarta respuestas de una cola anterior y el control de tiempo se reinicia al cambiar de canción.

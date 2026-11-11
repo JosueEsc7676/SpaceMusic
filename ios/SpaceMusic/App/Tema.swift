@@ -16,20 +16,7 @@ enum Tema {
     static let aurora = LinearGradient(colors: [lila, celeste, rosa], startPoint: .leading, endPoint: .trailing)
 }
 
-/// Espacio al final de las listas para que el mini reproductor no tape nada.
-struct EspacioReproductor: ViewModifier {
-    var activo = true
-    @State private var reproductor = Reproductor.compartido
-    func body(content: Content) -> some View {
-        content.safeAreaInset(edge: .bottom, spacing: 0) {
-            Color.clear.frame(height: reproductor.actual == nil || !activo ? 0 : 68)
-        }
-    }
-}
-
 extension View {
-    func espacioReproductor(activo: Bool = true) -> some View { modifier(EspacioReproductor(activo: activo)) }
-
     /// Título de sección.
     func titulo() -> some View {
         font(.system(.title3, design: .rounded).weight(.bold)).foregroundStyle(Tema.texto)

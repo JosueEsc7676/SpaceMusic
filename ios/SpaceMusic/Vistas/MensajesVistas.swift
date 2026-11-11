@@ -164,6 +164,7 @@ struct ChatVista: View {
                     if chat?.hayMas == true {
                         Button(cargandoMas ? "Cargando…" : "Ver mensajes anteriores") { Task { await anteriores() } }
                             .font(.caption).padding(.vertical, 8)
+                            .disabled(cargandoMas)
                     }
                     ForEach(mensajes) { m in
                         Burbuja(mensaje: m).id(m.id)
@@ -178,7 +179,7 @@ struct ChatVista: View {
                 .padding(.vertical, 8)
             }
             .scrollDismissesKeyboard(.interactively)
-            .onChange(of: mensajes.count) { _, _ in withAnimation { lector.scrollTo("fin", anchor: .bottom) } }
+            .onChange(of: mensajes.last?.id) { _, _ in withAnimation { lector.scrollTo("fin", anchor: .bottom) } }
             .onChange(of: escribiendo) { _, si in if si { withAnimation { lector.scrollTo("fin", anchor: .bottom) } } }
             .onAppear { lector.scrollTo("fin", anchor: .bottom) }
         }
@@ -197,6 +198,7 @@ struct ChatVista: View {
                             .frame(width: 38, height: 38).background(Circle().fill(Tema.tarjeta))
                     }
                     .accessibilityLabel("Compartir la canción que suena")
+                    .disabled(enviando)
                 }
                 TextField("Mensaje", text: $texto, axis: .vertical)
                     .lineLimit(1...5)
@@ -220,8 +222,12 @@ struct ChatVista: View {
     private func cargar() async {
         do {
             let c: Chat = try await API.get("/api/mensajes/\(API.segmento(username))", tiempo: 20)
+            guard !Task.isCancelled else { return }
             chat = c
-            mensajes = c.mensajes
+            // Conserva los mensajes anteriores y los recibidos mientras cargaba.
+            var unidos = Dictionary(mensajes.map { ($0.id, $0) }, uniquingKeysWith: { _, nuevo in nuevo })
+            for mensaje in c.mensajes { unidos[mensaje.id] = mensaje }
+            mensajes = unidos.values.sorted { $0.id < $1.id }
             error = nil
             await eventos.actualizarResumen()
         } catch is CancellationError {
@@ -235,21 +241,23 @@ struct ChatVista: View {
         cargandoMas = true
         defer { cargandoMas = false }
         if let c: Chat = try? await API.get("/api/mensajes/\(API.segmento(username))?antes=\(primero.id)") {
-            mensajes = c.mensajes + mensajes
+            guard !Task.isCancelled else { return }
+            let ids = Set(mensajes.map(\.id))
+            mensajes = c.mensajes.filter { !ids.contains($0.id) } + mensajes
             chat?.hayMas = c.hayMas
         }
     }
 
     private func enviar(cancion: Cancion?) async {
         let t = texto.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty || cancion != nil else { return }
+        guard !enviando, !t.isEmpty || cancion != nil else { return }
         enviando = true
         defer { enviando = false }
         var cuerpo: [String: Any] = ["texto": cancion == nil ? t : ""]
         if let cancion { cuerpo["cancionId"] = cancion.id }
         do {
             let m: Mensaje = try await API.enviar("POST", "/api/mensajes/\(API.segmento(username))", cuerpo)
-            if cancion == nil { texto = "" }
+            if cancion == nil, texto.trimmingCharacters(in: .whitespacesAndNewlines) == t { texto = "" }
             if !mensajes.contains(where: { $0.id == m.id }) { withAnimation { mensajes.append(m) } }
         } catch {
             Avisos.compartido.error(error)

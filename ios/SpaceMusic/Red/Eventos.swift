@@ -56,6 +56,15 @@ final class Eventos {
         sondeo = nil
     }
 
+    func limpiar() {
+        desconectar()
+        mensajesSinLeer = 0
+        notificacionesSinLeer = 0
+        ultimoMensaje = nil
+        ultimoVisto = nil
+        chatAbierto = nil
+    }
+
     func actualizarResumen() async {
         guard Sesion.compartida.conectado,
               let r: ResumenAvisos = try? await API.get("/api/notificaciones/resumen", tiempo: 15) else { return }

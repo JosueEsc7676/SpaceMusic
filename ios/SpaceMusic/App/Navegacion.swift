@@ -41,6 +41,12 @@ final class Navegacion {
         Binding(get: { self.rutas[p] ?? NavigationPath() }, set: { self.rutas[p] = $0 })
     }
 
+    func reiniciar() {
+        pestana = .inicio
+        rutas = [:]
+        reproductorAbierto = false
+    }
+
     func ir(_ d: Destino) {
         reproductorAbierto = false
         var r = rutas[pestana] ?? NavigationPath()
@@ -101,13 +107,6 @@ struct VistaDestino: View {
             case .artistas: TodosArtistasVista()
             }
         }
-        // En el chat no hay mini reproductor (la barra para escribir va abajo)
-        .espacioReproductor(activo: !esChat)
-    }
-
-    private var esChat: Bool {
-        if case .chat = destino { return true }
-        return false
     }
 }
 
