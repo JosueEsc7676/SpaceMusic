@@ -1,6 +1,14 @@
 # Registro de cambios
 
-## App de iPhone 2.0 (React Native + Expo)
+## App de iPhone 1.1 (SwiftUI, de nuevo la app activa)
+- Se vuelve a SwiftUI como app principal: el flujo **App iPhone** compila `ios/` en cada cambio; Expo queda archivado (flujo manual aparte).
+- Reproductor: cabecera compacta con letra o cola abiertas, bordes desvanecidos (ya no parecen montarse sobre el título), controles en cinco columnas que no se salen de la pantalla e indicador de espera solo si la carga dura más de 0,6 s.
+- Arranque: la siguiente canción se precarga cuando la actual ya está lista, en vez de descargarse a la vez (mejora pendiente de medir en el iPhone).
+- Mini reproductor con fondo hasta la barra de pestañas: las listas ya no asoman entre ambos.
+- Géneros con el color de la web y portada girada en la esquina, sin recortes del nombre; botón Atrás solo con la flecha.
+- Matriz de paridad con la web en `ios/PARIDAD.md`.
+
+## App de iPhone 2.0 (React Native + Expo, archivada)
 - Nueva app en TypeScript que comparte la interfaz web móvil real, con cola de audio nativa de Expo, controles bloqueados, radio, temporizador, sesión protegida y descargas persistentes por cuenta. GitHub Actions genera el nuevo IPA; se conserva SwiftUI como versión anterior. Arquitectura híbrida y límites documentados en ios-expo/README.md.
 
 

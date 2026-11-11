@@ -2,9 +2,7 @@
 
 ## App de iPhone
 
-La app activa está en ios-expo/: React Native, Expo y TypeScript, con la interfaz web móvil compartida y audio/descargas nativos. El flujo **App iPhone** de GitHub genera el artefacto **SpaceMusic-ipa**. Instrucciones y límites en ios-expo/README.md.
-
-La versión SwiftUI anterior se conserva en ios/ y tiene un flujo manual separado.
+La app de iPhone activa es la nativa en SwiftUI de ios/. El flujo **App iPhone** de GitHub la compila en cada cambio de ios/ y genera el artefacto **SpaceMusic-ipa**. Instrucciones en ios/LEEME.md y estado de paridad con la web en ios/PARIDAD.md. ios-expo/ (React Native + Expo) queda archivado como referencia y no se sigue desarrollando.
 
 Servidor de música personal: escanea tu carpeta de música y la sirve con una
 app web estilo Spotify (también instalable en el celular).

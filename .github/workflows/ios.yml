@@ -1,13 +1,15 @@
+# App de iPhone activa: SwiftUI (ios/). Compila en una Mac de GitHub, ejecuta las pruebas y deja SpaceMusic.ipa sin firmar
+# para instalar con Sideloadly. Corre al subir cambios dentro de ios/, en pull requests y a mano (Actions → "App iPhone").
 name: App iPhone
 
 on:
   push:
     paths:
-      - "ios-expo/**"
+      - "ios/**"
       - ".github/workflows/ios.yml"
   pull_request:
     paths:
-      - "ios-expo/**"
+      - "ios/**"
       - ".github/workflows/ios.yml"
   workflow_dispatch:
 
@@ -15,78 +17,54 @@ permissions:
   contents: read
 
 concurrency:
-  # v2: nuevo grupo para no quedar en cola detrás de una ejecución que GitHub dejó atascada (11/11/2026).
-  group: ios-expo-v2-${{ github.ref }}
+  group: ios-swiftui-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   compilar:
-    name: Expo · comprobar y crear IPA
-    runs-on: macos-26
-    timeout-minutes: 55
-    env:
-      EXPO_NO_TELEMETRY: "1"
-      CI: "1"
-      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    name: SwiftUI · probar, compilar y crear IPA
+    runs-on: macos-15
+    timeout-minutes: 40
     defaults:
       run:
-        working-directory: ios-expo
+        working-directory: ios
     steps:
       - name: Bajar el código
         uses: actions/checkout@v4
 
-      - name: Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: ios-expo/package-lock.json
+      - name: Versión de Xcode
+        run: xcodebuild -version
 
-      - name: Instalar versiones bloqueadas
-        run: npm ci
+      - name: Probar modelos y letras
+        run: swift test
 
-      - name: Comprobar TypeScript y pruebas
-        run: npm run verify
-
-      - name: Verificar paquete JavaScript de iOS
-        run: npm run export:ios
-
-      - name: Generar proyecto nativo de Expo
-        run: npm run prebuild:ios
-
-      - name: Instalar módulos iOS
-        run: pod install --project-directory=ios
-
-      - name: Herramientas de compilación
-        run: |
-          xcodebuild -version
-          xcodebuild -list -workspace ios/SpaceMusic.xcworkspace
-
-      - name: Compilar para iPhone sin firmar
+      - name: Compilar (sin firmar)
         run: |
           set -o pipefail
-          xcodebuild -workspace ios/SpaceMusic.xcworkspace -scheme SpaceMusic \
+          xcodebuild -project SpaceMusic.xcodeproj -scheme SpaceMusic \
             -configuration Release -destination 'generic/platform=iOS' \
-            -derivedDataPath "$RUNNER_TEMP/spacemusic-expo" \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-            build > "$RUNNER_TEMP/spacemusic-ios.log" 2>&1 || {
-              tail -160 "$RUNNER_TEMP/spacemusic-ios.log"
-              exit 1
-            }
-          grep -E 'warning:|BUILD SUCCEEDED' "$RUNNER_TEMP/spacemusic-ios.log" | tail -50 || true
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build > "$RUNNER_TEMP/build.log" 2>&1 || true
+          grep -E "warning:|BUILD (SUCCEEDED|FAILED)" "$RUNNER_TEMP/build.log" | sort -u | tail -60 || true
+          grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/build.log"
+
+      - name: Mostrar errores
+        if: failure()
+        run: |
+          grep -E "error:" "$RUNNER_TEMP/build.log" | sort -u | head -80 || true
+          tail -60 "$RUNNER_TEMP/build.log" || true
 
       - name: Crear SpaceMusic.ipa
         run: |
-          APP="$RUNNER_TEMP/spacemusic-expo/Build/Products/Release-iphoneos/SpaceMusic.app"
+          APP="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/SpaceMusic.app"
           test -d "$APP"
-          mkdir -p "$RUNNER_TEMP/spacemusic-ipa/Payload"
-          cp -R "$APP" "$RUNNER_TEMP/spacemusic-ipa/Payload/"
-          cd "$RUNNER_TEMP/spacemusic-ipa"
-          zip -qry "$GITHUB_WORKSPACE/SpaceMusic.ipa" Payload
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/SpaceMusic.ipa" Payload
+          ls -la "$GITHUB_WORKSPACE/SpaceMusic.ipa"
 
       # El servicio de artefactos de GitHub falla a veces de forma temporal (responde HTML en vez de JSON).
-      # Se reintenta tras una pausa para no perder una compilación correcta.
-      - name: Publicar ZIP del IPA
+      - name: Guardar el .ipa
         id: publicar
         continue-on-error: true
         uses: actions/upload-artifact@v4
@@ -96,11 +74,11 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-      - name: Esperar antes de reintentar la publicación
+      - name: Esperar antes de reintentar
         if: steps.publicar.outcome == 'failure'
         run: sleep 90
 
-      - name: Publicar ZIP del IPA (reintento)
+      - name: Guardar el .ipa (reintento)
         if: steps.publicar.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
@@ -110,13 +88,11 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
-      - name: Guardar diagnóstico si falla
+      - name: Guardar registro si falla
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: SpaceMusic-diagnostico-ios
-          path: |
-            ${{ runner.temp }}/spacemusic-ios.log
-            ios-expo/ios/Podfile.lock
+          name: SpaceMusic-registro-compilacion
+          path: ${{ runner.temp }}/build.log
           if-no-files-found: ignore
           retention-days: 7

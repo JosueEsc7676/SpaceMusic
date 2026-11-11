@@ -70,6 +70,14 @@ struct Principal: View {
                 }
             }
             .padding(.vertical, avisos.texto != nil || (reproductor.actual != nil && eventos.chatAbierto == nil) ? 4 : 0)
+            // Fondo hasta la barra de pestañas: las filas ya no asoman entre el mini reproductor y las pestañas.
+            .background(alignment: .bottom) {
+                if reproductor.actual != nil, eventos.chatAbierto == nil {
+                    LinearGradient(stops: [.init(color: .black.opacity(0), location: 0), .init(color: .black.opacity(0.92), location: 0.35),
+                                           .init(color: .black, location: 1)], startPoint: .top, endPoint: .bottom)
+                        .allowsHitTesting(false)
+                }
+            }
             .animation(.spring(duration: 0.3), value: avisos.texto)
             .animation(.spring(duration: 0.3), value: reproductor.actual?.id)
         }
@@ -98,7 +106,7 @@ struct MiniReproductor: View {
                     }
                     Button { r.alternar() } label: {
                         Group {
-                            if r.cargando && !r.sonando { ProgressView() } else {
+                            if r.esperaVisible && !r.sonando { ProgressView() } else {
                                 Image(systemName: r.sonando ? "pause.fill" : "play.fill")
                             }
                         }

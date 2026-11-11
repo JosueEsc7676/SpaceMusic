@@ -136,6 +136,7 @@ struct VistaDestino: View {
 
 extension View {
     func destinos() -> some View {
-        navigationDestination(for: Destino.self) { VistaDestino(destino: $0) }
+        // .editor: el botón Atrás muestra solo la flecha (antes salía, por ejemplo, «‹ Buenos días»).
+        navigationDestination(for: Destino.self) { VistaDestino(destino: $0).toolbarRole(.editor) }
     }
 }

@@ -1,3 +1,5 @@
+> **Archivado.** La app activa de iPhone es la nativa en SwiftUI de `../ios/`. Este proyecto Expo se conserva como referencia; su flujo de GitHub es manual (**App iPhone Expo (archivada)**) y su artefacto se llama **SpaceMusic-expo-ipa-archivada**.
+
 # SpaceMusic para iPhone · Expo
 
 App hecha con **React Native, Expo SDK 58 y TypeScript**. Sustituye la interfaz SwiftUI que se mantiene en `../ios/` como versión anterior.

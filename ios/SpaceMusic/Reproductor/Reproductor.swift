@@ -19,7 +19,11 @@ final class Reproductor {
     private(set) var cola: [Cancion] = []
     private(set) var indice = 0
     private(set) var sonando = false
-    private(set) var cargando = false
+    private(set) var cargando = false {
+        didSet { if cargando != oldValue { programarEspera() } }
+    }
+    /// Indicador de espera visible: solo si la carga dura más de 0,6 s (evita parpadeos y ruedas eternas en cada cambio).
+    private(set) var esperaVisible = false
     private(set) var tiempo: Double = 0
     private(set) var duracion: Double = 0
     private(set) var aleatorio = false
@@ -52,6 +56,9 @@ final class Reproductor {
     @ObservationIgnored private var portadaNowPlaying: (id: Int, arte: MPMediaItemArtwork)?
     @ObservationIgnored private var saltosSeguidos = 0
     @ObservationIgnored private var intencionSonar = false
+    @ObservationIgnored private var tareaEspera: Task<Void, Never>?
+    /// La siguiente canción se precarga cuando la actual ya está lista, para no competir por la red al arrancar.
+    @ObservationIgnored private var siguientePendiente = false
 
     private init() {
         radioAutomatica = UserDefaults.standard.object(forKey: "radioAutomatica") as? Bool ?? true
@@ -341,12 +348,24 @@ final class Reproductor {
             try? AVAudioSession.sharedInstance().setActive(true)
             jugador.playImmediately(atRate: 1)
         }
-        prepararSiguiente()
+        // Antes se precargaba la siguiente aquí mismo y su descarga competía con la canción que se pedía.
+        siguientePendiente = true
         cambioDeCancion()
+    }
+
+    private func programarEspera() {
+        tareaEspera?.cancel()
+        guard cargando else { esperaVisible = false; return }
+        tareaEspera = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard let self, !Task.isCancelled, self.cargando else { return }
+            self.esperaVisible = true
+        }
     }
 
     /// Deja lista la siguiente canción dentro del reproductor.
     private func prepararSiguiente() {
+        siguientePendiente = false
         for it in jugador.items() where it !== jugador.currentItem { jugador.remove(it) }
         itemSiguiente = nil
         indiceSiguiente = nil
@@ -483,6 +502,7 @@ final class Reproductor {
                     self.saltosSeguidos = 0
                     if dur.isFinite, dur > 0 { self.duracion = dur }
                     self.actualizarNowPlaying()
+                    if self.siguientePendiente { self.siguientePendiente = false; self.prepararSiguiente() }
                 }
             }
         }

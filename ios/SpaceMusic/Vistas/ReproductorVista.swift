@@ -31,17 +31,23 @@ struct ReproductorVista: View {
                 } else {
                   VStack(spacing: 0) {
                     cabecera(c)
+                    if panel != .portada {
+                        // Con letra o cola abiertas, la canción pasa arriba (como en la web y Apple Music)
+                        // y el panel ocupa todo el centro sin rozar los controles.
+                        cabeceraCompacta(c).padding(.top, 8)
+                    }
                     Group {
                         switch panel {
                         case .portada: portada(c)
-                        case .letra: LetraCompleta()
-                        case .cola: ColaVista()
+                        case .letra: LetraCompleta().mask(desvanecido)
+                        case .cola: ColaVista().mask(desvanecido)
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                     controles(c)
                         .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 12)
                 }
                 .padding(.horizontal, 22)
                 .padding(.bottom, 8)
@@ -57,6 +63,37 @@ struct ReproductorVista: View {
         }
         .onChange(of: r.actual?.id) { _, _ in arrastrando = nil }
         .hojasGlobales()
+    }
+
+    /// Bordes suaves arriba y abajo: las líneas y filas se desvanecen en vez de quedar cortadas en seco.
+    private var desvanecido: some View {
+        LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.05),
+                               .init(color: .black, location: 0.9), .init(color: .clear, location: 1)],
+                       startPoint: .top, endPoint: .bottom)
+    }
+
+    private func cabeceraCompacta(_ c: Cancion) -> some View {
+        HStack(spacing: 12) {
+            Portada(ruta: c.portadaUrl, tamano: 52, radio: 8)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(c.nombre).font(.headline).lineLimit(1)
+                Text(c.artista).font(.subheadline).foregroundStyle(Tema.secundario).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            botonFavorito(c)
+        }
+    }
+
+    private func botonFavorito(_ c: Cancion) -> some View {
+        Button { biblioteca.alternarFavorito(c) } label: {
+            Image(systemName: biblioteca.esFavorita(c.id) ? "heart.fill" : "heart")
+                .font(.title2)
+                .foregroundStyle(biblioteca.esFavorita(c.id) ? Tema.rosa : Tema.texto)
+                .symbolEffect(.bounce, value: biblioteca.esFavorita(c.id))
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(biblioteca.esFavorita(c.id) ? "Quitar de Me gusta" : "Me gusta")
     }
 
     @ViewBuilder private func contenidoPanel(_ c: Cancion) -> some View {
@@ -128,22 +165,18 @@ struct ReproductorVista: View {
 
     private func controles(_ c: Cancion) -> some View {
         VStack(spacing: 14) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(c.nombre).font(.title3.weight(.bold)).lineLimit(1)
-                    Button { Navegacion.compartida.ir(.artista(c.artista)) } label: {
-                        Text(c.artista).font(.body).foregroundStyle(Tema.secundario).lineLimit(1)
+            if panel == .portada {
+                HStack(alignment: .center, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(c.nombre).font(.title3.weight(.bold)).lineLimit(1)
+                        Button { Navegacion.compartida.ir(.artista(c.artista)) } label: {
+                            Text(c.artista).font(.body).foregroundStyle(Tema.secundario).lineLimit(1)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    botonFavorito(c)
                 }
-                Spacer()
-                Button { biblioteca.alternarFavorito(c) } label: {
-                    Image(systemName: biblioteca.esFavorita(c.id) ? "heart.fill" : "heart")
-                        .font(.title2)
-                        .foregroundStyle(biblioteca.esFavorita(c.id) ? Tema.rosa : Tema.texto)
-                        .symbolEffect(.bounce, value: biblioteca.esFavorita(c.id))
-                }
-                .buttonStyle(.plain)
             }
 
             if panel == .portada, letras.sincronizada {
@@ -152,30 +185,34 @@ struct ReproductorVista: View {
 
             barraTiempo
 
-            HStack {
+            // Cinco columnas iguales: ningún botón puede salirse de la pantalla, en ningún tamaño de iPhone.
+            HStack(spacing: 0) {
                 Button { r.cambiarAleatorio() } label: {
-                    Image(systemName: "shuffle").foregroundStyle(r.aleatorio ? Tema.celeste : Tema.texto)
+                    Image(systemName: "shuffle").foregroundStyle(r.aleatorio ? Tema.celeste : Tema.texto).celda()
                 }
-                Spacer()
-                Button { r.anterior() } label: { Image(systemName: "backward.fill").font(.title) }
-                Spacer()
+                .accessibilityLabel(r.aleatorio ? "Desactivar aleatorio" : "Activar aleatorio")
+                Button { r.anterior() } label: { Image(systemName: "backward.fill").font(.title).celda() }
+                    .accessibilityLabel("Anterior")
                 Button { r.alternar() } label: {
                     ZStack {
-                        Circle().fill(Color.white).frame(width: 72, height: 72)
-                        if r.cargando && !r.sonando {
+                        Circle().fill(Color.white).frame(width: 68, height: 68)
+                        if r.esperaVisible && !r.sonando {
                             ProgressView().tint(.black)
                         } else {
                             Image(systemName: r.sonando ? "pause.fill" : "play.fill").font(.title).foregroundStyle(.black)
                         }
                     }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
-                Spacer()
-                Button { r.siguiente() } label: { Image(systemName: "forward.fill").font(.title) }
-                Spacer()
+                .accessibilityLabel(r.sonando ? "Pausar" : "Reproducir")
+                Button { r.siguiente() } label: { Image(systemName: "forward.fill").font(.title).celda() }
+                    .accessibilityLabel("Siguiente")
                 Button { r.cambiarRepetir() } label: {
                     Image(systemName: r.repetir == .una ? "repeat.1" : "repeat")
-                        .foregroundStyle(r.repetir == .no ? Tema.texto : Tema.celeste)
+                        .foregroundStyle(r.repetir == .no ? Tema.texto : Tema.celeste).celda()
                 }
+                .accessibilityLabel("Repetir")
             }
             .font(.title3)
             .buttonStyle(.plain)
@@ -184,9 +221,8 @@ struct ReproductorVista: View {
                 Text(e).font(.caption).foregroundStyle(Tema.peligro)
             }
 
-            HStack {
-                SelectorSalida().frame(width: 36, height: 36)
-                Spacer()
+            HStack(spacing: 0) {
+                SelectorSalida().frame(width: 36, height: 36).frame(maxWidth: .infinity)
                 Menu {
                     ForEach([5, 10, 15, 30, 45, 60], id: \.self) { minutos in
                         Button("\(minutos) minutos") { r.programarSueno(minutos: minutos) }
@@ -194,23 +230,22 @@ struct ReproductorVista: View {
                     Button("Al terminar esta canción") { r.programarSueno(minutos: nil); r.dormirAlTerminar = true }
                     Button("Desactivar", role: .cancel) { r.programarSueno(minutos: nil) }
                 } label: {
-                    Image(systemName: "moon.zzz").foregroundStyle(r.finTemporizador != nil || r.dormirAlTerminar ? Tema.celeste : Tema.texto)
+                    Image(systemName: "moon.zzz").foregroundStyle(r.finTemporizador != nil || r.dormirAlTerminar ? Tema.celeste : Tema.texto).celda()
                 }
                 .accessibilityLabel("Temporizador para dormir")
-                Spacer()
-                Button { hojas.enviarCancion = c } label: { Image(systemName: "paperplane") }
-                Spacer()
-                Button { panel = panel == .letra ? .portada : .letra } label: {
-                    Image(systemName: "quote.bubble").foregroundStyle(panel == .letra ? Tema.celeste : Tema.texto)
+                Button { hojas.enviarCancion = c } label: { Image(systemName: "paperplane").celda() }
+                    .accessibilityLabel("Enviar a un amigo")
+                Button { withAnimation(.spring(duration: 0.35)) { panel = panel == .letra ? .portada : .letra } } label: {
+                    Image(systemName: "quote.bubble").foregroundStyle(panel == .letra ? Tema.celeste : Tema.texto).celda()
                 }
-                Spacer()
-                Button { panel = panel == .cola ? .portada : .cola } label: {
-                    Image(systemName: "list.bullet").foregroundStyle(panel == .cola ? Tema.celeste : Tema.texto)
+                .accessibilityLabel("Letra")
+                Button { withAnimation(.spring(duration: 0.35)) { panel = panel == .cola ? .portada : .cola } } label: {
+                    Image(systemName: "list.bullet").foregroundStyle(panel == .cola ? Tema.celeste : Tema.texto).celda()
                 }
+                .accessibilityLabel("A continuación")
             }
             .font(.title3)
             .buttonStyle(.plain)
-            .padding(.horizontal, 6)
         }
     }
 
@@ -312,7 +347,8 @@ struct LetraCompleta: View {
                             .onTapGesture { r.buscar(l.tiempo) }
                     }
                 }
-                .padding(.vertical, 140)
+                .padding(.vertical, 60)
+                .padding(.horizontal, 4)
             }
             .onChange(of: actual) { _, nuevo in
                 guard let nuevo else { return }
@@ -367,4 +403,9 @@ struct ColaVista: View {
         .scrollContentBackground(.hidden)
         .environment(\.editMode, .constant(.active))
     }
+}
+
+private extension View {
+    /// Celda de botón: ocupa su columna completa y mantiene un área táctil de 44 pt.
+    func celda() -> some View { frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle()) }
 }

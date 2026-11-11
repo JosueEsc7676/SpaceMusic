@@ -14,6 +14,23 @@ enum Tema {
     static let peligro = Color(red: 1.0, green: 0.42, blue: 0.42)
 
     static let aurora = LinearGradient(colors: [lila, celeste, rosa], startPoint: .leading, endPoint: .trailing)
+
+    /// Paleta de géneros de la web (`GENRE_COLORS` en ui.js), en el mismo orden.
+    private static let coloresGenero: [UInt32] = [0x6c5ce7, 0x3a7bd5, 0xc2547a, 0xd07a4a, 0x3c9d9b, 0x8e5bd1, 0xb8863b, 0x4d6fd8,
+                                                  0xa34fa0, 0x5c8a6a, 0xc96a5b, 0x4b9ec9, 0x7d6bb8, 0xb0596f, 0x5e7fa8, 0x9a7a52]
+
+    /// Mismo color que `genreColor(nombre)` de la web: hash ×31 sobre el nombre sin acentos y en minúsculas.
+    /// Devuelve los componentes (0…1) para poder oscurecerlos como el `color-mix` de la web.
+    static func colorGenero(_ nombre: String) -> (Double, Double, Double) {
+        let normal = nombre.folding(options: .diacriticInsensitive, locale: nil).lowercased()
+        var h: UInt32 = 0
+        for escalar in normal.unicodeScalars {
+            let codigo = escalar.value <= 0xFFFF ? escalar.value : (0xD800 + ((escalar.value - 0x10000) >> 10))
+            h = h &* 31 &+ codigo
+        }
+        let c = coloresGenero[Int(h % UInt32(coloresGenero.count))]
+        return (Double((c >> 16) & 0xff) / 255, Double((c >> 8) & 0xff) / 255, Double(c & 0xff) / 255)
+    }
 }
 
 extension View {

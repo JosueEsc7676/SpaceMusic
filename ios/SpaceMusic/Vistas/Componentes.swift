@@ -253,23 +253,47 @@ struct TarjetaMix: View {
     }
 }
 
+/// Tarjeta de género como en la web (`.genre`): color propio que se funde con el negro, nombre arriba
+/// y la portada pequeña girada en la esquina. El texto nunca queda debajo de la imagen ni fuera de la tarjeta.
 struct TarjetaGenero: View {
     let genero: Genero
+    @ScaledMetric(relativeTo: .headline) private var alto: CGFloat = 92
+
     var body: some View {
+        let color = Tema.colorGenero(genero.nombre)
         NavigationLink(value: Destino.genero(genero.nombre)) {
-            ZStack(alignment: .bottomLeading) {
-                ImagenRemota(ruta: genero.portadaUrl)
-                LinearGradient(colors: [Tema.lila.opacity(0.35), .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(genero.nombre).font(.headline).foregroundStyle(.white).lineLimit(2)
-                    Text(Formato.canciones(genero.totalCanciones)).font(.caption).foregroundStyle(.white.opacity(0.7))
-                }
-                .padding(10)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(genero.nombre)
+                    .font(.system(.headline, design: .rounded).weight(.heavy))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(Formato.canciones(genero.totalCanciones))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .lineLimit(1)
             }
-            .frame(height: 96)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.leading, 12).padding(.top, 12).padding(.trailing, 58)
+            .frame(maxWidth: .infinity, minHeight: alto, alignment: .topLeading)
+            .background {
+                LinearGradient(colors: [Color(red: color.0, green: color.1, blue: color.2), Color(red: color.0 * 0.45, green: color.1 * 0.45, blue: color.2 * 0.45)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if let ruta = genero.portadaUrl, !ruta.isEmpty {
+                    Portada(ruta: ruta, tamano: 70, radio: 6)
+                        .shadow(color: .black.opacity(0.4), radius: 9, y: 6)
+                        .rotationEffect(.degrees(24))
+                        .offset(x: 14, y: 8)
+                        .allowsHitTesting(false)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(genero.nombre), \(Formato.canciones(genero.totalCanciones))")
     }
 }
 
