@@ -92,8 +92,18 @@ final class Reproductor {
     }
 
     func alternar() {
-        if actual == nil { return }
-        if jugador.timeControlStatus == .playing { pausar() } else { continuar() }
+        guard actual != nil else { return }
+        if jugador.timeControlStatus != .paused { pausar() } else { continuar() }
+    }
+
+    /// Refleja las ediciones en la cola y en la pantalla bloqueada.
+    func actualizar(_ cancion: Cancion) {
+        for i in cola.indices where cola[i].id == cancion.id { cola[i] = cancion }
+        for i in ordenOriginal.indices where ordenOriginal[i].id == cancion.id { ordenOriginal[i] = cancion }
+        if actual?.id == cancion.id {
+            actualizarNowPlaying()
+            cargarPortadaNowPlaying(cancion)
+        }
     }
 
     func pausar() {
@@ -247,7 +257,7 @@ final class Reproductor {
             return nil
         }
         let item = AVPlayerItem(asset: AVURLAsset(url: url))
-        item.preferredForwardBufferDuration = 30
+        item.preferredForwardBufferDuration = 5
         return item
     }
 
@@ -266,7 +276,7 @@ final class Reproductor {
         cargando = true
         if reproducir {
             try? AVAudioSession.sharedInstance().setActive(true)
-            jugador.play()
+            jugador.playImmediately(atRate: 1)
         }
         prepararSiguiente()
         cambioDeCancion()

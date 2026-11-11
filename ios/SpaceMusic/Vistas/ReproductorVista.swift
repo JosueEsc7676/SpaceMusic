@@ -13,8 +13,8 @@ struct ReproductorVista: View {
     @State private var hojas = Hojas.compartidas
 
     var body: some View {
-        ZStack {
-            fondo
+        GeometryReader { espacio in
+          ZStack {
             if let c = r.actual {
                 VStack(spacing: 0) {
                     cabecera(c)
@@ -25,14 +25,21 @@ struct ReproductorVista: View {
                         case .cola: ColaVista()
                         }
                     }
-                    .frame(maxHeight: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
                     controles(c)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 22)
                 .padding(.bottom, 8)
+                .frame(width: espacio.size.width, height: espacio.size.height)
             } else {
                 EstadoVista(icono: "music.note", titulo: "No suena nada")
             }
+        }
+          .frame(width: espacio.size.width, height: espacio.size.height)
+          .background { fondo }
+          .clipped()
         }
         .onChange(of: r.actual?.id) { _, _ in arrastrando = nil }
         .hojasGlobales()
@@ -265,6 +272,7 @@ struct LetraCompleta: View {
                     ForEach(letras.lineas) { l in
                         Text(l.texto.isEmpty ? "♪" : l.texto)
                             .font(.title2.weight(.bold))
+                            .fixedSize(horizontal: false, vertical: true)
                             .foregroundStyle(l.id == actual ? Tema.texto : Tema.texto.opacity(0.35))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .id(l.id)

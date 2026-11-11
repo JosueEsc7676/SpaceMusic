@@ -10,6 +10,16 @@ actor CacheImagenes {
 
     init() { memoria.countLimit = 400 }
 
+    /// El servidor ya ofrece miniaturas: evita descargar el original en cada fila.
+    nonisolated static func rutaReducida(_ ruta: String, pixeles: Int) -> String {
+        guard ruta.hasPrefix("/api/portada/db/"), var partes = URLComponents(string: ruta) else { return ruta }
+        var parametros = partes.queryItems ?? []
+        parametros.removeAll { $0.name == "s" }
+        parametros.append(URLQueryItem(name: "s", value: String(pixeles)))
+        partes.queryItems = parametros
+        return partes.string ?? ruta
+    }
+
     nonisolated func enMemoria(_ ruta: String) -> UIImage? { memoria.object(forKey: ruta as NSString) }
 
     func imagen(_ ruta: String) async -> UIImage? {
@@ -45,11 +55,13 @@ struct ImagenRemota: View {
     let ruta: String?
     var icono = "music.note"
     var redonda = false
+    var pixeles = 640
 
     @State private var imagen: UIImage?
 
     var body: some View {
-        ZStack {
+        GeometryReader { espacio in
+          ZStack {
             if let imagen {
                 Image(uiImage: imagen).resizable().scaledToFill()
             } else {
@@ -57,13 +69,16 @@ struct ImagenRemota: View {
                 Image(systemName: icono).font(.title2).foregroundStyle(.white.opacity(0.35))
             }
         }
-        .clipped()
+          .frame(width: espacio.size.width, height: espacio.size.height)
+          .clipped()
+        }
         .clipShape(redonda ? AnyShape(Circle()) : AnyShape(Rectangle()))
-        .task(id: ruta) {
+        .task(id: ruta.map { CacheImagenes.rutaReducida($0, pixeles: pixeles) }) {
             guard let ruta, !ruta.isEmpty else { imagen = nil; return }
-            if let i = CacheImagenes.compartida.enMemoria(ruta) { imagen = i; return }
+            let reducida = CacheImagenes.rutaReducida(ruta, pixeles: pixeles)
+            if let i = CacheImagenes.compartida.enMemoria(reducida) { imagen = i; return }
             imagen = nil
-            let nueva = await CacheImagenes.compartida.imagen(ruta)
+            let nueva = await CacheImagenes.compartida.imagen(reducida)
             guard !Task.isCancelled else { return }
             imagen = nueva
         }
@@ -80,7 +95,7 @@ struct Portada: View {
     var body: some View {
         Color.clear
             .aspectRatio(1, contentMode: .fit)
-            .overlay { ImagenRemota(ruta: ruta, icono: icono) }
+            .overlay { ImagenRemota(ruta: ruta, icono: icono, pixeles: (tamano ?? 300) <= 60 ? 160 : 640) }
             .frame(width: tamano, height: tamano)
             .clipShape(RoundedRectangle(cornerRadius: radio, style: .continuous))
     }

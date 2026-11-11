@@ -4,6 +4,11 @@ App nativa (SwiftUI) que usa la misma API del servidor que la web. No abre la we
 
 ## Correcciones en revisión
 
+- Desde el menú de canción, colaboradores y administradores pueden editar información, portada y letra.
+- Se limitan imágenes y fondo del reproductor a su espacio y se solicitan miniaturas para reducir transferencia.
+- El arranque del audio usa menor búfer; la mejora de tiempo debe comprobarse en red real.
+- Seguimiento de funciones y pruebas en REVISION-IOS.md.
+
 - El mini reproductor reserva su espacio sobre las pestañas automáticamente.
 - Cargar mensajes anteriores conserva la posición; los envíos se bloquean mientras hay otro pendiente y respetan lo escrito durante la espera.
 - Cerrar sesión limpia la biblioteca y las pantallas de la cuenta anterior.

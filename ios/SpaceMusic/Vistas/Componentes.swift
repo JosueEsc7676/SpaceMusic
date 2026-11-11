@@ -117,6 +117,11 @@ struct OpcionesCancion: View {
         } else {
             Button { descargas.descargar([cancion]) } label: { Label("Descargar", systemImage: "arrow.down.circle") }
         }
+        if Sesion.compartida.puedeEditar {
+            Button { hojas.editarCancion = cancion } label: {
+                Label("Editar canción, portada y letra", systemImage: "square.and.pencil")
+            }
+        }
         if let url = API.url("/#/album/\(API.segmento(cancion.album))") {
             ShareLink(item: url, subject: Text(cancion.nombre), message: Text("\(cancion.nombre) · \(cancion.artista)")) {
                 Label("Compartir", systemImage: "square.and.arrow.up")
@@ -132,6 +137,7 @@ final class Hojas {
     static let compartidas = Hojas()
     var agregarAPlaylist: [Cancion]?
     var enviarCancion: Cancion?
+    var editarCancion: Cancion?
 }
 
 extension View {
@@ -151,6 +157,9 @@ private struct HojasGlobales: ViewModifier {
             }
             .sheet(isPresented: Binding(get: { activas && hojas.enviarCancion != nil }, set: { if !$0 { hojas.enviarCancion = nil } })) {
                 if let c = hojas.enviarCancion { EnviarCancionHoja(cancion: c) }
+            }
+            .sheet(isPresented: Binding(get: { activas && hojas.editarCancion != nil }, set: { if !$0 { hojas.editarCancion = nil } })) {
+                if let c = hojas.editarCancion { EditarCancionHoja(cancion: c) }
             }
     }
 }

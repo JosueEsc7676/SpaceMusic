@@ -24,14 +24,15 @@ final class Letras {
 
     @ObservationIgnored private var tarea: Task<Void, Never>?
 
-    func cargar(_ c: Cancion) {
-        guard c.id != cancionId else { return }
+    func cargar(_ c: Cancion, forzar: Bool = false) {
+        guard forzar || c.id != cancionId else { return }
         cancionId = c.id
         lineas = []
         textoPlano = ""
         mensaje = nil
         tarea?.cancel()
-        guard c.tieneLetra else { return }
+        cargando = false
+        guard c.tieneLetra || forzar else { return }
         cargando = true
         tarea = Task {
             defer { if cancionId == c.id { cargando = false } }
@@ -43,7 +44,7 @@ final class Letras {
     /// Busca la letra en internet (la guarda el servidor).
     func buscarEnInternet(_ c: Cancion, forzar: Bool = false) async {
         cargando = true
-        defer { cargando = false }
+        defer { if cancionId == c.id { cargando = false } }
         do {
             let l: Letra = try await API.enviar("POST", "/api/letras/\(c.id)/buscar" + (forzar ? "?forzar=true" : ""))
             guard cancionId == c.id else { return }
@@ -51,9 +52,10 @@ final class Letras {
                 mensaje = l.instrumental == true ? "Es una canción instrumental" : (l.message ?? "No se encontró la letra")
             } else {
                 aplicar(l)
-                if !hayLetra, let r: Letra = try? await API.get("/api/letras/\(c.id)") { aplicar(r) }
+                if !hayLetra, let r: Letra = try? await API.get("/api/letras/\(c.id)"), cancionId == c.id { aplicar(r) }
             }
         } catch {
+            guard cancionId == c.id, !Task.isCancelled else { return }
             mensaje = error.localizedDescription
         }
     }
