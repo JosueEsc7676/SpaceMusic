@@ -1,4 +1,6 @@
-# SpaceMusic para iPhone
+# SpaceMusic para iPhone (versión SwiftUI anterior)
+
+La app activa ahora está en ../ios-expo/ y usa React Native, Expo y TypeScript. El flujo **App iPhone** compila esa versión. Este documento conserva las instrucciones de SwiftUI; su flujo manual se llama **App iPhone SwiftUI (anterior)**.
 
 App nativa (SwiftUI) que usa la misma API del servidor que la web. No abre la web dentro: todo está hecho con pantallas del iPhone.
 

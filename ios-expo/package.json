@@ -1,0 +1,40 @@
+{
+  "name": "spacemusic-ios",
+  "version": "2.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "expo": "~58.0.23",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "expo-audio": "~58.0.11",
+    "expo-secure-store": "~58.0.2",
+    "expo-file-system": "~58.0.13",
+    "expo-sharing": "~58.0.22",
+    "expo-splash-screen": "~58.0.13",
+    "expo-notifications": "~58.1.8",
+    "expo-build-properties": "~58.0.12",
+    "react-native-webview": "14.0.1",
+    "react-native-safe-area-context": "~5.11.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "~19.3.0",
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "npm run bridge && tsc --noEmit",
+    "test": "node scripts/test.mjs",
+    "verify": "npm run typecheck && npm test",
+    "export:ios": "expo export --platform ios --output-dir dist-ios",
+    "bridge": "node scripts/build-bridge.mjs",
+    "prepare": "npm run bridge",
+    "prebuild:ios": "expo prebuild --platform ios --no-install"
+  },
+  "private": true
+}

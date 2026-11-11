@@ -1,0 +1,55 @@
+# Compila la app de iPhone en una Mac de GitHub y deja el SpaceMusic.ipa para descargar.
+# Corre al subir cambios dentro de ios/, en pull requests y a mano (pestaña Actions → "App iPhone" → Run workflow).
+name: App iPhone SwiftUI (anterior)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compilar:
+    name: Compilar y crear .ipa
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Bajar el código
+        uses: actions/checkout@v4
+
+      - name: Versión de Xcode
+        run: xcodebuild -version
+
+      - name: Probar modelos y letras
+        working-directory: ios
+        run: swift test
+
+      - name: Compilar (sin firmar)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project SpaceMusic.xcodeproj -scheme SpaceMusic \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tee "$RUNNER_TEMP/build.log" \
+            | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/build.log"
+
+      - name: Mostrar errores
+        if: failure()
+        run: grep -E "error:" "$RUNNER_TEMP/build.log" | sort -u | head -50 || true
+
+      - name: Crear SpaceMusic.ipa
+        run: |
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/SpaceMusic.app" "$RUNNER_TEMP/ipa/Payload/"
+          cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/SpaceMusic.ipa" Payload
+          ls -la "$GITHUB_WORKSPACE/SpaceMusic.ipa"
+
+      - name: Guardar el .ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpaceMusic-ipa
+          path: SpaceMusic.ipa
+          retention-days: 14

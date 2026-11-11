@@ -1,5 +1,9 @@
 # Registro de cambios
 
+## App de iPhone 2.0 (React Native + Expo)
+- Nueva app en TypeScript que comparte la interfaz web móvil real, con cola de audio nativa de Expo, controles bloqueados, radio, temporizador, sesión protegida y descargas persistentes por cuenta. GitHub Actions genera el nuevo IPA; se conserva SwiftUI como versión anterior. Arquitectura híbrida y límites documentados en ios-expo/README.md.
+
+
 ## App de iPhone 1.0 (nativa)
 - Ampliación de iOS: soporte, géneros, mantenimiento y detalle de usuarios; letras con archivos y borrado, ajuste del banner, recomendaciones y guardado de mixes; temporizador y restauración de cola; copias sin conexión y descargas con cancelación/reintento; mejoras de memoria, carga y protección de sesiones. Pruebas de modelos y LRC preparadas para la compilación final.
 - Revisión de desbordamientos de imágenes y reproductor, miniaturas ligeras, arranque de audio con menor búfer, correcciones de carga de letras y editor de información, portada y letra para colaboradores y administradores. Pendiente de comprobar en iPhone.

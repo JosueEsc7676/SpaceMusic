@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "SpaceMusic",
+    "slug": "spacemusic",
+    "scheme": "spacemusic",
+    "version": "2.0.0",
+    "orientation": "default",
+    "icon": "./assets/spacemusic.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "bundleIdentifier": "com.bpm.spacemusic.ios",
+      "buildNumber": "200",
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio"
+        ],
+        "NSPhotoLibraryUsageDescription": "Permite elegir fotos para tu perfil, playlists y portadas.",
+        "NSCameraUsageDescription": "Permite tomar fotos para tu perfil y portadas.",
+        "NSLocalNetworkUsageDescription": "Conectarse a tu servidor de m\u00fasica en la red local.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "enableBackgroundPlayback": true,
+          "enableBackgroundRecording": false
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/spacemusic.png",
+          "imageWidth": 96,
+          "backgroundColor": "#000000"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false,
+          "enableBackgroundRemoteNotifications": false
+        }
+      ]
+    ],
+    "updates": {
+      "enabled": false
+    },
+    "extra": {
+      "defaultServer": "https://spacemusic.tail8ccfdf.ts.net"
+    }
+  }
+}
