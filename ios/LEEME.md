@@ -2,6 +2,13 @@
 
 App nativa (SwiftUI) que usa la misma API del servidor que la web. No abre la web dentro: todo está hecho con pantallas del iPhone.
 
+## Correcciones en revisión
+
+- Las portadas mantienen su tamaño cuadrado y se ajustan a la altura disponible del reproductor.
+- Buscar o cambiar de canción rápidamente ya no debe mostrar respuestas antiguas sobre la selección nueva.
+- La radio descarta respuestas de una cola anterior y el control de tiempo se reinicia al cambiar de canción.
+- Pendiente: compilar con el flujo **App iPhone** y comprobar estos cambios en el iPhone real.
+
 ## Qué incluye
 
 - **Entrar, crear cuenta y recuperar contraseña.** Se puede cambiar la dirección del servidor (por defecto `https://spacemusic.tail8ccfdf.ts.net`).

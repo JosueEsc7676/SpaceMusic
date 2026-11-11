@@ -43,7 +43,8 @@ final class Reproductor {
     @ObservationIgnored private var obsControl: NSKeyValueObservation?
     @ObservationIgnored private var obsTiempo: Any?
     @ObservationIgnored private var ordenOriginal: [Cancion] = []
-    @ObservationIgnored private var pidiendoRadio = false
+    @ObservationIgnored private var pidiendoRadio: UUID?
+    @ObservationIgnored private var versionCola = UUID()
     @ObservationIgnored private var escuchado: Double = 0
     @ObservationIgnored private var ultimoTick: Double = 0
     @ObservationIgnored private var registrada = false
@@ -67,6 +68,7 @@ final class Reproductor {
         guard !canciones.isEmpty else { return }
         registrarEscucha()
         self.contexto = contexto
+        versionCola = UUID()
         ordenOriginal = canciones
         var lista = canciones
         var inicio = min(max(i, 0), canciones.count - 1)
@@ -141,10 +143,12 @@ final class Reproductor {
     }
 
     func buscar(_ segundos: Double) {
-        let t = CMTime(seconds: max(0, segundos), preferredTimescale: 600)
+        guard segundos.isFinite else { return }
+        let destino = max(0, duracion > 0 ? min(segundos, duracion) : segundos)
+        let t = CMTime(seconds: destino, preferredTimescale: 600)
         jugador.seek(to: t, toleranceBefore: .zero, toleranceAfter: .zero)
-        tiempo = segundos
-        ultimoTick = segundos
+        tiempo = destino
+        ultimoTick = destino
         actualizarNowPlaying()
     }
 
@@ -161,6 +165,7 @@ final class Reproductor {
         jugador.removeAllItems()
         itemActual = nil
         itemSiguiente = nil
+        versionCola = UUID()
         cola = []
         indice = 0
         sonando = false
@@ -332,15 +337,17 @@ final class Reproductor {
 
     /// Pide canciones parecidas al servidor y las agrega a la cola.
     func pedirRadio(cantidad: Int) async {
-        guard !pidiendoRadio, let semilla = cola.last ?? actual else { return }
-        pidiendoRadio = true
-        defer { pidiendoRadio = false }
+        let version = versionCola
+        guard pidiendoRadio != version, let semilla = cola.last ?? actual else { return }
+        pidiendoRadio = version
+        defer { if pidiendoRadio == version { pidiendoRadio = nil } }
         let excluir = cola.suffix(150).map { String($0.id) }.joined(separator: ",")
         let previas = anteriores.filter { $0 != semilla.id }.prefix(3).map(String.init).joined(separator: ",")
         var ruta = "/api/radio/\(semilla.id)?cantidad=\(cantidad)"
         if !excluir.isEmpty { ruta += "&excluir=\(excluir)" }
         if !previas.isEmpty { ruta += "&anteriores=\(previas)" }
         guard let nuevas: [Cancion] = try? await API.get(ruta), !nuevas.isEmpty else { return }
+        guard version == versionCola, actual != nil else { return }
         let ids = Set(cola.map(\.id))
         let filtradas = nuevas.filter { !ids.contains($0.id) }
         guard !filtradas.isEmpty else { return }

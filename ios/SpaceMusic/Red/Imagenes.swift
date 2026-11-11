@@ -63,7 +63,9 @@ struct ImagenRemota: View {
             guard let ruta, !ruta.isEmpty else { imagen = nil; return }
             if let i = CacheImagenes.compartida.enMemoria(ruta) { imagen = i; return }
             imagen = nil
-            imagen = await CacheImagenes.compartida.imagen(ruta)
+            let nueva = await CacheImagenes.compartida.imagen(ruta)
+            guard !Task.isCancelled else { return }
+            imagen = nueva
         }
     }
 }
@@ -76,9 +78,10 @@ struct Portada: View {
     var icono = "music.note"
 
     var body: some View {
-        ImagenRemota(ruta: ruta, icono: icono)
-            .frame(width: tamano, height: tamano)
+        Color.clear
             .aspectRatio(1, contentMode: .fit)
+            .overlay { ImagenRemota(ruta: ruta, icono: icono) }
+            .frame(width: tamano, height: tamano)
             .clipShape(RoundedRectangle(cornerRadius: radio, style: .continuous))
     }
 }

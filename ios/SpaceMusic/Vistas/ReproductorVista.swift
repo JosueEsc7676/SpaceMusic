@@ -34,6 +34,7 @@ struct ReproductorVista: View {
                 EstadoVista(icono: "music.note", titulo: "No suena nada")
             }
         }
+        .onChange(of: r.actual?.id) { _, _ in arrastrando = nil }
         .hojasGlobales()
     }
 
@@ -82,9 +83,9 @@ struct ReproductorVista: View {
     }
 
     private func portada(_ c: Cancion) -> some View {
-        VStack(spacing: 22) {
-            Spacer(minLength: 8)
-            Portada(ruta: c.portadaUrl, radio: 14)
+        GeometryReader { espacio in
+            let lado = max(0, min(espacio.size.width, espacio.size.height - 16))
+            Portada(ruta: c.portadaUrl, tamano: lado, radio: 14)
                 .shadow(color: .black.opacity(0.6), radius: 30, y: 16)
                 .scaleEffect(r.sonando ? 1 : 0.9)
                 .animation(.spring(duration: 0.4), value: r.sonando)
@@ -92,7 +93,7 @@ struct ReproductorVista: View {
                     if g.translation.width < -60 { r.siguiente() }
                     if g.translation.width > 60 { r.anterior() }
                 })
-            Spacer(minLength: 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -175,7 +176,7 @@ struct ReproductorVista: View {
 
     private var barraTiempo: some View {
         let total = max(r.duracion, 1)
-        let valor = arrastrando ?? min(r.tiempo, total)
+        let valor = min(max(arrastrando ?? r.tiempo, 0), total)
         return VStack(spacing: 4) {
             Slider(value: Binding(get: { valor }, set: { arrastrando = $0 }), in: 0...total) { editando in
                 if !editando, let a = arrastrando {

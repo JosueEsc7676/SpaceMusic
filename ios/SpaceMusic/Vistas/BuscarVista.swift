@@ -14,6 +14,8 @@ struct BuscarVista: View {
         ScrollView {
             if texto.trimmingCharacters(in: .whitespaces).isEmpty {
                 explorar
+            } else if buscando {
+                Cargando()
             } else if let r = resultado {
                 resultados(r)
             } else if let error {
@@ -29,16 +31,19 @@ struct BuscarVista: View {
         .onSubmit(of: .search) { guardarReciente(texto) }
         .task(id: texto) {
             let q = texto.trimmingCharacters(in: .whitespaces)
-            guard !q.isEmpty else { resultado = nil; return }
+            resultado = nil
+            error = nil
+            buscando = !q.isEmpty
+            guard !q.isEmpty else { return }
             try? await Task.sleep(for: .milliseconds(280))
             if Task.isCancelled { return }
-            buscando = true
-            defer { buscando = false }
+            defer { if !Task.isCancelled { buscando = false } }
             do {
                 let r: Busqueda = try await API.get("/api/buscar?q=\(API.codificar(q))")
                 if !Task.isCancelled { resultado = r; error = nil }
             } catch is CancellationError {
             } catch {
+                guard !Task.isCancelled else { return }
                 self.error = error.localizedDescription
                 resultado = nil
             }
