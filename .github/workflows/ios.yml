@@ -15,7 +15,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ios-expo-${{ github.ref }}
+  # v2: nuevo grupo para no quedar en cola detrás de una ejecución que GitHub dejó atascada (11/11/2026).
+  group: ios-expo-v2-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
