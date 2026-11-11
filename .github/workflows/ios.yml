@@ -83,13 +83,31 @@ jobs:
           cd "$RUNNER_TEMP/spacemusic-ipa"
           zip -qry "$GITHUB_WORKSPACE/SpaceMusic.ipa" Payload
 
+      # El servicio de artefactos de GitHub falla a veces de forma temporal (responde HTML en vez de JSON).
+      # Se reintenta tras una pausa para no perder una compilación correcta.
       - name: Publicar ZIP del IPA
+        id: publicar
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: SpaceMusic-ipa
           path: SpaceMusic.ipa
           retention-days: 14
           if-no-files-found: error
+
+      - name: Esperar antes de reintentar la publicación
+        if: steps.publicar.outcome == 'failure'
+        run: sleep 90
+
+      - name: Publicar ZIP del IPA (reintento)
+        if: steps.publicar.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpaceMusic-ipa
+          path: SpaceMusic.ipa
+          retention-days: 14
+          if-no-files-found: error
+          overwrite: true
 
       - name: Guardar diagnóstico si falla
         if: failure()
