@@ -9,7 +9,15 @@ enum Tema {
     static let texto = Color(red: 0.98, green: 0.98, blue: 0.98)
     static let secundario = Color.white.opacity(0.6)
     static let lila = Color(red: 0.706, green: 0.647, blue: 1.0)
-    static let celeste = Color(red: 0.486, green: 0.784, blue: 1.0)
+    /// Color de acento elegido en «Color de la app» (los mismos de la web). Por defecto Cielo, el celeste de siempre.
+    static var celeste: Color { acentos.first { $0.nombre == acentoGuardado }?.color ?? acentos[2].color }
+    static let acentoPorDefecto = "Cielo"
+    static var acentoGuardado: String { UserDefaults.standard.string(forKey: "acento") ?? acentoPorDefecto }
+    static let acentos: [(nombre: String, color: Color)] = [
+        ("Perla", Color(red: 0.961, green: 0.961, blue: 0.969)), ("Iris", Color(red: 0.706, green: 0.647, blue: 1.0)),
+        ("Cielo", Color(red: 0.486, green: 0.784, blue: 1.0)), ("Rosa", Color(red: 1.0, green: 0.639, blue: 0.784)),
+        ("Coral", Color(red: 1.0, green: 0.561, blue: 0.471)), ("Ámbar", Color(red: 0.957, green: 0.769, blue: 0.416)),
+    ]
     static let rosa = Color(red: 1.0, green: 0.639, blue: 0.784)
     static let peligro = Color(red: 1.0, green: 0.42, blue: 0.42)
 
@@ -99,15 +107,25 @@ struct Cargando: View {
 final class Avisos {
     static let compartido = Avisos()
     private(set) var texto: String?
+    /// Botón opcional del aviso (por ejemplo «Deshacer»).
+    private(set) var accion: (titulo: String, hacer: () -> Void)?
     private var tarea: Task<Void, Never>?
 
-    func mostrar(_ t: String) {
+    func mostrar(_ t: String, accion: (titulo: String, hacer: () -> Void)? = nil) {
         texto = t
+        self.accion = accion
         tarea?.cancel()
+        let espera: Double = accion == nil ? 2.2 : 6
         tarea = Task {
-            try? await Task.sleep(for: .seconds(2.2))
-            if !Task.isCancelled { texto = nil }
+            try? await Task.sleep(for: .seconds(espera))
+            if !Task.isCancelled { texto = nil; self.accion = nil }
         }
+    }
+
+    func ejecutarAccion() {
+        let a = accion
+        texto = nil; accion = nil; tarea?.cancel()
+        a?.hacer()
     }
 
     func error(_ e: Error) {

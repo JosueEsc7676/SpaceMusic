@@ -14,7 +14,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # write: publicar el .ipa en la versión «ios-latest» que consulta la app para avisar de actualizaciones.
+  contents: write
 
 concurrency:
   group: ios-swiftui-${{ github.ref }}
@@ -36,7 +37,12 @@ jobs:
         run: xcodebuild -version
 
       - name: Probar modelos y letras
-        run: swift test
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee "$RUNNER_TEMP/test.log" || {
+            grep -E "error:|failed" "$RUNNER_TEMP/test.log" | sort -u | head -30 | sed -E 's#^(.*)$#::error::\1#'
+            exit 1
+          }
 
       - name: Compilar (sin firmar)
         run: |
@@ -44,7 +50,7 @@ jobs:
           xcodebuild -project SpaceMusic.xcodeproj -scheme SpaceMusic \
             -configuration Release -destination 'generic/platform=iOS' \
             -derivedDataPath "$RUNNER_TEMP/dd" \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build > "$RUNNER_TEMP/build.log" 2>&1 || true
+            CURRENT_PROJECT_VERSION=${{ github.run_number }}             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build > "$RUNNER_TEMP/build.log" 2>&1 || true
           grep -E "warning:|BUILD (SUCCEEDED|FAILED)" "$RUNNER_TEMP/build.log" | sort -u | tail -60 || true
           grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/build.log"
 
@@ -53,6 +59,8 @@ jobs:
         run: |
           grep -E "error:" "$RUNNER_TEMP/build.log" | sort -u | head -80 || true
           tail -60 "$RUNNER_TEMP/build.log" || true
+          # Anotaciones públicas (se leen sin permisos de administrador): archivo, línea y mensaje de cada error.
+          grep -E "^/.+\.swift:[0-9]+:[0-9]+: error: " "$RUNNER_TEMP/build.log" | sort -u | head -40 |             sed -E 's#^.*/ios/(.+\.swift):([0-9]+):[0-9]+: error: (.*)$#::error file=ios/\1,line=\2::\3#' || true
 
       - name: Crear SpaceMusic.ipa
         run: |
@@ -87,6 +95,27 @@ jobs:
           retention-days: 14
           if-no-files-found: error
           overwrite: true
+
+      # La app compara su número de compilación con version-ios.json y ofrece instalar la nueva desde el iPhone.
+      - name: Publicar actualización para el iPhone
+        if: github.event_name == 'push' && github.ref == 'refs/heads/app-ios'
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMERO: ${{ github.run_number }}
+          REPO: ${{ github.repository }}
+          MENSAJE: ${{ github.event.head_commit.message }}
+        run: |
+          export NOTAS=$(printf '%s' "$MENSAJE" | head -1 | cut -c1-200)
+          python3 - <<'PY'
+          import json, os
+          n = int(os.environ["NUMERO"])
+          json.dump({"code": n, "nombre": f"1.{n}", "ipa": f"https://github.com/{os.environ['REPO']}/releases/download/ios-latest/SpaceMusic.ipa",
+                     "notas": os.environ.get("NOTAS", ""), "commit": os.environ.get("GITHUB_SHA", "")[:7]},
+                    open("version-ios.json", "w"), ensure_ascii=False)
+          PY
+          gh release view ios-latest --repo "$REPO" >/dev/null 2>&1 ||             gh release create ios-latest --repo "$REPO" --prerelease --title "SpaceMusic para iPhone (última)"               --notes "Se actualiza sola con cada compilación correcta de la rama app-ios. Instala SpaceMusic.ipa con SideStore, AltStore o Sideloadly."
+          gh release upload ios-latest SpaceMusic.ipa version-ios.json --repo "$REPO" --clobber
 
       - name: Guardar registro si falla
         if: failure()

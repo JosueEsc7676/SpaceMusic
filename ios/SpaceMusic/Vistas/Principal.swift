@@ -35,6 +35,7 @@ struct Principal: View {
             ReproductorVista()
                 .presentationBackground(.clear)
         }
+        .sheet(isPresented: $nav.verActualizacion) { ActualizacionVista() }
         .hojasGlobales(activas: !nav.reproductorAbierto)
         .task {
             Descargas.compartido.cargar()
@@ -73,11 +74,16 @@ struct Principal: View {
                     }
                 }
                 if let t = avisos.texto {
-                    Text(t)
-                        .font(.subheadline.weight(.medium))
-                        .padding(.horizontal, 16).padding(.vertical, 10)
-                        .background(Capsule().fill(Color(white: 0.18)))
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    HStack(spacing: 12) {
+                        Text(t).font(.subheadline.weight(.medium))
+                        if let a = avisos.accion {
+                            Button(a.titulo) { avisos.ejecutarAccion() }
+                                .font(.subheadline.weight(.bold)).foregroundStyle(Tema.celeste)
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(Capsule().fill(Color(white: 0.18)))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 if reproductor.actual != nil, eventos.chatAbierto == nil {
                     MiniReproductor()

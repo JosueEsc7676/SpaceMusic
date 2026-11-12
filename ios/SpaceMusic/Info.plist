@@ -6,6 +6,12 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
+		<string>fetch</string>
+	</array>
+	<!-- Revisión de mensajes, avisos y versiones nuevas con la app cerrada (Red/SegundoPlano.swift) -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.bpm.spacemusic.ios.revisar</string>
 	</array>
 	<!-- Permite usar el servidor por la red de casa (http://192.168.x.x) -->
 	<key>NSAppTransportSecurity</key>

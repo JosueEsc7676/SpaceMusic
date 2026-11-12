@@ -5,17 +5,22 @@ import UserNotifications
 struct SpaceMusicApp: App {
     @UIApplicationDelegateAdaptor(Delegado.self) private var delegado
     @Environment(\.scenePhase) private var fase
+    @AppStorage("acento") private var acento = Tema.acentoPorDefecto
 
     var body: some Scene {
         WindowGroup {
             Raiz()
                 .preferredColorScheme(.dark)
                 .tint(Tema.celeste)
+                // Al cambiar el color de la app se redibuja todo con el nuevo acento.
+                .id(acento)
         }
         .onChange(of: fase) { _, nueva in
             if nueva != .active { Reproductor.compartido.guardarEstado() }
             Eventos.compartido.appActiva = nueva == .active
+            if nueva == .background { SegundoPlano.programar() }
             if nueva == .active {
+                Task { await Actualizaciones.compartida.revisar(avisar: false) }
                 Eventos.compartido.conectar()
                 Task { await Eventos.compartido.actualizarResumen() }
                 Task { await Biblioteca.compartida.renovarSesionSiHaceFalta() }
@@ -32,6 +37,7 @@ final class Delegado: NSObject, UIApplicationDelegate, UNUserNotificationCenterD
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        SegundoPlano.registrar()
         return true
     }
 

@@ -606,12 +606,32 @@ struct Notificacion: Decodable, Identifiable {
 }
 
 struct ResumenAvisos: Decodable {
+    /// Lo más reciente, para avisar con una notificación del iPhone (igual que `avisos.js` de la web).
+    struct UltimoMensaje: Decodable {
+        var id: Int; var username: String; var de: String; var texto: String
+        init(from decoder: Decoder) throws {
+            let c = try decoder.campos()
+            id = c.entero("id") ?? 0; username = c.texto("username") ?? ""
+            de = c.texto("de") ?? username; texto = c.texto("texto") ?? ""
+        }
+    }
+    struct UltimaNotificacion: Decodable {
+        var id: Int; var texto: String; var ruta: String?
+        init(from decoder: Decoder) throws {
+            let c = try decoder.campos()
+            id = c.entero("id") ?? 0; texto = c.texto("texto") ?? ""; ruta = c.texto("ruta")
+        }
+    }
     var mensajes: Int
     var notificaciones: Int
+    var ultimoMensaje: UltimoMensaje?
+    var ultimaNotificacion: UltimaNotificacion?
     init(from decoder: Decoder) throws {
         let c = try decoder.campos()
         mensajes = c.entero("mensajes") ?? 0
         notificaciones = c.entero("notificaciones") ?? 0
+        ultimoMensaje = c.v("ultimoMensaje")
+        ultimaNotificacion = c.v("ultimaNotificacion")
     }
 }
 

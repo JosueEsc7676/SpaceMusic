@@ -72,6 +72,33 @@ final class Eventos {
         guard !Task.isCancelled, token == Sesion.compartida.token else { return }
         mensajesSinLeer = r.mensajes
         notificacionesSinLeer = r.notificaciones
+        avisarNuevos(r)
+    }
+
+    /// Avisa con una notificación del iPhone del último mensaje o aviso que aún no se había mostrado
+    /// (actualizaciones, seguidores, playlists…). Lo ya avisado se guarda por cuenta para no repetirlo.
+    func avisarNuevos(_ r: ResumenAvisos) {
+        guard let usuario = Sesion.compartida.usuario?.id else { return }
+        let clave = "avisosVistos:\(Sesion.compartida.servidor)|\(usuario)"
+        let previos = UserDefaults.standard.dictionary(forKey: clave) as? [String: Int]
+        var vistos = previos ?? [:]
+        // La primera vez solo se toma nota: no se avisa de lo que ya existía antes de instalar la app.
+        let primeraVez = previos == nil
+        if let m = r.ultimoMensaje, m.id > vistos["m", default: 0] {
+            vistos["m"] = m.id
+            if !primeraVez, chatAbierto != m.username {
+                avisar(titulo: m.de, texto: m.texto, ruta: "#/mensajes/\(m.username)", siempre: true)
+            }
+        }
+        if let n = r.ultimaNotificacion, n.id > vistos["n", default: 0] {
+            vistos["n"] = n.id
+            if !primeraVez {
+                avisar(titulo: "SpaceMusic", texto: n.texto, ruta: n.ruta ?? "#/", siempre: true)
+                if appActiva { Avisos.compartido.mostrar(n.texto) }
+            }
+        }
+        if primeraVez { vistos["m"] = vistos["m"] ?? 0; vistos["n"] = vistos["n"] ?? 0 }
+        UserDefaults.standard.set(vistos, forKey: clave)
     }
 
     func notificacionesLeidas() { notificacionesSinLeer = 0 }
@@ -120,6 +147,7 @@ final class Eventos {
             ultimoMensaje = ev
             if !m.mio && chatAbierto != con {
                 mensajesSinLeer += 1
+                marcarMensajeAvisado(m.id)
                 avisar(titulo: ev.nombre, texto: m.cancion.map { "🎵 \($0.nombre) · \($0.artista)" } ?? m.texto, ruta: "#/mensajes/\(con)")
             }
         case "visto":
@@ -133,9 +161,18 @@ final class Eventos {
         }
     }
 
-    /// Notificación del sistema cuando la app no está en pantalla.
-    private func avisar(titulo: String, texto: String, ruta: String) {
-        guard !appActiva else { return }
+    private func marcarMensajeAvisado(_ id: Int) {
+        guard let usuario = Sesion.compartida.usuario?.id else { return }
+        let clave = "avisosVistos:\(Sesion.compartida.servidor)|\(usuario)"
+        var vistos = UserDefaults.standard.dictionary(forKey: clave) as? [String: Int] ?? ["n": 0]
+        vistos["m"] = max(vistos["m", default: 0], id)
+        UserDefaults.standard.set(vistos, forKey: clave)
+    }
+
+    /// Notificación del sistema. Los mensajes del chat en vivo solo avisan fuera de la app;
+    /// lo que llega por el resumen (mensajes y avisos nuevos) avisa siempre, también en primer plano.
+    private func avisar(titulo: String, texto: String, ruta: String, siempre: Bool = false) {
+        guard siempre || !appActiva else { return }
         let c = UNMutableNotificationContent()
         c.title = titulo
         c.body = texto

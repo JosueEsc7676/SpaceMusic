@@ -7,6 +7,7 @@ struct InicioVista: View {
     @State private var eventos = Eventos.compartido
     @State private var sesion = Sesion.compartida
     @State private var conexion = Conexion.compartida
+    @State private var actualizaciones = Actualizaciones.compartida
 
     var body: some View {
         ScrollView {
@@ -87,6 +88,24 @@ struct InicioVista: View {
     @ViewBuilder
     private func contenido(_ i: Inicio) -> some View {
         LazyVStack(alignment: .leading, spacing: 30) {
+            if let v = actualizaciones.disponible {
+                Button { Navegacion.compartida.verActualizacion = true } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "arrow.down.app.fill").font(.title2).foregroundStyle(Tema.celeste)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Nueva versión de la app").font(.subheadline.weight(.bold))
+                            Text("Versión \(v.nombre) lista para instalar").font(.caption).foregroundStyle(Tema.secundario)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(Tema.secundario)
+                    }
+                    .padding(14)
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Tema.celeste.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal)
+            }
+            if let m = i.mixes.first { Destacado(mix: m) }
             if !i.recientes.isEmpty { accesosRapidos(Array(i.recientes.prefix(6))) }
             mezclasRapidas
 
@@ -104,8 +123,14 @@ struct InicioVista: View {
                 }
             }
             if !i.tendencias.isEmpty {
-                Carrusel(titulo: "Tendencias esta semana") {
-                    ForEach(i.tendencias) { TarjetaCancion(cancion: $0, lista: i.tendencias) }
+                // Lista numerada como la web («Lo más escuchado por todos»).
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Lo más escuchado por todos").font(.caption.weight(.bold)).foregroundStyle(Tema.secundario).textCase(.uppercase)
+                        Text("Tendencias de la semana").titulo()
+                    }
+                    .padding(.horizontal)
+                    Ranking(canciones: Array(i.tendencias.prefix(8)))
                 }
             }
             if !i.recienAgregadas.isEmpty {
@@ -203,5 +228,93 @@ struct TarjetaAmigo: View {
         .padding(12)
         .frame(width: 290, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Tema.tarjeta))
+    }
+}
+
+/// Gran tarjeta destacada con la primera mezcla del día (el «spotlight» de la web).
+struct Destacado: View {
+    let mix: Mix
+    @State private var cargando = false
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            ImagenRemota(ruta: mix.portadas.first, icono: "sparkles")
+                .blur(radius: 40)
+                .scaleEffect(1.4)
+                .opacity(0.75)
+            LinearGradient(colors: [.black.opacity(0.75), .black.opacity(0.25)], startPoint: .bottomLeading, endPoint: .topTrailing)
+            HStack(alignment: .bottom, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Hecho para ti", systemImage: "sparkles").font(.caption.weight(.bold)).foregroundStyle(Tema.lila)
+                    Text(mix.titulo).font(.system(.title, design: .rounded).weight(.heavy)).lineLimit(2).minimumScaleFactor(0.8)
+                    Text(mix.subtitulo ?? mix.artistas.joined(separator: ", "))
+                        .font(.subheadline).foregroundStyle(.white.opacity(0.75)).lineLimit(2)
+                    HStack(spacing: 10) {
+                        Button { Task { await reproducir() } } label: {
+                            Label(cargando ? "Cargando…" : "Reproducir", systemImage: "play.fill")
+                        }
+                        .buttonStyle(BotonPrincipal())
+                        .disabled(cargando)
+                        NavigationLink(value: Destino.mix(id: mix.id, titulo: mix.titulo)) { Text("Ver mezcla") }
+                            .buttonStyle(BotonSecundario())
+                    }
+                    .padding(.top, 4)
+                }
+                Spacer(minLength: 0)
+                Mosaico(rutas: mix.portadas, radio: 12)
+                    .frame(width: 96, height: 96)
+                    .rotationEffect(.degrees(6))
+                    .shadow(color: .black.opacity(0.5), radius: 14, y: 8)
+                    .accessibilityHidden(true)
+            }
+            .padding(18)
+        }
+        .frame(minHeight: 220)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.08)))
+        .padding(.horizontal)
+    }
+
+    private func reproducir() async {
+        cargando = true
+        defer { cargando = false }
+        do {
+            let cs: [Cancion] = try await API.get("/api/mixes/\(API.segmento(mix.id))?cantidad=50")
+            if !cs.isEmpty { Reproductor.compartido.reproducir(cs, contexto: "mix") }
+        } catch { Avisos.compartido.error(error) }
+    }
+}
+
+/// Lista numerada (tendencias) como la de la web.
+struct Ranking: View {
+    let canciones: [Cancion]
+    @State private var reproductor = Reproductor.compartido
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ForEach(Array(canciones.enumerated()), id: \.element.id) { i, c in
+                Button { Reproductor.compartido.reproducir(canciones, desde: i, contexto: "tendencias") } label: {
+                    HStack(spacing: 12) {
+                        Text("\(i + 1)")
+                            .font(.system(.title2, design: .rounded).weight(.heavy))
+                            .foregroundStyle(i < 3 ? AnyShapeStyle(Tema.aurora) : AnyShapeStyle(Color.white.opacity(0.45)))
+                            .frame(width: 30)
+                        Portada(ruta: c.portadaUrl, tamano: 46, radio: 8)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(c.nombre).font(.body.weight(.semibold)).lineLimit(1)
+                                .foregroundStyle(reproductor.actual?.id == c.id ? Tema.celeste : Tema.texto)
+                            Text(c.artista).font(.subheadline).foregroundStyle(Tema.secundario).lineLimit(1)
+                        }
+                        Spacer(minLength: 4)
+                        Text(Formato.duracion(c.duracionSegundos)).font(.caption).monospacedDigit().foregroundStyle(Tema.secundario)
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .contextMenu { OpcionesCancion(cancion: c) }
+            }
+        }
+        .padding(.horizontal)
     }
 }

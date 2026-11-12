@@ -196,6 +196,13 @@ struct CuentaVista: View {
 
             Section("Reproducción") {
                 Toggle("Radio automática", isOn: $reproductor.radioAutomatica)
+                AjustesReproduccion()
+            }
+            Section("App de iPhone") {
+                Button { Navegacion.compartida.verActualizacion = true } label: {
+                    LabeledContent("Versión", value: Actualizaciones.compartida.versionActual)
+                }
+                .foregroundStyle(Tema.texto)
             }
             Section {
                 TextField("Sobre ti (máximo 160 caracteres)", text: $biografia, axis: .vertical)

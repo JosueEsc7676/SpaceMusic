@@ -20,6 +20,17 @@ final class Descargas {
     private(set) var fallidas: [Int: Cancion] = [:]
     private(set) var errores: [Int: String] = [:]
 
+    // MARK: Guardadas al escucharlas (como el modo sin conexión de la web)
+    /// Canciones que se guardaron solas al escucharlas (las más recientes primero). No salen en Descargas,
+    /// pero suenan sin conexión. Se conservan como máximo `limiteAutomaticas`.
+    private(set) var automaticas: [Cancion] = []
+    @ObservationIgnored private var bajandoAutomatica: Set<Int> = []
+    static let limiteAutomaticas = 300
+    var guardarAlEscuchar: Bool {
+        get { UserDefaults.standard.object(forKey: "guardarAlEscuchar") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "guardarAlEscuchar") }
+    }
+
     private var carpeta: URL? {
         guard let uid = Sesion.compartida.usuario?.id else { return nil }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -33,6 +44,15 @@ final class Descargas {
     }
 
     private var indiceURL: URL? { carpeta?.appendingPathComponent("indice.json") }
+    private var carpetaAutomaticas: URL? {
+        guard let c = carpeta?.appendingPathComponent("escuchadas", isDirectory: true) else { return nil }
+        try? FileManager.default.createDirectory(at: c, withIntermediateDirectories: true)
+        return c
+    }
+    private func rutaAutomatica(de c: Cancion) -> URL? {
+        let ext = (c.formato?.lowercased()).flatMap { $0.isEmpty ? nil : $0 } ?? "mp3"
+        return carpetaAutomaticas?.appendingPathComponent("\(c.id).\(ext)")
+    }
 
     /// Lee la lista de la cuenta abierta.
     func cargar() {
@@ -41,20 +61,66 @@ final class Descargas {
         usuarioCargado = uid
         canciones = []
         ids = []
+        automaticas = []
+        if let u = carpetaAutomaticas?.appendingPathComponent("indice.json"), let d = try? Data(contentsOf: u),
+           let lista = try? JSONDecoder().decode([Cancion].self, from: d) {
+            automaticas = lista.filter { c in rutaAutomatica(de: c).map { FileManager.default.fileExists(atPath: $0.path) } ?? false }
+        }
         guard let u = indiceURL, let d = try? Data(contentsOf: u),
               let lista = try? JSONDecoder().decode([Cancion].self, from: d) else { return }
         canciones = lista.filter { archivoExiste($0) }
         ids = Set(canciones.map(\.id))
     }
 
+    /// Guarda en segundo plano la canción que se está escuchando (y la siguiente) para poder oírla sin conexión.
+    /// Usa la misma ruta de audio que la reproducción, así no depende del permiso de descarga del servidor.
+    func guardarAlEscucharla(_ c: Cancion) {
+        guard guardarAlEscuchar, Sesion.compartida.conectado, !ids.contains(c.id), !bajandoAutomatica.contains(c.id),
+              !automaticas.contains(where: { $0.id == c.id }),
+              let origen = API.audioURL(c.id), let destino = rutaAutomatica(de: c) else { return }
+        bajandoAutomatica.insert(c.id)
+        let version = generacion
+        Task {
+            defer { bajandoAutomatica.remove(c.id) }
+            guard let resultado = try? await API.sesionURL.download(from: origen) else { return }
+            let (temporal, resp) = resultado
+            guard version == generacion, (resp as? HTTPURLResponse)?.statusCode == 200 else {
+                try? FileManager.default.removeItem(at: temporal); return
+            }
+            try? FileManager.default.removeItem(at: destino)
+            guard (try? FileManager.default.moveItem(at: temporal, to: destino)) != nil else { return }
+            automaticas.removeAll { $0.id == c.id }
+            automaticas.insert(c, at: 0)
+            while automaticas.count > Self.limiteAutomaticas, let vieja = automaticas.popLast() {
+                if let u = rutaAutomatica(de: vieja) { try? FileManager.default.removeItem(at: u) }
+            }
+            guardarIndiceAutomaticas()
+        }
+    }
+
+    func borrarAutomaticas() {
+        if let dir = carpetaAutomaticas { try? FileManager.default.removeItem(at: dir) }
+        automaticas = []
+    }
+
+    private func guardarIndiceAutomaticas() {
+        guard let u = carpetaAutomaticas?.appendingPathComponent("indice.json"), let d = try? JSONEncoder().encode(automaticas) else { return }
+        try? d.write(to: u, options: .atomic)
+    }
+
     func descargada(_ id: Int) -> Bool { ids.contains(id) }
 
     /// Archivo local de la canción, si está descargada.
     func archivo(de id: Int) -> URL? {
-        guard ids.contains(id), let c = canciones.first(where: { $0.id == id }) else { return nil }
-        let u = ruta(de: c)
-        return u.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
+        if ids.contains(id), let c = canciones.first(where: { $0.id == id }),
+           let u = ruta(de: c), FileManager.default.fileExists(atPath: u.path) { return u }
+        if let c = automaticas.first(where: { $0.id == id }),
+           let u = rutaAutomatica(de: c), FileManager.default.fileExists(atPath: u.path) { return u }
+        return nil
     }
+
+    /// Se puede escuchar sin conexión (descargada a mano o guardada al escucharla).
+    func disponibleSinConexion(_ id: Int) -> Bool { ids.contains(id) || automaticas.contains { $0.id == id } }
 
     private func ruta(de c: Cancion) -> URL? {
         let ext = (c.formato?.lowercased()).flatMap { $0.isEmpty ? nil : $0 } ?? "mp3"
@@ -130,6 +196,7 @@ final class Descargas {
         if let dir = carpeta { try? FileManager.default.removeItem(at: dir) }
         canciones = []
         ids = []
+        automaticas = []
         enCurso = [:]
         usuarioCargado = nil
         fallidas = [:]; errores = [:]

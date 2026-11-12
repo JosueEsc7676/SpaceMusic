@@ -64,6 +64,10 @@ final class Reproductor {
     @ObservationIgnored private var tareaEspera: Task<Void, Never>?
     /// La siguiente canción se precarga cuando la actual ya está lista, para no competir por la red al arrancar.
     @ObservationIgnored private var siguientePendiente = false
+    /// Vigila que la canción empiece: si no carga a tiempo se reintenta una vez y luego se explica el fallo.
+    @ObservationIgnored private var vigilante: Task<Void, Never>?
+    @ObservationIgnored private var reintentada: Int?
+    @ObservationIgnored private var guardadaAlEscuchar = false
 
     private init() {
         radioAutomatica = UserDefaults.standard.object(forKey: "radioAutomatica") as? Bool ?? true
@@ -330,8 +334,9 @@ final class Reproductor {
         } else {
             return nil
         }
-        let item = AVPlayerItem(asset: AVURLAsset(url: url))
+        let item = AVPlayerItem(asset: AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: false]))
         item.preferredForwardBufferDuration = 5
+        ProcesadorAudio.compartido.conectar(item)
         return item
     }
 
@@ -353,9 +358,50 @@ final class Reproductor {
             try? AVAudioSession.sharedInstance().setActive(true)
             jugador.playImmediately(atRate: 1)
         }
+        vigilar(item, cancion: c)
         // Antes se precargaba la siguiente aquí mismo y su descarga competía con la canción que se pedía.
         siguientePendiente = true
         cambioDeCancion()
+    }
+
+    /// Si en 12 s la canción no está lista, reintenta una vez (renovando la sesión por si el permiso del audio venció);
+    /// si vuelve a fallar, salta a la siguiente con el motivo, en vez de dejar la rueda girando en 0:00.
+    private func vigilar(_ item: AVPlayerItem, cancion c: Cancion) {
+        vigilante?.cancel()
+        vigilante = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(12))
+            guard let self, !Task.isCancelled, item === self.itemActual, item.status != .readyToPlay, self.intencionSonar else { return }
+            if self.reintentada != c.id {
+                self.reintentada = c.id
+                await Biblioteca.compartida.renovarSesionSiHaceFalta()
+                guard item === self.itemActual else { return }
+                self.cargarActual(reproducir: true)
+            } else {
+                self.falloItem(item, motivo: "el servidor no respondió a tiempo")
+            }
+        }
+    }
+
+    /// Explicación legible del error de AVFoundation (permiso, archivo no encontrado, formato…).
+    private func motivo(_ item: AVPlayerItem) -> String? {
+        let ns = (item.error as NSError?)
+        let evento = item.errorLog()?.events.last
+        if let codigo = evento?.errorStatusCode, codigo != 0 {
+            switch codigo {
+            case 401, 403: return "el servidor rechazó el permiso (\(codigo)); vuelve a iniciar sesión"
+            case 404: return "el archivo ya no está en el servidor (404)"
+            case 500...599: return "error del servidor (\(codigo))"
+            default: return "respuesta \(codigo) del servidor"
+            }
+        }
+        if let ns, ns.domain == NSURLErrorDomain { return "sin conexión con el servidor" }
+        if let ns, ns.code == -11828 || ns.code == -11829 { return "este formato no se puede reproducir en iPhone" }
+        return ns?.localizedFailureReason ?? ns?.localizedDescription
+    }
+
+    /// Ecualizador o visualizador encendidos/apagados: se conecta (o quita) el procesador en las canciones cargadas.
+    func reconectarProcesador() {
+        for item in jugador.items() { ProcesadorAudio.compartido.conectar(item) }
     }
 
     private func programarEspera() {
@@ -503,6 +549,7 @@ final class Reproductor {
             Task { @MainActor in
                 guard let self, it === self.itemActual else { return }
                 if estado == .failed { self.falloItem(it) }
+                if estado == .readyToPlay { self.vigilante?.cancel(); self.reintentada = nil }
                 if estado == .readyToPlay {
                     self.saltosSeguidos = 0
                     if dur.isFinite, dur > 0 { self.duracion = dur }
@@ -513,9 +560,11 @@ final class Reproductor {
         }
     }
 
-    private func falloItem(_ item: AVPlayerItem?) {
+    private func falloItem(_ item: AVPlayerItem?, motivo explicado: String? = nil) {
         guard let item, item === itemActual else { return }
-        error = "No se pudo reproducir “\(actual?.nombre ?? "")”"
+        vigilante?.cancel()
+        let causa = explicado ?? motivo(item)
+        error = "No se pudo reproducir “\(actual?.nombre ?? "")”" + (causa.map { ": \($0)" } ?? "")
         saltosSeguidos += 1
         // Salta a la siguiente, sin entrar en un bucle si fallan todas
         if saltosSeguidos < 4, calcularSiguiente(manual: true) != nil {
@@ -535,10 +584,19 @@ final class Reproductor {
         ultimoTick = t
         let umbral = duracion > 0 ? min(30, duracion * 0.5) : 30
         if !registrada, escuchado >= umbral { registrarEscucha(forzar: true) }
+        // Como la web: a los 20 s de escuchar se guarda la canción (y la siguiente) para tenerla sin conexión.
+        if escuchado >= 20, !guardadaAlEscuchar, let c = actual {
+            guardadaAlEscuchar = true
+            Descargas.compartido.guardarAlEscucharla(c)
+            if let j = calcularSiguiente(manual: false), j != indice, cola.indices.contains(j) {
+                Descargas.compartido.guardarAlEscucharla(cola[j])
+            }
+        }
         if Date().timeIntervalSince(ultimoGuardado) >= 5 { guardarEstado(); ultimoGuardado = Date() }
     }
 
     private func reiniciarConteo() {
+        guardadaAlEscuchar = false
         escuchado = 0
         ultimoTick = 0
         registrada = false

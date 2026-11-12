@@ -38,6 +38,8 @@ final class Navegacion {
     var pestana: Pestana = .inicio
     var rutas: [Pestana: NavigationPath] = [:]
     var reproductorAbierto = false
+    /// Hoja de la versión nueva de la app (aviso de actualización).
+    var verActualizacion = false
 
     func ruta(_ p: Pestana) -> Binding<NavigationPath> {
         Binding(get: { self.rutas[p] ?? NavigationPath() }, set: { self.rutas[p] = $0 })
@@ -71,6 +73,7 @@ final class Navegacion {
             pestana = .mensajes
             rutas[.mensajes] = NavigationPath()
             if let v = valor { ir(.chat(v)) }
+        case "actualizacion": reproductorAbierto = false; verActualizacion = true
         case "novedades": ir(.novedades)
         case "perfil": pestana = .perfil
         case "estadisticas": ir(.estadisticas)

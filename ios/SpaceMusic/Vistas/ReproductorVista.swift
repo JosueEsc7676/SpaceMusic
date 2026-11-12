@@ -12,6 +12,7 @@ struct ReproductorVista: View {
 
     @State private var r = Reproductor.compartido
     @State private var biblioteca = Biblioteca.compartida
+    @State private var letras = Letras.compartido
     @State private var panel: Panel = .portada
     @State private var arrastrando: Double?
     @State private var colores = ColoresPortada.neutros
@@ -22,8 +23,9 @@ struct ReproductorVista: View {
         GeometryReader { espacio in
             let altoPantalla = espacio.size.height + espacio.safeAreaInsets.top + espacio.safeAreaInsets.bottom
             let ocupadoAbajo = altoControles + espacio.safeAreaInsets.bottom
-            ZStack(alignment: .top) {
-                fondo(ancho: espacio.size.width, alto: altoPantalla, ocupadoAbajo: ocupadoAbajo, horizontal: espacio.size.width > espacio.size.height)
+            // El fondo va detrás como capa aparte: ocupa toda la pantalla sin agrandar el contenido,
+            // así los botones de abajo (Letra · AirPlay · Cola) siempre quedan a la vista.
+            Group {
                 if let c = r.actual {
                     if espacio.size.width > espacio.size.height {
                         horizontal(c, espacio.size)
@@ -33,7 +35,11 @@ struct ReproductorVista: View {
                 } else {
                     EstadoVista(icono: "music.note", titulo: "No suena nada")
                 }
-                agarradera
+            }
+            .frame(width: espacio.size.width, height: espacio.size.height, alignment: .top)
+            .overlay(alignment: .top) { agarradera }
+            .background(alignment: .top) {
+                fondo(ancho: espacio.size.width, alto: altoPantalla, ocupadoAbajo: ocupadoAbajo, horizontal: espacio.size.width > espacio.size.height)
             }
         }
         .background(colores.fondo.ignoresSafeArea())
@@ -99,6 +105,7 @@ struct ReproductorVista: View {
                     .accessibilityHidden(true)
                 VStack(spacing: 0) {
                     infoCancion(c)
+                    LetraBreve { withAnimation(.spring(duration: 0.4)) { panel = .letra } }
                     controles(c)
                 }
                 .padding(.horizontal, 26)
@@ -188,9 +195,12 @@ struct ReproductorVista: View {
     private func infoCancion(_ c: Cancion) -> some View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(c.nombre)
-                    .font(.title2.weight(.bold))
-                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Text(c.nombre)
+                        .font(.title2.weight(.bold))
+                        .lineLimit(1)
+                    Visualizador()
+                }
                 Button { abrir(.artista(c.artista)) } label: {
                     Text(c.artista).font(.title3).foregroundStyle(colores.acento).lineLimit(1)
                 }
@@ -253,6 +263,17 @@ struct ReproductorVista: View {
             } label: {
                 Label(textoTemporizador, systemImage: "moon.zzz")
             }
+            if letras.sincronizada {
+                Menu {
+                    Button("Letra antes (−0,5 s)") { letras.ajustarDesfase(-0.5) }
+                    Button("Letra antes (−0,1 s)") { letras.ajustarDesfase(-0.1) }
+                    Button("Letra después (+0,1 s)") { letras.ajustarDesfase(0.1) }
+                    Button("Letra después (+0,5 s)") { letras.ajustarDesfase(0.5) }
+                    if letras.desfase != 0 { Button("Restablecer", role: .destructive) { letras.ajustarDesfase(nil) } }
+                } label: {
+                    Label("Ajustar sincronía (\(textoDesfase))", systemImage: "clock.arrow.2.circlepath")
+                }
+            }
             if !c.album.isEmpty {
                 Section(textoContexto) { Text(c.album) }
             }
@@ -266,6 +287,10 @@ struct ReproductorVista: View {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel("Más opciones")
+    }
+
+    private var textoDesfase: String {
+        letras.desfase == 0 ? "sin ajuste" : String(format: "%+.1f s", letras.desfase).replacingOccurrences(of: ".", with: ",")
     }
 
     private var textoTemporizador: String {
@@ -316,13 +341,6 @@ struct ReproductorVista: View {
                 Text(e).font(.caption).foregroundStyle(Tema.peligro).multilineTextAlignment(.center).padding(.bottom, 6)
             }
 
-            HStack(spacing: 10) {
-                Image(systemName: "speaker.fill").font(.caption).foregroundStyle(.white.opacity(0.6))
-                VolumenSistema().frame(height: 34)
-                Image(systemName: "speaker.wave.3.fill").font(.caption).foregroundStyle(.white.opacity(0.6))
-            }
-            .accessibilityElement(children: .contain)
-
             HStack(spacing: 0) {
                 botonPanel(.letra, icono: "quote.bubble", nombre: "Letra")
                 SelectorSalida().frame(width: 44, height: 44).frame(maxWidth: .infinity)
@@ -339,7 +357,7 @@ struct ReproductorVista: View {
                         }
                     }
             }
-            .padding(.top, 10)
+            .padding(.top, 6)
         }
     }
 
@@ -497,6 +515,42 @@ struct SelectorSalida: UIViewRepresentable {
 
 // MARK: - Letra
 
+/// La línea que suena, debajo del título y el artista (como en la web del celular y Apple Music).
+/// Tocarla abre la letra completa. Si la canción no tiene letra sincronizada no ocupa espacio.
+struct LetraBreve: View {
+    var abrir: () -> Void
+    @State private var r = Reproductor.compartido
+    @State private var letras = Letras.compartido
+    @State private var actual: Int?
+
+    var body: some View {
+        if letras.sincronizada {
+            let texto = actual.flatMap { letras.lineas.indices.contains($0) ? letras.lineas[$0].texto : nil } ?? ""
+            Button(action: abrir) {
+                Text(texto.isEmpty ? "• • •" : texto)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.white.opacity(texto.isEmpty ? 0.5 : 0.95))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+                    .contentTransition(.opacity)
+                    .animation(.easeInOut(duration: 0.3), value: actual)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 10)
+            .accessibilityHint("Abre la letra completa")
+            .task(id: "\(letras.cancionId ?? 0)-\(letras.lineas.count)") {
+                while !Task.isCancelled {
+                    let i = LectorLRC.indice(letras.lineas, en: letras.tiempoLetra(r.tiempoExacto) + 0.15)
+                    if i != actual { actual = i }
+                    try? await Task.sleep(for: .milliseconds(150))
+                }
+            }
+        }
+    }
+}
+
 /// Letra sincronizada como Apple Music:
 /// - la línea activa se calcula 10 veces por segundo con el tiempo exacto del audio (no cada medio segundo);
 /// - se ilumina palabra por palabra (con los tiempos de la letra si los trae; si no, repartiendo la línea según su largo);
@@ -552,7 +606,7 @@ struct LetraCompleta: View {
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 manual = false
-                                r.buscar(l.tiempo)
+                                r.buscar(max(0, l.tiempo + letras.desfase))
                                 if !r.sonando { r.continuar() }
                             }
                             .accessibilityAddTraits(.isButton)
@@ -570,7 +624,7 @@ struct LetraCompleta: View {
             .task(id: "\(letras.cancionId ?? 0)-\(letras.lineas.count)") {
                 actual = nil
                 while !Task.isCancelled {
-                    let i = LectorLRC.indice(letras.lineas, en: r.tiempoExacto + 0.15)
+                    let i = LectorLRC.indice(letras.lineas, en: letras.tiempoLetra(r.tiempoExacto) + 0.15)
                     let volverASeguir = manual && Date() >= manualHasta
                     if volverASeguir { manual = false }
                     if i != actual || volverASeguir {
@@ -610,7 +664,7 @@ struct LineaLetraVista: View {
                 PuntosInterludio(linea: linea, activa: activa)
             } else if activa {
                 TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in
-                    karaoke(r.tiempoExacto)
+                    karaoke(Letras.compartido.tiempoLetra(r.tiempoExacto))
                 }
                 .accessibilityLabel(linea.texto)
             } else {
@@ -648,7 +702,7 @@ struct PuntosInterludio: View {
         Group {
             if activa {
                 TimelineView(.animation(minimumInterval: 1.0 / 20)) { contexto in
-                    let progreso = min(max((r.tiempoExacto - linea.tiempo) / max(linea.fin - linea.tiempo, 0.5), 0), 1)
+                    let progreso = min(max((Letras.compartido.tiempoLetra(r.tiempoExacto) - linea.tiempo) / max(linea.fin - linea.tiempo, 0.5), 0), 1)
                     let latido = 1 + 0.08 * sin(contexto.date.timeIntervalSinceReferenceDate * 3)
                     puntos { i in min(max(progreso * 3 - Double(i), 0), 1) }
                         .scaleEffect(latido, anchor: .leading)

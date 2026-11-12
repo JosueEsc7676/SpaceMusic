@@ -70,6 +70,14 @@ struct AlbumVista: View {
                             Button { Navegacion.compartida.ir(.artista(a.artista)) } label: {
                                 Label("Ir al artista", systemImage: "music.mic")
                             }
+                            Button { Task { await crearPlaylist(con: a) } } label: {
+                                Label("Crear playlist con este álbum", systemImage: "plus.rectangle.on.rectangle")
+                            }
+                            if let url = API.url("/#/album/\(API.segmento(a.nombre))") {
+                                ShareLink(item: url, subject: Text(a.nombre), message: Text("\(a.nombre) · \(a.artista)")) {
+                                    Label("Compartir enlace", systemImage: "square.and.arrow.up")
+                                }
+                            }
                         } label: { Image(systemName: "ellipsis").font(.title2).frame(width: 40, height: 40) }
                     }
                     ListaCanciones(canciones: a.canciones, contexto: "album", numerada: true, mostrarPortada: false)
@@ -79,6 +87,17 @@ struct AlbumVista: View {
             .refreshable { await recargar() }
         }
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// Como la web: una playlist nueva con el nombre del álbum y todas sus canciones, y se abre.
+    private func crearPlaylist(con a: Album) async {
+        do {
+            let p = try await biblioteca.crearPlaylist(nombre: a.nombre, descripcion: "De \(a.artista)", publica: false)
+            try await API.hacer("POST", "/api/playlists/\(p.id)/canciones", ["ids": a.canciones.map(\.id)])
+            await biblioteca.recargarPlaylists()
+            Avisos.compartido.mostrar("Playlist creada")
+            Navegacion.compartida.ir(.playlist(p.id))
+        } catch { Avisos.compartido.error(error) }
     }
 }
 
@@ -109,6 +128,10 @@ struct ArtistaVista: View {
 
                     HStack(spacing: 14) {
                         BotonDescargarLista(canciones: a.canciones)
+                        if let url = API.url("/#/artista/\(API.segmento(a.nombre))") {
+                            ShareLink(item: url, subject: Text(a.nombre)) { Image(systemName: "square.and.arrow.up").font(.title2) }
+                                .accessibilityLabel("Compartir enlace")
+                        }
                         NavigationLink(value: Destino.mix(id: "artista:" + a.nombre, titulo: "Mix de " + a.nombre)) {
                             Image(systemName: "sparkles").font(.title2)
                         }
@@ -315,7 +338,12 @@ struct PlaylistVista: View {
                 }
             }
             Button { Reproductor.compartido.agregarAlFinal(p.canciones) } label: { Label("Agregar a la cola", systemImage: "text.append") }
-            Button { Task { await duplicar() } } label: { Label("Duplicar en mis playlists", systemImage: "plus.square.on.square") }
+            Button { Task { await duplicar() } } label: {
+                Label(p.propia ? "Duplicar" : "Guardar una copia en mi biblioteca", systemImage: "plus.square.on.square")
+            }
+            if let url = API.url("/#/playlist/\(p.id)") {
+                ShareLink(item: url, subject: Text(p.nombre)) { Label("Compartir enlace", systemImage: "square.and.arrow.up") }
+            }
             if p.propia {
                 Divider()
                 Button(role: .destructive) { confirmarBorrar = true } label: { Label("Borrar playlist", systemImage: "trash") }
@@ -342,8 +370,9 @@ struct PlaylistVista: View {
             }
             .onDelete { idx in
                 let quitadas = idx.map { p.canciones[$0] }
+                let antes = p.canciones.map(\.id)
                 playlist?.canciones.remove(atOffsets: idx)
-                Task { for c in quitadas { await quitar(c, recargar: false) } }
+                Task { for c in quitadas { await quitar(c, recargar: false, antes: antes) } }
             }
         }
         .environment(\.editMode, .constant(.active))
@@ -363,14 +392,29 @@ struct PlaylistVista: View {
         }
     }
 
-    private func quitar(_ c: Cancion, recargar: Bool = true) async {
+    private func quitar(_ c: Cancion, recargar: Bool = true, antes: [Int]? = nil) async {
+        let orden = antes ?? playlist?.canciones.map(\.id) ?? []
         do {
             try await API.hacer("DELETE", "/api/playlists/\(id)/canciones/\(c.id)")
             if recargar { await cargar() }
             await biblioteca.recargarPlaylists()
+            // Como la web: «Deshacer» la vuelve a agregar en el mismo lugar.
+            Avisos.compartido.mostrar("Quitada de la playlist", accion: ("Deshacer", {
+                Task { await deshacerQuitar(c, orden: orden) }
+            }))
         } catch {
             Avisos.compartido.error(error)
         }
+    }
+
+    private func deshacerQuitar(_ c: Cancion, orden: [Int]) async {
+        do {
+            try await API.hacer("POST", "/api/playlists/\(id)/canciones", ["ids": [c.id]])
+            if orden.contains(c.id) {
+                let _: Playlist = try await API.enviar("PUT", "/api/playlists/\(id)/orden", ["ids": orden])
+            }
+            await cargar(); await biblioteca.recargarPlaylists()
+        } catch { Avisos.compartido.error(error) }
     }
 
     private func duplicar() async {
