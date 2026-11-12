@@ -194,6 +194,18 @@ struct CuentaVista: View {
                 }
             }
 
+            Section("Tu música") {
+                NavigationLink(value: Destino.resumen) { Label("Tu resumen (tu año y tus meses)", systemImage: "gift") }
+                NavigationLink(value: Destino.dedicatorias) { Label("Dedicatorias", systemImage: "heart.text.square") }
+                NavigationLink(value: Destino.coincidimos) { Label("Coincidimos", systemImage: "person.2") }
+                NavigationLink(value: Destino.descubrir) { Label("Descubrir", systemImage: "sparkles") }
+                NavigationLink(value: Destino.rutas) { Label("Rutas musicales", systemImage: "safari") }
+                NavigationLink(value: Destino.preparar) { Label("Preparar sin internet", systemImage: "arrow.down.circle") }
+                Button { Hojas.compartidas.gustosInicial = false; Hojas.compartidas.gustos = true } label: {
+                    Label("Tus gustos", systemImage: "heart.circle")
+                }
+            }
+
             Section("Reproducción") {
                 Toggle("Radio automática", isOn: $reproductor.radioAutomatica)
                 AjustesReproduccion()

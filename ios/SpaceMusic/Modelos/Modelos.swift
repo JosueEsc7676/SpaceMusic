@@ -180,12 +180,37 @@ struct Genero: Decodable, Identifiable, Hashable {
 }
 
 struct GeneroDetalle: Decodable {
+    /// Sección del género («Lo nuevo», «Clásicos»…), como en la web 3.3.
+    struct Seccion: Decodable {
+        var titulo: String; var sub: String?; var clave: String; var canciones: [Cancion]
+        init(from decoder: Decoder) throws {
+            let c = try decoder.campos()
+            titulo = c.texto("titulo") ?? ""; sub = c.texto("sub"); clave = c.texto("clave") ?? titulo; canciones = c.lista("canciones")
+        }
+    }
     var nombre: String
+    var clave: String
     var canciones: [Cancion]
+    var total: Int
+    var artistas: [Artista]
+    var secciones: [Seccion]
     init(from decoder: Decoder) throws {
         let c = try decoder.campos()
         nombre = c.texto("nombre") ?? ""
+        clave = c.texto("clave") ?? nombre
         canciones = c.lista("canciones")
+        total = c.entero("total") ?? canciones.count
+        artistas = c.lista("artistas")
+        secciones = c.lista("secciones")
+    }
+}
+
+/// Página de «Ver todas» de un género (de 50 en 50).
+struct PaginaGenero: Decodable {
+    var canciones: [Cancion]; var total: Int; var hayMas: Bool
+    init(from decoder: Decoder) throws {
+        let c = try decoder.campos()
+        canciones = c.lista("canciones"); total = c.entero("total") ?? canciones.count; hayMas = c.bool("hayMas") ?? false
     }
 }
 
@@ -202,6 +227,8 @@ struct Playlist: Decodable, Identifiable, Hashable {
     var autor: String?
     var autorUsername: String?
     var canciones: [Cancion]
+    /// Personas que pueden agregar y quitar canciones (playlist colaborativa).
+    var colaboradores: [PerfilMini] = []
 
     init(from decoder: Decoder) throws {
         let c = try decoder.campos()
@@ -220,6 +247,7 @@ struct Playlist: Decodable, Identifiable, Hashable {
         autor = c.texto("autor")
         autorUsername = c.texto("autorUsername")
         canciones = c.lista("canciones")
+        colaboradores = c.lista("colaboradores")
     }
     static func == (a: Playlist, b: Playlist) -> Bool { a.id == b.id }
     func hash(into h: inout Hasher) { h.combine(id) }
@@ -758,6 +786,13 @@ enum Formato {
     }
 
     static func canciones(_ n: Int) -> String { n == 1 ? "1 canción" : "\(n) canciones" }
+    /// Número con separador de miles («12 345»), como `fmtNum` de la web.
+    static func numero(_ n: Int) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.locale = Locale(identifier: "es")
+        return f.string(from: NSNumber(value: n)) ?? String(n)
+    }
 
     /// Lee fechas del servidor: "2025-03-01T10:20:30", con o sin zona y milisegundos.
     static func fecha(_ s: String?) -> Date? {

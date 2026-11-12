@@ -27,6 +27,15 @@ enum Destino: Hashable {
     case usuarioAdmin(Int)
     case albumes
     case artistas
+    // Funciones de la web 3.x
+    case rutas
+    case descubrir
+    case coincidimos
+    case sesionCoincidimos(Int)
+    case dedicatorias
+    case dedicatoria(Int)
+    case preparar
+    case resumen
 }
 
 /// Pestaña elegida y pantallas abiertas en cada pestaña.
@@ -87,6 +96,12 @@ final class Navegacion {
         case "buscar": pestana = .buscar
         case "inicio": pestana = .inicio
         case "subir": if Sesion.compartida.puedeEditar { ir(.subir) }
+        case "rutas": ir(.rutas)
+        case "descubrir": ir(.descubrir)
+        case "coincidimos": if let v = valor, let id = Int(v) { ir(.sesionCoincidimos(id)) } else { ir(.coincidimos) }
+        case "dedicatorias": if let v = valor, let id = Int(v) { ir(.dedicatoria(id)) } else { ir(.dedicatorias) }
+        case "preparar": ir(.preparar)
+        case "resumen": ir(.resumen)
         case "admin":
             guard Sesion.compartida.esAdmin else { return }
             let consulta = URLComponents(string: "https://local/" + limpia)?.queryItems
@@ -132,6 +147,14 @@ struct VistaDestino: View {
             case .usuarioAdmin(let id): UsuarioAdminVista(id: id)
             case .albumes: TodosAlbumesVista()
             case .artistas: TodosArtistasVista()
+            case .rutas: RutasVista()
+            case .descubrir: DescubrirVista()
+            case .coincidimos: CoincidimosVista()
+            case .sesionCoincidimos(let id): SesionCoincidimosVista(id: id)
+            case .dedicatorias: DedicatoriasVista()
+            case .dedicatoria(let id): DedicatoriaVista(id: id)
+            case .preparar: PrepararVista()
+            case .resumen: ResumenVista()
             }
         }
     }

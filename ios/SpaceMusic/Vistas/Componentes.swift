@@ -118,6 +118,7 @@ struct OpcionesCancion: View {
             Label("Iniciar radio", systemImage: "dot.radiowaves.left.and.right")
         }
         Button { hojas.enviarCancion = cancion } label: { Label("Enviar a un amigo", systemImage: "paperplane") }
+        Button { hojas.dedicar = cancion } label: { Label("Dedicar esta canción", systemImage: "heart.text.square") }
         Divider()
         Button { Navegacion.compartida.ir(.artista(cancion.artista)) } label: { Label("Ir al artista", systemImage: "music.mic") }
         if !["single", "sencillo", ""].contains(cancion.album.lowercased()) {
@@ -129,6 +130,7 @@ struct OpcionesCancion: View {
         } else {
             Button { descargas.descargar([cancion]) } label: { Label("Descargar", systemImage: "arrow.down.circle") }
         }
+        Button { hojas.reportar = cancion } label: { Label("Reportar un problema", systemImage: "flag") }
         if Sesion.compartida.puedeEditar {
             Button { hojas.editarCancion = cancion } label: {
                 Label("Editar canción, portada y letra", systemImage: "square.and.pencil")
@@ -150,6 +152,11 @@ final class Hojas {
     var agregarAPlaylist: [Cancion]?
     var enviarCancion: Cancion?
     var editarCancion: Cancion?
+    var dedicar: Cancion?
+    var reportar: Cancion?
+    /// Elegir gustos (la primera vez, al crear la cuenta).
+    var gustos: Bool = false
+    var gustosInicial = false
 }
 
 extension View {
@@ -172,6 +179,15 @@ private struct HojasGlobales: ViewModifier {
             }
             .sheet(isPresented: Binding(get: { activas && hojas.editarCancion != nil }, set: { if !$0 { hojas.editarCancion = nil } })) {
                 if let c = hojas.editarCancion { EditarCancionHoja(cancion: c) }
+            }
+            .sheet(isPresented: Binding(get: { activas && hojas.dedicar != nil }, set: { if !$0 { hojas.dedicar = nil } })) {
+                if let c = hojas.dedicar { DedicarHoja(cancion: c) }
+            }
+            .sheet(isPresented: Binding(get: { activas && hojas.reportar != nil }, set: { if !$0 { hojas.reportar = nil } })) {
+                if let c = hojas.reportar { ReportarHoja(cancion: c) }
+            }
+            .sheet(isPresented: Binding(get: { activas && hojas.gustos }, set: { if !$0 { hojas.gustos = false } })) {
+                GustosHoja(inicial: hojas.gustosInicial)
             }
     }
 }

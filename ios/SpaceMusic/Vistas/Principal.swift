@@ -46,6 +46,10 @@ struct Principal: View {
             Eventos.compartido.conectar()
             Eventos.pedirPermiso()
             await Biblioteca.compartida.cargar()
+            if await GustosHoja.debePreguntar() {
+                Hojas.compartidas.gustosInicial = true
+                Hojas.compartidas.gustos = true
+            }
         }
     }
 

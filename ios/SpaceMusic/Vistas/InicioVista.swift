@@ -107,6 +107,8 @@ struct InicioVista: View {
             }
             if let m = i.mixes.first { Destacado(mix: m) }
             if !i.recientes.isEmpty { accesosRapidos(Array(i.recientes.prefix(6))) }
+            if !i.recientes.isEmpty { BannerResumen() }
+            AccesosExperiencias()
             mezclasRapidas
 
             if !amigos.isEmpty {
@@ -321,6 +323,36 @@ struct Ranking: View {
                 .contextMenu { OpcionesCancion(cancion: c) }
             }
         }
+        .padding(.horizontal)
+    }
+}
+
+/// Aviso de «Tu resumen» (como `bannerResumen` de la web): en diciembre y enero el del año, el resto del mes anterior.
+struct BannerResumen: View {
+    private var titulo: String {
+        let cal = Calendar.current, hoy = Date()
+        let mes = cal.component(.month, from: hoy)
+        if mes == 12 || mes == 1 { return "Tu \(mes == 12 ? cal.component(.year, from: hoy) : cal.component(.year, from: hoy) - 1) en SpaceMusic" }
+        let anterior = cal.date(byAdding: .month, value: -1, to: hoy) ?? hoy
+        let nombre = anterior.formatted(.dateTime.month(.wide).locale(Locale(identifier: "es")))
+        return "Tu \(nombre) en SpaceMusic"
+    }
+    var body: some View {
+        NavigationLink(value: Destino.resumen) {
+            HStack(spacing: 12) {
+                Image(systemName: "gift.fill").font(.title2).foregroundStyle(.black)
+                    .frame(width: 44, height: 44).background(Circle().fill(Tema.aurora))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(titulo).font(.subheadline.weight(.bold))
+                    Text("Minutos, artistas, canciones y una tarjeta para compartir").font(.caption).foregroundStyle(Tema.secundario)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Tema.secundario)
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Tema.tarjeta))
+        }
+        .buttonStyle(.plain)
         .padding(.horizontal)
     }
 }

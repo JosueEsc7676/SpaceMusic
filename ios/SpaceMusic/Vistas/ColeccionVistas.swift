@@ -204,6 +204,9 @@ struct PlaylistVista: View {
     @State private var foto: PhotosPickerItem?
     @State private var eligiendoFoto = false
     @State private var biblioteca = Biblioteca.compartida
+    @State private var invitandoColaborador = false
+    @State private var usuarioColaborador = ""
+    @State private var confirmarSalir = false
     @Environment(\.dismiss) private var cerrar
 
     var body: some View {
@@ -227,9 +230,42 @@ struct PlaylistVista: View {
             guard let item else { return }
             Task { await subirImagen(item) }
         }
+        .alert("Invitar a colaborar", isPresented: $invitandoColaborador) {
+            TextField("@usuario", text: $usuarioColaborador).textInputAutocapitalization(.never).autocorrectionDisabled()
+            Button("Invitar") { Task { await invitarColaborador() } }
+            Button("Cancelar", role: .cancel) {}
+        } message: { Text("Alguien que sigues o que te sigue. Podrá agregar y quitar canciones.") }
+        .confirmationDialog("¿Salir de esta playlist?", isPresented: $confirmarSalir, titleVisibility: .visible) {
+            Button("Salir", role: .destructive) { Task { await salirDeColaborar() } }
+        } message: { Text("Ya no la verás en tu biblioteca ni podrás agregar canciones.") }
         .confirmationDialog("¿Borrar esta playlist?", isPresented: $confirmarBorrar, titleVisibility: .visible) {
             Button("Borrar", role: .destructive) { Task { await borrar() } }
         } message: { Text("No se puede deshacer.") }
+    }
+
+    // MARK: Playlist colaborativa (web 3.1)
+    private func invitarColaborador() async {
+        let u = usuarioColaborador.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "@", with: "")
+        guard !u.isEmpty else { return }
+        do {
+            let _: Playlist = try await API.enviar("POST", "/api/playlists/\(id)/colaboradores", ["username": u])
+            usuarioColaborador = ""
+            Avisos.compartido.mostrar("Invitación enviada: ya puede agregar canciones")
+            await cargar()
+        } catch { Avisos.compartido.error(error) }
+    }
+    private func quitarColaborador(_ u: PerfilMini) async {
+        do { try await API.hacer("DELETE", "/api/playlists/\(id)/colaboradores/\(u.id)"); await cargar() }
+        catch { Avisos.compartido.error(error) }
+    }
+    private func salirDeColaborar() async {
+        guard let yo = Sesion.compartida.usuario?.id else { return }
+        do {
+            try await API.hacer("DELETE", "/api/playlists/\(id)/colaboradores/\(yo)")
+            await biblioteca.recargarPlaylists()
+            Avisos.compartido.mostrar("Saliste de la playlist")
+            cerrar()
+        } catch { Avisos.compartido.error(error) }
     }
 
     private func cargar() async {
@@ -270,6 +306,8 @@ struct PlaylistVista: View {
                     Text(d).font(.subheadline).foregroundStyle(Tema.secundario).frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal)
                 }
+                Colaboradores(playlist: p, invitar: { invitandoColaborador = true }, quitar: { u in Task { await quitarColaborador(u) } },
+                              salir: { confirmarSalir = true })
                 if let autor = p.autorUsername, !p.propia {
                     NavigationLink(value: Destino.perfil(autor)) {
                         Label("De \(p.autor ?? autor)", systemImage: "person.crop.circle")
@@ -482,11 +520,11 @@ struct GeneroVista: View {
         Cargador(cargar: { () async throws -> GeneroDetalle in try await API.get("/api/generos/\(API.segmento(nombre))") }) { g, recargar in
             ScrollView {
                 VStack(spacing: 22) {
-                    Encabezado(titulo: g.nombre, detalle: Formato.canciones(g.canciones.count), canciones: g.canciones, contexto: "genero") {
+                    Encabezado(titulo: g.nombre, detalle: Formato.canciones(g.total), canciones: g.canciones, contexto: "genero") {
                         Mosaico(rutas: Array(Set(g.canciones.compactMap(\.portadaUrl))).sorted().prefix(4).map { $0 }, radio: 12)
                     } extra: {
                         BotonDescargarLista(canciones: g.canciones)
-                        NavigationLink(value: Destino.mix(id: "genero:" + g.nombre, titulo: "Mix de " + g.nombre)) {
+                        NavigationLink(value: Destino.mix(id: "genero:" + g.clave, titulo: "Mix de " + g.nombre)) {
                             Image(systemName: "sparkles").font(.title2)
                         }
                         .accessibilityLabel("Mix de \(g.nombre)")
@@ -501,7 +539,14 @@ struct GeneroVista: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel("Aleatorio de todo el género")
                     }
-                    ListaCanciones(canciones: g.canciones, contexto: "genero")
+                    if !g.artistas.isEmpty {
+                        Carrusel(titulo: "Artistas") { ForEach(g.artistas) { TarjetaArtista(artista: $0) } }
+                    }
+                    SeccionGenero(titulo: "Lo esencial", sub: "Lo más escuchado, con variedad de artistas", canciones: g.canciones)
+                    ForEach(Array(g.secciones.enumerated()), id: \.offset) { _, sc in
+                        SeccionGenero(titulo: sc.titulo, sub: sc.sub, canciones: sc.canciones)
+                    }
+                    if g.total > g.canciones.count { TodasDelGenero(clave: g.clave, total: g.total) }
                 }
                 .padding(.bottom, 20)
             }
@@ -696,5 +741,113 @@ struct TodosArtistasVista: View {
         }
         .searchable(text: $filtro, prompt: "Filtrar artistas")
         .navigationTitle("Artistas")
+    }
+}
+
+/// Sección de un género («Lo esencial», «Lo nuevo», «Clásicos»…), como la web 3.3.
+struct SeccionGenero: View {
+    let titulo: String
+    let sub: String?
+    let canciones: [Cancion]
+    var body: some View {
+        if !canciones.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(titulo).titulo()
+                    if let sub { Text(sub).font(.caption).foregroundStyle(Tema.secundario) }
+                }
+                .padding(.horizontal)
+                ListaCanciones(canciones: canciones, contexto: "genero")
+            }
+        }
+    }
+}
+
+/// «Ver las N canciones» de un género, de 50 en 50 y en orden variado (`/api/generos/{clave}/todas`).
+struct TodasDelGenero: View {
+    let clave: String
+    let total: Int
+    @State private var canciones: [Cancion] = []
+    @State private var pagina = 0
+    @State private var hayMas = true
+    @State private var cargando = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if canciones.isEmpty {
+                Button { Task { await cargar() } } label: { Label("Ver las \(total) canciones", systemImage: "list.bullet") }
+                    .buttonStyle(BotonSecundario())
+                    .frame(maxWidth: .infinity)
+                    .disabled(cargando)
+            } else {
+                Text("Todas (\(total))").titulo().padding(.horizontal)
+                ListaCanciones(canciones: canciones, contexto: "genero")
+                if hayMas {
+                    Button { Task { await cargar() } } label: { Text(cargando ? "Cargando…" : "Cargar 50 más") }
+                        .buttonStyle(BotonSecundario())
+                        .frame(maxWidth: .infinity)
+                        .disabled(cargando)
+                }
+            }
+        }
+    }
+
+    private func cargar() async {
+        cargando = true
+        defer { cargando = false }
+        do {
+            let r: PaginaGenero = try await API.get("/api/generos/\(API.segmento(clave))/todas?pagina=\(pagina)&tam=50")
+            canciones += r.canciones
+            hayMas = r.hayMas
+            pagina += 1
+        } catch { Avisos.compartido.error(error) }
+    }
+}
+
+/// Quién más puede agregar canciones a la playlist (colaborativa), como `colaboradoresHtml` de la web.
+struct Colaboradores: View {
+    let playlist: Playlist
+    let invitar: () -> Void
+    let quitar: (PerfilMini) -> Void
+    let salir: () -> Void
+    private var soyColaborador: Bool { playlist.colaboradores.contains { $0.id == Sesion.compartida.usuario?.id } }
+
+    var body: some View {
+        if playlist.propia || !playlist.colaboradores.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(playlist.colaboradores.isEmpty ? "Playlist solo tuya" : "Colaboran", systemImage: "person.2.fill")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Tema.secundario)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(playlist.colaboradores, id: \.id) { c in
+                            HStack(spacing: 6) {
+                                NavigationLink(value: Destino.perfil(c.username)) {
+                                    HStack(spacing: 6) {
+                                        Avatar(ruta: c.fotoPerfil, nombre: c.nombre, tamano: 26)
+                                        Text(c.nombre).font(.subheadline).lineLimit(1)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                if playlist.propia {
+                                    Button { quitar(c) } label: { Image(systemName: "xmark").font(.caption2.weight(.bold)) }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel("Quitar a \(c.nombre)")
+                                }
+                            }
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(Capsule().fill(Tema.tarjeta))
+                        }
+                        if playlist.propia {
+                            Button(action: invitar) { Label("Invitar amigos", systemImage: "plus") }
+                                .buttonStyle(BotonSecundario())
+                        } else if soyColaborador {
+                            Button("Salir de la playlist", role: .destructive, action: salir).font(.subheadline)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal)
+        }
     }
 }

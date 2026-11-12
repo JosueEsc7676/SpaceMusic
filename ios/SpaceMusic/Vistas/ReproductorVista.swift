@@ -613,7 +613,8 @@ struct LetraCompleta: View {
                             .accessibilityHint("Saltar a esta parte")
                     }
                 }
-                .padding(.horizontal, 26)
+                // Sin margen aquí: cada línea lleva el suyo y ocupa todo el ancho, así desplazar hasta la línea
+                // activa nunca mueve la letra hacia los lados (antes quedaba pegada al borde izquierdo).
                 .padding(.top, 36)
                 .padding(.bottom, 380)
             }
@@ -632,10 +633,10 @@ struct LetraCompleta: View {
                         actual = i
                         if !manual, let i {
                             if primera {
-                                lector.scrollTo(i, anchor: UnitPoint(x: 0, y: 0.22))
+                                lector.scrollTo(i, anchor: UnitPoint(x: 0.5, y: 0.22))
                             } else {
                                 withAnimation(.spring(response: 0.65, dampingFraction: 0.86)) {
-                                    lector.scrollTo(i, anchor: UnitPoint(x: 0, y: 0.22))
+                                    lector.scrollTo(i, anchor: UnitPoint(x: 0.5, y: 0.22))
                                 }
                             }
                         }
@@ -678,6 +679,7 @@ struct LineaLetraVista: View {
         .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 26)
         .blur(radius: activa || enfocada ? 0 : min(Double(distancia) * 0.9, 3.2))
         .animation(.easeInOut(duration: 0.35), value: activa)
         .animation(.easeInOut(duration: 0.3), value: enfocada)
