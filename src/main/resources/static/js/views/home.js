@@ -63,6 +63,7 @@ function inicioSinConexion(el, head) {
   const pins = cols.map((c) => {
     if (c.tipo === 'favoritos') return `<a class="pin" href="#/favoritos"><span class="pin-art art-liked">${icon('heartFill')}</span><span class="pin-t ellipsis">Me gusta</span></a>`;
     if (c.tipo === 'playlist') return `<a class="pin" href="#/playlist/${c.datos.id}"><span class="pin-art">${playlistArt(c.datos, 160)}</span><span class="pin-t ellipsis">${esc(c.datos.nombre)}</span></a>`;
+    if (c.tipo === 'preparada') return `<a class="pin" href="#/preparar"><span class="pin-art art-liked">${icon('download')}</span><span class="pin-t ellipsis">Para escuchar sin internet</span></a>`;
     if (c.tipo === 'album') return `<a class="pin" href="${albumHref(c.datos.nombre, c.datos.artista)}"><span class="pin-art">${coverImg(c.datos.portadaUrl, 160, c.datos.nombre)}</span><span class="pin-t ellipsis">${esc(c.datos.nombre)}</span></a>`;
     return '';
   }).join('');
@@ -127,6 +128,12 @@ export async function homeView(el, _p, _q, isStale) {
       ${pins.length ? `<div class="pins">${pins.join('')}</div>` : ''}
     </div>
     ${d.recientes?.length ? bannerResumen() : ''}
+    <div class="exp-accesos">
+      <a class="exp-acceso" href="#/rutas">${icon('compass')}<b>Rutas musicales</b><span>De tranquilo a con energía, o al revés</span></a>
+      <a class="exp-acceso" href="#/descubrir">${icon('sparkles')}<b>Descubrir</b><span>Familiar, cercano o sorpréndeme</span></a>
+      <a class="exp-acceso" href="#/coincidimos">${icon('users')}<b>Coincidimos</b><span>Tus gustos y los de alguien más</span></a>
+      <a class="exp-acceso" href="#/preparar">${icon('download')}<b>Sin internet</b><span>Prepara música para el camino</span></a>
+    </div>
     <div data-amigos></div>
     ${section('Continúa escuchando', songShelf(d.recientes, { type: 'historial', label: 'Escuchado recientemente' }), { more: '#/historial', eyebrow: 'Tu historial' })}
     ${section('Tus mezclas', shelf(mixes.map(cardMix).join('')), { eyebrow: 'Se actualizan con lo que escuchas' })}

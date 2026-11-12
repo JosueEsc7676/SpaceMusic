@@ -77,6 +77,7 @@ public class AudioAnalisisService {
             repo.save(x);
             procesadas++;
         }
+        if (procesadas > 0) cache.limpiar();
         return procesadas;
     }
 
@@ -106,10 +107,14 @@ public class AudioAnalisisService {
     }
 
     /** Energía de cada canción analizada (cancionId → 0..1). */
+    private final com.bpm.music.services.CacheTemporal<String, Map<Long, Double>> cache = new com.bpm.music.services.CacheTemporal<>(5 * 60_000, 1);
+
     public Map<Long, Double> energias() {
-        Map<Long, Double> r = new HashMap<>();
-        for (CaracteristicaAudio c : repo.findAll()) if (c.getEnergia() != null) r.put(c.getCancionId(), c.getEnergia());
-        return r;
+        return cache.obtener("e", () -> {
+            Map<Long, Double> r = new HashMap<>();
+            for (CaracteristicaAudio c : repo.findAll()) if (c.getEnergia() != null) r.put(c.getCancionId(), c.getEnergia());
+            return r;
+        });
     }
 
     public Map<String, Object> resumen() {

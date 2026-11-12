@@ -22,6 +22,7 @@ import { mensajesView } from './views/mensajes.js';
 import { novedadesView } from './views/novedades.js';
 import { iniciarAvisos } from './avisos.js';
 import { resumenView, revisarBienvenida } from './comunidad.js';
+import { rutasView, descubrirView, coincidimosView, dedicatoriasView, prepararView } from './experiencias.js';
 import { iniciarNativo, modoLigero } from './nativo.js';
 
 // Sesión vencida sin conexión: se entra igual para escuchar lo descargado (la sesión no caduca sin internet).
@@ -133,7 +134,8 @@ const SOLO_EN_LINEA = [
   [/^\/historial/, 'tu historial'], [/^\/artista\//, 'este artista'], [/^\/genero\//, 'este género'],
   [/^\/mix\//, 'esta mezcla'], [/^\/u\//, 'este perfil'], [/^\/mensajes/, 'tus mensajes'],
   [/^\/novedades/, 'las novedades'], [/^\/estadisticas/, 'tus estadísticas'], [/^\/resumen/, 'tu resumen'], [/^\/admin/, 'la administración'], [/^\/soporte/, 'el centro de soporte'],
-  [/^\/subir/, 'la subida de canciones'],
+  [/^\/subir/, 'la subida de canciones'], [/^\/rutas/, 'las rutas musicales'], [/^\/descubrir/, 'Descubrir'],
+  [/^\/coincidimos/, 'El punto donde coincidimos'], [/^\/dedicatorias/, 'tus dedicatorias'], [/^\/preparar/, 'preparar la escucha sin internet'],
 ];
 setGuardiaSinRed((path) => {
   if (!sinConexion()) return null;
@@ -160,6 +162,13 @@ route('/novedades/:version', novedadesView);
 route('/mensajes/:username', mensajesView);
 route('/estadisticas', statsView);
 route('/resumen', resumenView);
+route('/rutas', rutasView);
+route('/descubrir', descubrirView);
+route('/coincidimos', coincidimosView);
+route('/coincidimos/:id', coincidimosView);
+route('/dedicatorias', dedicatoriasView);
+route('/dedicatorias/:id', dedicatoriasView);
+route('/preparar', prepararView);
 route('/admin', async (...args) => (await import('./views/admin.js')).adminView(...args));
 // Compatibilidad con marcadores y notificaciones anteriores.
 route('/soporte', (_el, _p, query) => go('/admin?tab=soporte' + (query.sec ? '&sec=' + encodeURIComponent(query.sec) : ''), { replace: true }));
@@ -198,6 +207,11 @@ $('[data-user-menu]').addEventListener('click', (e) => {
     { label: 'Tus estadísticas', icon: 'chart', fn: () => go('/estadisticas') },
     { label: 'Escuchado recientemente', icon: 'history', fn: () => go('/historial') },
     { label: 'Tu resumen del año', icon: 'gift', fn: () => go('/resumen') },
+    { label: 'Rutas musicales', icon: 'compass', fn: () => go('/rutas') },
+    { label: 'Descubrir', icon: 'sparkles', fn: () => go('/descubrir') },
+    { label: 'El punto donde coincidimos', icon: 'users', fn: () => go('/coincidimos') },
+    { label: 'Dedicatorias', icon: 'heart', fn: () => go('/dedicatorias') },
+    { label: 'Preparar sin internet', icon: 'download', fn: () => go('/preparar') },
     { label: 'Ecualizador', icon: 'sliders', fn: () => openEqualizer() },
     session.canEdit ? { label: 'Subir canciones', icon: 'upload', fn: () => go('/subir') } : null,
     session.isAdmin ? { label: 'Administración', icon: 'shield', fn: () => go('/admin') } : null,

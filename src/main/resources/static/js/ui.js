@@ -6,6 +6,7 @@ import { api, session, downloadUrl, upload } from './api.js';
 import { lib } from './state.js';
 import { player } from './player.js';
 import { reportarProblema } from './comunidad.js';
+import { dedicarCancion } from './experiencias.js';
 
 // ═══════════════════ Avisos ═══════════════════
 
@@ -330,6 +331,7 @@ export function songMenu(anchor, song, { playlistId } = {}) {
     { label: 'Ir al artista', icon: 'user', fn: () => { location.hash = '#/artista/' + encodeURIComponent(song.artista); } },
     song.album && song.album !== 'Single' ? { label: 'Ir al álbum', icon: 'disc', fn: () => { location.hash = albumHref(song.album, song.artista); } } : null,
     { label: 'Ver letra', icon: 'mic', fn: () => bus.emit('np:lyrics', song) },
+    { label: 'Dedicar esta canción', icon: 'send', fn: () => dedicarCancion(song) },
     { label: 'Reportar un problema', icon: 'flag', fn: () => reportarProblema(song) },
     ...(session.canEdit ? [
       { sep: true },

@@ -983,3 +983,45 @@ body.admin-mode .sop-lado, body.admin-mode .sop-contenido { min-width: 0; }
 .org-ajuste input { width: 80px; background: var(--bg-elev-3); border: 1px solid var(--line-strong); color: var(--text); border-radius: 8px; padding: 6px 8px; }
 .org-errores { font-size: 12px; color: var(--text-2); }
 @media (max-width: 640px) { .org-cambio { flex-wrap: wrap; } }
+
+/* ═══════════ Experiencias ═══════════ */
+.exp-cab { display: flex; gap: 14px; align-items: center; margin: 8px 0 16px; }
+.exp-cab h1 { margin: 0; font-size: 30px; }
+.exp-cab p { margin: 4px 0 0; }
+.exp-ico { width: 56px; height: 56px; border-radius: 16px; background: var(--aurora-soft); display: grid; place-items: center; flex-shrink: 0; }
+.exp-form { display: flex; flex-direction: column; gap: 12px; max-width: 620px; }
+.exp-form input[type=range] { width: 100%; accent-color: #fff; }
+.exp-grupo { border: 0; padding: 0; margin: 0; display: flex; gap: 8px; flex-wrap: wrap; }
+.exp-grupo legend { font-weight: 700; margin-bottom: 6px; }
+.exp-op { display: inline-flex; }
+.exp-op input { position: absolute; opacity: 0; }
+.exp-op span { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line-strong); cursor: pointer; }
+.exp-op input:checked + span { background: #fff; color: #000; border-color: #fff; }
+.exp-op input:focus-visible + span { outline: 2px solid #fff; outline-offset: 2px; }
+.exp-curva { display: flex; align-items: flex-end; gap: 3px; height: 70px; margin: 8px 0; }
+.exp-curva i { flex: 1; background: linear-gradient(to top, #7cc8ff, #ffa3c8); border-radius: 3px 3px 0 0; min-width: 3px; }
+.exp-selector { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.exp-modo { padding: 12px 14px; border-radius: var(--radius); background: var(--bg-elev-2); color: inherit; text-decoration: none; display: flex; flex-direction: column; border: 1px solid transparent; }
+.exp-modo.active { border-color: #fff; background: var(--bg-elev-3); }
+.exp-modo span { color: var(--text-2); font-size: 13px; }
+.exp-desc { display: flex; flex-direction: column; gap: 6px; }
+.exp-desc-fila, .exp-coin { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 10px; background: var(--bg-elev-2); }
+.exp-desc-play { background: none; border: 0; padding: 0; cursor: pointer; flex-shrink: 0; }
+.exp-desc-play img, .exp-desc-fila > img, .exp-coin > img { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; }
+.exp-desc-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.exp-razon { font-size: 13px; color: var(--text-2); display: inline-flex; gap: 6px; align-items: center; }
+.exp-desc-acc, .exp-reac { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.exp-lista { display: flex; flex-direction: column; gap: 6px; }
+.exp-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; background: var(--bg-elev-2); color: inherit; text-decoration: none; border: 0; text-align: left; font: inherit; width: 100%; cursor: pointer; }
+.exp-item:hover { background: var(--bg-elev-3); }
+.exp-item img { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; }
+.exp-busca { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow: auto; }
+.exp-ded { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.exp-ded-portada img { width: 200px; height: 200px; border-radius: 12px; object-fit: cover; }
+.exp-msg { font-size: 20px; margin: 12px 0; padding-left: 14px; border-left: 3px solid #fff; }
+.exp-resp { margin-top: 12px; }
+.exp-accesos { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin: 8px 0 24px; }
+.exp-acceso { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: var(--radius-lg); background: var(--bg-elev-2); color: inherit; text-decoration: none; }
+.exp-acceso:hover { background: var(--bg-elev-3); }
+.exp-acceso span { color: var(--text-2); font-size: 13px; }
+@media (max-width: 640px) { .exp-selector { grid-template-columns: 1fr; } .exp-desc-fila, .exp-coin { flex-wrap: wrap; } .exp-desc-acc, .exp-reac { width: 100%; justify-content: flex-start; } .exp-accesos { grid-template-columns: 1fr 1fr; } }
