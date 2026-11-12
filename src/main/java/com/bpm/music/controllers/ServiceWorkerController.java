@@ -39,7 +39,8 @@ public class ServiceWorkerController {
             if (ruta.startsWith("/app/") || ruta.startsWith("/sonidos/")) continue;   // instaladores y sonidos: no se precargan
             // La administración requiere red: no descargarla para cada oyente al instalar la app.
             if (java.util.Set.of("/js/views/admin.js", "/js/views/soporte.js",
-                    "/js/views/reportes-admin.js", "/js/views/descargas-admin.js").contains(ruta)) continue;
+                    "/js/views/reportes-admin.js", "/js/views/descargas-admin.js", "/js/views/descargas-buscar.js",
+                    "/js/views/organizacion-admin.js").contains(ruta)) continue;
             archivos.add(ruta);
         }
         archivos.add("/");

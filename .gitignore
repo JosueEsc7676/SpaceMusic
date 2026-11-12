@@ -57,3 +57,4 @@ android-movil/build/
 android-movil/*.apk
 android-movil/*.idsig
 respaldos/
+data-perf/

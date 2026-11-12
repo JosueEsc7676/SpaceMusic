@@ -41,6 +41,155 @@ public class DescargasService {
         this.datos = Path.of(datos);
     }
 
+    // ═══════════════════ Buscar en YouTube Music ═══════════════════
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+    private static final Pattern ID_EN_TEXTO = Pattern.compile("(?:[?&]v=|youtu\\.be/)([A-Za-z0-9_-]{11})");
+    private com.bpm.music.externo.YouTubeMusicProveedor ytm;
+    private com.bpm.music.services.BibliotecaService biblioteca;
+    /** Datos de lo último que se mostró en una búsqueda (para comprobar duplicados al encolar por id). */
+    private final com.bpm.music.services.CacheTemporal<String, Map<String, Object>> vistos = new com.bpm.music.services.CacheTemporal<>(6 * 3600_000, 5000);
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setBusqueda(com.bpm.music.externo.YouTubeMusicProveedor ytm, com.bpm.music.services.BibliotecaService biblioteca) {
+        this.ytm = ytm;
+        this.biblioteca = biblioteca;
+    }
+
+    /** Dónde aparece cada canción de YouTube: en cola, descargándose, terminada o fallida. */
+    record Situacion(Set<String> enCola, Set<String> descargando, Set<String> terminadas, Set<String> fallidas) {}
+
+    Situacion situacion() {
+        Set<String> cola = new HashSet<>(), bajando = new HashSet<>(), hechas = new HashSet<>(), fallas = new HashSet<>();
+        List<Path> archivos = listar(datos.resolve("cola"));
+        boolean activo = pidTrabajador() != null;
+        for (int i = 0; i < archivos.size(); i++)
+            for (String l : leerLineas(archivos.get(i), MAX_LINEAS)) ids(l, cola);
+        for (Path f : listar(datos.resolve("cola-hechas"))) for (String l : leerLineas(f, MAX_LINEAS)) ids(l, hechas);
+        for (String l : leerLineas(datos.resolve("fallidas.txt"), 2000)) ids(l, fallas);
+        if (activo) {
+            for (String l : cola(datos.resolve("descargas.log"), 200)) {
+                Matcher b = ENTRADA.matcher(l);
+                if (b.find()) { bajando.clear(); ids(b.group(3), bajando); }
+            }
+        }
+        return new Situacion(cola, bajando, hechas, fallas);
+    }
+
+    private static void ids(String texto, Set<String> destino) {
+        Matcher m = ID_EN_TEXTO.matcher(texto);
+        while (m.find()) destino.add(m.group(1));
+    }
+
+    /** Estado de un resultado: biblioteca, descargando, en_cola, completado, fallido o disponible. */
+    String estadoDe(String videoId, String titulo, List<String> artistas, Integer duracion, Situacion s, List<com.bpm.music.dtos.CancionDTO> locales) {
+        if (locales != null && titulo != null) {
+            var c = com.bpm.music.externo.Coincidencias.buscar(titulo, artistas, duracion, locales);
+            if (c != null && c.getValue() == com.bpm.music.externo.Coincidencias.Resultado.MISMA) return "biblioteca";
+        }
+        if (s.descargando().contains(videoId)) return "descargando";
+        if (s.enCola().contains(videoId)) return "en_cola";
+        if (s.fallidas().contains(videoId)) return "fallido";
+        if (s.terminadas().contains(videoId)) return "completado";
+        return "disponible";
+    }
+
+    private Map<String, List<com.bpm.music.dtos.CancionDTO>> indiceLocal() {
+        Map<String, List<com.bpm.music.dtos.CancionDTO>> r = new HashMap<>();
+        if (biblioteca == null) return r;
+        for (var c : biblioteca.todas()) r.computeIfAbsent(com.bpm.music.externo.Coincidencias.base(c.getNombre()), k -> new ArrayList<>()).add(c);
+        return r;
+    }
+
+    private List<Map<String, Object>> conEstado(com.fasterxml.jackson.databind.JsonNode resultados) {
+        Situacion s = situacion();
+        Map<String, List<com.bpm.music.dtos.CancionDTO>> indice = indiceLocal();
+        List<Map<String, Object>> r = new ArrayList<>();
+        for (var it : resultados) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> m = new LinkedHashMap<>(JSON.convertValue(it, Map.class));
+            String vid = it.path("videoId").asText(null);
+            if (vid != null) {
+                List<String> arts = new ArrayList<>();
+                it.path("artistas").forEach(a -> arts.add(a.asText()));
+                Integer dur = it.path("duracion").isNumber() ? it.path("duracion").asInt() : null;
+                String titulo = it.path("titulo").asText(null);
+                m.put("estado", estadoDe(vid, titulo, arts, dur, s, indice.get(com.bpm.music.externo.Coincidencias.base(titulo))));
+                vistos.poner(vid, m);
+            }
+            r.add(m);
+        }
+        return r;
+    }
+
+    private com.bpm.music.externo.YouTubeMusicProveedor ytm() {
+        if (ytm == null) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "La búsqueda de YouTube Music no está disponible");
+        return ytm;
+    }
+
+    public Map<String, Object> buscarYT(String consulta, String filtro, int limite) {
+        var r = ytm().buscar(consulta, filtro, limite);
+        return Map.of("resultados", conEstado(r.path("resultados")), "limite", limite, "hayMas", r.path("resultados").size() >= limite && limite < 50);
+    }
+
+    public Map<String, Object> albumYT(String browseId) {
+        var r = ytm().album(browseId);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("album", JSON.convertValue(r.path("album"), Map.class));
+        m.put("resultados", conEstado(r.path("resultados")));
+        return m;
+    }
+
+    public Map<String, Object> artistaYT(String browseId) {
+        var r = ytm().artista(browseId);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("artista", JSON.convertValue(r.path("artista"), Map.class));
+        m.put("resultados", conEstado(r.path("resultados")));
+        return m;
+    }
+
+    /**
+     * Agrega canciones de YouTube Music a la cola por su id, sin copiar enlaces. Se omiten las que ya
+     * están en la biblioteca, en la cola o descargándose. La descarga la hace la cola de siempre, en segundo plano.
+     */
+    public synchronized Map<String, Object> encolarCanciones(List<String> ids) {
+        requerirInstalado();
+        if (ids == null || ids.isEmpty()) throw new IllegalArgumentException("Elige al menos una canción");
+        if (ids.size() > 200) throw new IllegalArgumentException("Máximo 200 canciones por vez");
+        Situacion s = situacion();
+        Map<String, List<com.bpm.music.dtos.CancionDTO>> indice = indiceLocal();
+        List<String> lineas = new ArrayList<>();
+        Map<String, String> omitidas = new LinkedHashMap<>();
+        for (String id : new LinkedHashSet<>(ids)) {
+            if (id == null || !com.bpm.music.externo.YouTubeMusicProveedor.VIDEO_ID.matcher(id).matches())
+                throw new IllegalArgumentException("Identificador no válido");
+            Map<String, Object> v = vistos.leer(id);
+            String titulo = v == null ? null : (String) v.get("titulo");
+            @SuppressWarnings("unchecked") List<String> arts = v == null ? List.of() : (List<String>) v.getOrDefault("artistas", List.of());
+            Integer dur = v != null && v.get("duracion") instanceof Number n ? n.intValue() : null;
+            String e = estadoDe(id, titulo, arts, dur, s, indice.get(com.bpm.music.externo.Coincidencias.base(titulo)));
+            if (Set.of("biblioteca", "en_cola", "descargando").contains(e)) { omitidas.put(id, e); continue; }
+            lineas.add("https://music.youtube.com/watch?v=" + id);
+        }
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("omitidas", omitidas);
+        if (lineas.isEmpty()) { r.put("agregadas", 0); r.put("mensaje", "Ya estaban en la biblioteca o en la cola"); return r; }
+        Map<String, Object> res = encolar(String.join("\n", lineas));
+        r.put("agregadas", res.get("agregadas"));
+        r.put("mensaje", res.get("mensaje"));
+        return r;
+    }
+
+    /** Un álbum completo por su lista de YouTube Music (OLAK5uy_…). */
+    public synchronized Map<String, Object> encolarAlbum(String listaId) {
+        requerirInstalado();
+        if (listaId == null || !listaId.matches("OLAK5uy_[A-Za-z0-9_-]{20,60}")) throw new IllegalArgumentException("Álbum no válido");
+        String url = "https://music.youtube.com/playlist?list=" + listaId;
+        for (Path f : listar(datos.resolve("cola"))) if (leerLineas(f, MAX_LINEAS).contains(url))
+            return Map.of("agregadas", 0, "mensaje", "Ese álbum ya está en la cola");
+        return encolar(url);
+    }
+
     public boolean instalado() {
         return Files.isExecutable(script);
     }
@@ -110,7 +259,7 @@ public class DescargasService {
     // ═══════════════════ Acciones ═══════════════════
 
     /** Agrega enlaces o búsquedas "Artista - Canción" a la cola (una por línea). */
-    public Map<String, Object> encolar(String texto) {
+    public synchronized Map<String, Object> encolar(String texto) {
         requerirInstalado();
         if (texto == null || texto.isBlank()) throw new IllegalArgumentException("Pega al menos un enlace");
         List<String> lineas = new ArrayList<>();

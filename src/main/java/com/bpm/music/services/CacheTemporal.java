@@ -28,6 +28,18 @@ public class CacheTemporal<K, V> {
         return v;
     }
 
+    /** Valor guardado y vigente, o null (sin calcular nada). */
+    public V leer(K clave) {
+        Entrada<V> e = datos.get(clave);
+        return e != null && e.vence() > System.currentTimeMillis() ? e.valor() : null;
+    }
+
+    public void poner(K clave, V valor) {
+        long ahora = System.currentTimeMillis();
+        if (datos.size() >= maximo) datos.entrySet().removeIf(x -> x.getValue().vence() <= ahora);
+        if (datos.size() < maximo) datos.put(clave, new Entrada<>(valor, ahora + ttlMs));
+    }
+
     public void borrar(K clave) {
         datos.remove(clave);
     }

@@ -65,6 +65,44 @@ public class MonitorService {
 
     // ═══════════════════ Registro de peticiones ═══════════════════
 
+    // ── Rendimiento por ruta (últimas 400 peticiones de cada una): aplicación, base de datos y consultas ──
+    private final Map<String, java.util.concurrent.ConcurrentLinkedDeque<double[]>> tiempos = new ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicInteger audiosActivos = new java.util.concurrent.atomic.AtomicInteger();
+
+    void registrarTiempos(String endpoint, double appMs, double dbMs, int consultas) {
+        var cola = tiempos.computeIfAbsent(endpoint, k -> new java.util.concurrent.ConcurrentLinkedDeque<>());
+        cola.addLast(new double[]{appMs, dbMs, consultas});
+        while (cola.size() > 400) cola.pollFirst();
+    }
+
+    void audioEmpieza() { audiosActivos.incrementAndGet(); }
+    void audioTermina() { audiosActivos.decrementAndGet(); }
+
+    /** Cuántas canciones se están enviando ahora mismo (las tareas pesadas esperan si hay reproducción). */
+    public int audiosActivos() { return Math.max(0, audiosActivos.get()); }
+
+    /** p50/p95 de cada ruta (aplicación y base de datos) con las últimas peticiones. */
+    public List<Map<String, Object>> rendimiento() {
+        List<Map<String, Object>> r = new ArrayList<>();
+        tiempos.forEach((ruta, cola) -> {
+            List<double[]> l = new ArrayList<>(cola);
+            if (l.size() < 3) return;
+            double[] app = l.stream().mapToDouble(x -> x[0]).sorted().toArray();
+            double[] db = l.stream().mapToDouble(x -> x[1]).sorted().toArray();
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("ruta", ruta);
+            m.put("peticiones", l.size());
+            m.put("appP50", redondear(app[app.length / 2]));
+            m.put("appP95", redondear(app[(int) Math.min(app.length - 1, Math.ceil(app.length * 0.95) - 1)]));
+            m.put("dbP50", redondear(db[db.length / 2]));
+            m.put("dbP95", redondear(db[(int) Math.min(db.length - 1, Math.ceil(db.length * 0.95) - 1)]));
+            m.put("consultasMedia", redondear(l.stream().mapToDouble(x -> x[2]).average().orElse(0)));
+            r.add(m);
+        });
+        r.sort(Comparator.comparingDouble((Map<String, Object> m) -> ((Number) m.get("appP95")).doubleValue()).reversed());
+        return r;
+    }
+
     void registrarPeticion(String endpoint, int estado, double ms, boolean audio) {
         totalPeticiones.incrementAndGet();
         minPeticiones.incrementAndGet();

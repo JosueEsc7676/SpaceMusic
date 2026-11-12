@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { esc, bus, timeAgo, store } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, errorToast, confirmDialog, modal, emptyState } from '../ui.js';
+import { iniciarBusqueda } from './descargas-buscar.js';
 
 let reloj = null;
 bus.on('route', () => { clearTimeout(reloj); reloj = null; });
@@ -28,6 +29,7 @@ function entradas(texto) {
 export async function descargasTab(el) {
   el.innerHTML = `<div class="dl">
     <div class="dl-estado" data-estado><p class="muted">Cargando…</p></div>
+    <section class="panel dl-yt" data-yt></section>
     <div class="dl-grid">
       <section class="panel dl-pegar">
         <h3>${icon('download')} Agregar a la cola</h3>
@@ -56,6 +58,7 @@ export async function descargasTab(el) {
     <section class="panel"><h3>${icon('sliders')} Cuenta de Spotify</h3><div data-spotify></div></section>
   </div>`;
   const $ = (s) => el.querySelector(s);
+  iniciarBusqueda($('[data-yt]'), () => cargar(true));
   const texto = $('[data-texto]');
   try { texto.value = store.get(BORRADOR, '') || ''; } catch { }
 
