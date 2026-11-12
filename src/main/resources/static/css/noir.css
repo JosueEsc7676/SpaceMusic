@@ -925,3 +925,22 @@ input[type=range][data-mezcla] { accent-color: #fff; }
 .dl-filtro { background: var(--bg-elev-3); border: 1px solid var(--line-strong); color: var(--text); border-radius: 999px; padding: 6px 12px; font-size: 13px; width: 170px; }
 .dl-pasos { padding-left: 18px; margin-top: 0; display: grid; gap: 6px; font-size: 14px; }
 @media (max-width: 900px) { .dl-grid { grid-template-columns: 1fr; } .dl-log { height: 260px; } }
+
+/* Administración ocupa toda la ventana, también en el WebView Android. */
+body.admin-mode { --player-h: 0px; --mobile-nav-h: 0px; }
+body.admin-mode .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); grid-template-areas: "main"; padding: 8px; }
+body.admin-mode .sidebar,
+body.admin-mode #playerBar,
+body.admin-mode .mobile-nav,
+body.admin-mode .top-search,
+body.admin-mode .topbar > a[href="#/mensajes"],
+body.admin-mode .topbar [data-notif-btn] { display: none !important; }
+body.admin-mode .main { min-width: 0; padding-bottom: env(safe-area-inset-bottom); }
+body.admin-mode .sop-lado, body.admin-mode .sop-contenido { min-width: 0; }
+@media (max-width: 1000px) {
+  body.admin-mode .sop-pagina { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  body.admin-mode .app { padding: 0; }
+}
+.genero-todas { margin-top: 28px; display: flex; flex-direction: column; align-items: center; } .genero-todas > .section, .genero-todas > section { width: 100%; }

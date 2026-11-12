@@ -289,4 +289,7 @@ const fallidas = resultados.filter((r) => !r.ok);
 console.log(`\n${resultados.length - fallidas.length} de ${resultados.length} pruebas correctas`);
 try { ws.close(); } catch { }
 try { execSync(process.platform === 'win32' ? `taskkill /pid ${proc.pid} /T /F` : `kill ${proc.pid}`, { stdio: 'ignore' }); } catch { proc.kill(); }
+// El perfil temporal del navegador se borra (si no, se acumulan cientos de MB por cada ejecución)
+await espera(800);
+try { (await import('node:fs')).rmSync(perfil, { recursive: true, force: true }); } catch { }
 process.exit(fallidas.length ? 1 : 0);

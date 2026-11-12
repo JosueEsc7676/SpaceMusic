@@ -1,4 +1,4 @@
-// Centro de soporte técnico (página propia #/soporte, solo administradores): monitorización, diagnóstico, incidencias,
+// Centro de soporte técnico integrado en Administración (solo administradores): monitorización, diagnóstico, incidencias,
 // biblioteca, base de datos, sesiones, alertas, seguridad, mantenimiento e informes.
 // Todo lo que se muestra viene del servidor; si un dato no se puede medir se indica "No disponible".
 import { api, session } from '../api.js';
@@ -125,7 +125,7 @@ const DESCRIPCION = {
   informes: 'Tendencias por día, semana y mes, con exportación.',
 };
 
-/** Página de soporte: menú lateral propio, botón para volver al inicio y la sección elegida. */
+/** Soporte dentro de la pestaña de administración, con su selector de secciones. */
 export async function soporteView(el, _p, query) {
   if (!session.isAdmin) { el.innerHTML = emptyState('lock', 'Solo para administradores'); return; }
   const sec = SECCIONES.some(([k]) => k === query.sec) ? query.sec : 'resumen';
@@ -134,14 +134,10 @@ export async function soporteView(el, _p, query) {
   setHero(null);
   const enlace = (k) => {
     const [, l, i] = SECCIONES.find(([x]) => x === k);
-    return `<a class="sop-lado-item ${k === sec ? 'active' : ''}" href="#/soporte?sec=${k}" ${k === sec ? 'aria-current="page"' : ''}>${icon(i, 'sm')}<span>${esc(l)}</span></a>`;
+    return `<a class="sop-lado-item ${k === sec ? 'active' : ''}" href="#/admin?tab=soporte&sec=${k}" ${k === sec ? 'aria-current="page"' : ''}>${icon(i, 'sm')}<span>${esc(l)}</span></a>`;
   };
   el.innerHTML = `<div class="sop-pagina">
     <aside class="sop-lado" aria-label="Secciones de soporte">
-      <div class="sop-lado-top">
-        <a class="btn sm" href="#/">${icon('left', 'sm')} Volver al inicio</a>
-        <a class="btn sm ghost" href="#/admin">${icon('shield', 'sm')} Administración</a>
-      </div>
       <h2 class="sop-lado-t">${icon('sliders')} Soporte técnico</h2>
       <label class="sop-lado-movil"><span class="muted">Sección</span>
         <select class="sel" data-sec aria-label="Sección de soporte">${GRUPOS.map(([g, ks]) => `<optgroup label="${esc(g)}">${ks.map((k) =>
@@ -152,7 +148,7 @@ export async function soporteView(el, _p, query) {
       <header class="sop-cab"><h1>${icon(ic)} ${esc(titulo)}</h1><p class="muted">${esc(DESCRIPCION[sec] || '')}</p></header>
       <div class="sop-cuerpo" data-sop><div class="sop-cargando">${icon('clock', 'sm')} Cargando…</div></div>
     </section></div>`;
-  el.querySelector('[data-sec]').addEventListener('change', (e) => { location.hash = '#/soporte?sec=' + e.target.value; });
+  el.querySelector('[data-sec]').addEventListener('change', (e) => { location.hash = '#/admin?tab=soporte&sec=' + e.target.value; });
   const box = el.querySelector('[data-sop]');
   clearInterval(refresco);
   try {
@@ -192,15 +188,15 @@ async function resumen(box) {
       </div>
       <div class="panels">
         <div class="panel"><h3>${icon('info')} Incidencias</h3>
-          <div class="sop-mini">${['NUEVA', 'EN_INVESTIGACION', 'RESUELTA', 'DESCARTADA'].map((e) => `<a href="#/soporte?sec=incidencias" data-ver-estado="${e}">${chip(e)} <b>${fmtNum(inc[e] || 0)}</b></a>`).join('')}</div>
+          <div class="sop-mini">${['NUEVA', 'EN_INVESTIGACION', 'RESUELTA', 'DESCARTADA'].map((e) => `<a href="#/admin?tab=soporte&sec=incidencias" data-ver-estado="${e}">${chip(e)} <b>${fmtNum(inc[e] || 0)}</b></a>`).join('')}</div>
           ${inc.descartadasPorExceso ? `<p class="muted">${inc.descartadasPorExceso} eventos no se guardaron por exceso (la cola tiene un límite).</p>` : ''}</div>
         <div class="panel"><h3>${icon('bell')} Alertas</h3>
-          <div class="sop-mini">${['ACTIVA', 'RECONOCIDA', 'RESUELTA'].map((e) => `<a href="#/soporte?sec=alertas">${chip(e)} <b>${fmtNum(al[e] || 0)}</b></a>`).join('')}</div></div>
+          <div class="sop-mini">${['ACTIVA', 'RECONOCIDA', 'RESUELTA'].map((e) => `<a href="#/admin?tab=soporte&sec=alertas">${chip(e)} <b>${fmtNum(al[e] || 0)}</b></a>`).join('')}</div></div>
         <div class="panel"><h3>${icon('checkCircle')} Último diagnóstico</h3>${r.ultimoDiagnostico
           ? `<p style="margin-top:0">${chip(r.ultimoDiagnostico.estado)} ${esc(hora(r.ultimoDiagnostico.inicio))} · por @${esc(r.ultimoDiagnostico.usuario)}</p>
              <div class="sop-mini"><span>${chip('correcta')} ${r.ultimoDiagnostico.correctas}</span><span>${chip('advertencia')} ${r.ultimoDiagnostico.advertencias}</span><span>${chip('fallida')} ${r.ultimoDiagnostico.fallidas}</span></div>`
           : '<p class="muted">Aún no se ejecutó ninguno.</p>'}
-          <a class="btn sm" href="#/soporte?sec=diagnostico">${icon('checkCircle', 'sm')} Ir al diagnóstico</a></div>
+          <a class="btn sm" href="#/admin?tab=soporte&sec=diagnostico">${icon('checkCircle', 'sm')} Ir al diagnóstico</a></div>
         <div class="panel"><h3>${icon('sliders')} Entorno</h3>
           <div class="kv"><span>Java</span><b>${val(r.version?.java)}</b></div><div class="kv"><span>Spring Boot</span><b>${val(r.version?.springBoot)}</b></div>
           <div class="kv"><span>Sistema</span><b>${val(r.version?.sistema)}</b></div>

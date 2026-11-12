@@ -1,5 +1,11 @@
 # Registro de cambios
 
+## Versión 3.3
+- **IA local:** el servidor tiene Ollama con `qwen3:0.6b`. Se probó para clasificar artistas por estilo: tardó ~1 minuto en 10 artistas y respondió mal (repitió la lista de estilos). Con 2 núcleos y sin tarjeta gráfica, un modelo más grande sería aún más lento. Por eso la organización se hace con reglas, con los géneros de MusicBrainz y lo que se escucha.
+- **Estilos concretos** (`EstilosService`): cada canción recibe un estilo (bachata, reggaetón, trap latino, regional, corridos, pop latino, hip hop, trap, R&B, rock, electrónica, infantil, cristiana…): por su género si es específico, si no por los géneros del artista (MusicBrainz) y si no por sus otras canciones. "Latino" (1200 canciones) ya no es una sola categoría.
+- **Explorar** (`/api/generos`) lista estilos. **Página de género** (`/api/generos/{nombre}`): secciones cortas (lo esencial con variedad, lo nuevo, clásicos, recién llegadas, aún no escuchadas) y artistas destacados; todas las canciones por páginas en `/api/generos/{nombre}/todas`, en orden variado. Se mantiene `canciones` para versiones anteriores.
+- **Mixes:** Mix del día con los 3 estilos favoritos de cada persona (en proporción a lo que escucha) y por bloques; Descubrir con sus estilos y parecidos; mixes de género por estilo; mix de artista con su estilo real; radio puntúa por estilo y penaliza saltos sin relación. Todo con orden "fluido" (sin artistas seguidos ni saltos bruscos).
+
 ## Versión 3.2
 - **Recomendadas en una playlist:** "Agregar" agregaba nada y reproducía la canción. La escucha global de filas (`main.js`, fase de captura) se comía el clic; ahora los botones y enlaces propios de una fila manejan su clic.
 - **Pantalla apagada (iPhone y Android):** al terminar una canción no seguía la siguiente y el reproductor se cerraba. Causa: con la página en segundo plano iOS corta sus peticiones y la app lo tomaba como "sin conexión", así que saltaba todo lo no descargado. Ahora esos fallos no cuentan con la página oculta, si el sistema dice que hay red se intenta la siguiente igual, la radio se pide antes (quedan 2 canciones, al 20 %) y se reintenta hasta 3 veces.

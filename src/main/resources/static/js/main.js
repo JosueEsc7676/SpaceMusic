@@ -15,14 +15,12 @@ import { searchView } from './views/search.js';
 import { libraryView, invalidateLibraryCache } from './views/library.js';
 import { albumView, artistView, playlistView, likedView, genreView, mixView, historyView } from './views/collection.js';
 import { profileView, statsView, applyAccent, avatarHtml, openEqualizer } from './views/account.js';
-import { adminView, uploadView } from './views/admin.js';
 import { pintarCuerpo, ocultarSplash } from './splash.js';
 import { iniciarOffline, sinConexion } from './offline.js';
 import { perfilPublicoView } from './views/people.js';
 import { mensajesView } from './views/mensajes.js';
 import { novedadesView } from './views/novedades.js';
 import { iniciarAvisos } from './avisos.js';
-import { soporteView } from './views/soporte.js';
 import { resumenView, revisarBienvenida } from './comunidad.js';
 import { iniciarNativo, modoLigero } from './nativo.js';
 
@@ -162,9 +160,17 @@ route('/novedades/:version', novedadesView);
 route('/mensajes/:username', mensajesView);
 route('/estadisticas', statsView);
 route('/resumen', resumenView);
-route('/admin', adminView);
-route('/soporte', soporteView);
-route('/subir', uploadView);
+route('/admin', async (...args) => (await import('./views/admin.js')).adminView(...args));
+// Compatibilidad con marcadores y notificaciones anteriores.
+route('/soporte', (_el, _p, query) => go('/admin?tab=soporte' + (query.sec ? '&sec=' + encodeURIComponent(query.sec) : ''), { replace: true }));
+route('/subir', async (...args) => (await import('./views/admin.js')).uploadView(...args));
+
+function paintAdminLayout(path = parse().path) {
+  document.body.classList.toggle('admin-mode', session.isAdmin && (path === '/admin' || path === '/soporte'));
+}
+bus.on('route', ({ path }) => paintAdminLayout(path));
+bus.on('user', () => paintAdminLayout());
+paintAdminLayout();
 
 // ═══════════════════ Usuario y permisos ═══════════════════
 
@@ -179,6 +185,13 @@ paintUser();
 
 $('[data-user-menu]').addEventListener('click', (e) => {
   const u = session.user;
+  if (document.body.classList.contains('admin-mode')) {
+    showMenu(e.currentTarget, [
+      { label: 'Volver a la música', icon: 'left', fn: () => go('/') },
+      { label: 'Cerrar sesión', icon: 'logout', danger: true, fn: () => logout() },
+    ]);
+    return;
+  }
   showMenu(e.currentTarget, [
     { label: 'Ver mi perfil', icon: 'user', fn: () => go('/u/' + encodeURIComponent(u.username)) },
     { label: 'Ajustes de la cuenta', icon: 'sliders', fn: () => go('/perfil') },
@@ -587,16 +600,19 @@ async function boot() {
     if (r?.token) { session.save(r.token, r.usuario); paintUser(r.usuario); }
   }).catch((e) => { if (e.status === 403) logout('desactivada'); });
 
-  await lib.init();
+  // La biblioteca personal se carga en paralelo: no bloquea la primera pantalla.
+  const bibliotecaLista = lib.init();
+  // Las vistas musicales usan favoritos/guardados en su primer render.
+  if (!['/admin', '/soporte'].includes(parse().path)) await bibliotecaLista;
   paintSidebar();
-  player.restore();
+  bibliotecaLista.then(() => player.restore());
   paintVolume();
   paintMode();
   paintState();
   startRouter();
   ocultarSplash();
   // Cuenta nueva: elegir géneros y artistas (una sola vez)
-  setTimeout(() => revisarBienvenida(), 1200);
+  setTimeout(() => { if (!document.body.classList.contains('admin-mode')) revisarBienvenida(); }, 1200);
   // App de Android: la página ya arrancó (si no llega este aviso sin internet, la app muestra
   // las canciones guardadas en el teléfono en vez de una pantalla negra)
   try { window.SpaceMusicApp?.lista?.(); } catch { }

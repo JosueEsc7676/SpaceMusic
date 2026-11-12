@@ -472,19 +472,45 @@ export async function genreView(el, { nombre }, _q, isStale) {
   setHero([0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)));
   const route = '#/genero/' + encodeURIComponent(g.nombre);
   const ctx = { type: 'genero', label: g.nombre, route };
-  const artistas = [...new Map(g.canciones.map((c) => [norm(c.artista), c])).values()].slice(0, 12);
+  const total = g.total ?? g.canciones.length;
+  // Artistas: los que manda el servidor (o, en versiones anteriores, los de las canciones)
+  const artistas = g.artistas || [...new Map(g.canciones.map((c) => [norm(c.artista), c])).values()].slice(0, 12)
+    .map((c) => ({ nombre: c.artista, portadaUrl: c.portadaUrl }));
+  const secciones = g.secciones || [];
   el.innerHTML = head({
     kind: 'Género', title: g.nombre, art: mosaic(g.canciones.map((c) => c.portadaUrl), 640),
-    meta: plural(g.canciones.length, 'canción', 'canciones'),
+    meta: `${plural(total, 'canción', 'canciones')}${artistas.length ? ` · ${plural(artistas.length, 'artista destacado', 'artistas destacados')}` : ''}`,
   })
-    + actions({ filter: g.canciones.length > 8, extra: `<button class="btn outline sm" data-mix>${icon('sparkles', 'sm')} Mix de ${esc(g.nombre)}</button>` })
-    + section('Artistas', `<div class="shelf">${artistas.map((c) => cardArtist({ nombre: c.artista, portadaUrl: c.portadaUrl, totalCanciones: g.canciones.filter((x) => norm(x.artista) === norm(c.artista)).length })).join('')}</div>`)
-    + section('Canciones', trackList(g.canciones, { context: ctx }));
+    + actions({ extra: `<button class="btn outline sm" data-mix>${icon('sparkles', 'sm')} Mix de ${esc(g.nombre)}</button>` })
+    + (artistas.length ? section('Artistas', `<div class="shelf">${artistas.map((a) => cardArtist(a)).join('')}</div>`) : '')
+    + section('Lo esencial', trackList(g.canciones, { context: { ...ctx, label: g.nombre + ' · Lo esencial' } }), { sub: 'Lo más escuchado, con variedad de artistas' })
+    + secciones.map((sc, k) => section(sc.titulo, trackList(sc.canciones, { context: { ...ctx, label: g.nombre + ' · ' + sc.titulo, route: route + '#' + sc.clave } }), { sub: sc.sub, id: 'gs-' + k })).join('')
+    + (total > g.canciones.length ? `<div class="genero-todas" data-todas>
+        <button class="btn" data-ver-todas>${icon('list', 'sm')} Ver las ${total} canciones</button></div>` : '');
   wire(el, () => g.canciones, ctx);
   el.querySelector('[data-mix]').onclick = async () => {
-    try { player.play(await api('/api/mixes/' + encodeURIComponent('genero:' + g.nombre)), 0, { type: 'mix', label: 'Mix de ' + g.nombre }); }
+    try { player.play(await api('/api/mixes/' + encodeURIComponent('genero:' + (g.clave || g.nombre))), 0, { type: 'mix', label: 'Mix de ' + g.nombre }); }
     catch (e) { errorToast(e); }
   };
+  // "Ver todas": por páginas de 50, en orden variado (no mil canciones de golpe)
+  const caja = el.querySelector('[data-todas]');
+  if (caja) {
+    let pagina = 0;
+    const cargadas = [];
+    const cargar = async () => {
+      const b = caja.querySelector('button');
+      if (b) b.disabled = true;
+      try {
+        const r = await api(`/api/generos/${encodeURIComponent(g.clave || g.nombre)}/todas?pagina=${pagina}&tam=50`);
+        cargadas.push(...r.canciones);
+        pagina++;
+        caja.innerHTML = section(`Todas (${r.total})`, trackList(cargadas, { context: { ...ctx, label: g.nombre + ' · Todas' } }))
+          + (r.hayMas ? `<div class="row" style="justify-content:center;margin-top:12px"><button class="btn" data-mas>Cargar 50 más</button></div>` : '');
+        caja.querySelector('[data-mas]')?.addEventListener('click', cargar);
+      } catch (e) { errorToast(e); if (b) b.disabled = false; }
+    };
+    caja.querySelector('[data-ver-todas]').addEventListener('click', cargar);
+  }
 }
 
 // ═══════════════════ Mezcla ═══════════════════

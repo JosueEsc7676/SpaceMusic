@@ -39,6 +39,11 @@ public class BibliotecaController {
         this.estadisticas = estadisticas;
     }
 
+    private com.bpm.music.services.EstilosService estilos;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setEstilos(com.bpm.music.services.EstilosService estilos) { this.estilos = estilos; }
+
     /** Todo lo que necesita la pantalla de inicio en una sola petición. */
     @GetMapping("/inicio")
     public Map<String, Object> inicio() {
@@ -58,12 +63,8 @@ public class BibliotecaController {
                 .filter(a -> recomendaciones.artistaPermitido(a.artista(), ok)).limit(12).toList());
         r.put("artistas", biblioteca.artistas().stream()
                 .filter(a -> recomendaciones.artistaPermitido(a.nombre(), ok)).limit(12).toList());
-        // En "Explora por género" siguen todos, pero los aparte van al final
-        r.put("generos", biblioteca.generos().stream()
-                .sorted(Comparator.comparing((Map<String, Object> g) -> {
-                    String n = (String) g.get("nombre");
-                    return GeneroService.esAparte(n) && !apartesOk.contains(GeneroService.familia(n));
-                })).limit(16).toList());
+        // "Explora por género": estilos concretos (no un "Latino" con mil canciones); los aparte van al final
+        r.put("generos", explorar(apartesOk).stream().limit(16).toList());
         r.put("playlistsPublicas", playlists.publicas(uid).stream().filter(p -> {
             List<CancionDTO> cs = biblioteca.porIds(playlists.idsCanciones(p.getId()));
             long no = cs.stream().filter(ok.negate()).count();
@@ -121,17 +122,36 @@ public class BibliotecaController {
 
     // ── Géneros ──
 
+    /** Explorar: estilos organizados (Bachata, Reggaetón, Trap latino…), los "aparte" al final. */
     @GetMapping("/generos")
     public List<Map<String, Object>> generos() {
-        return biblioteca.generos();
+        return explorar(recomendaciones.apartesQueLeGustan(CurrentUser.id()));
     }
 
+    private List<Map<String, Object>> explorar(Set<String> apartesOk) {
+        List<Map<String, Object>> l = new ArrayList<>(estilos.estilos(x -> true));
+        l.sort(Comparator.comparing((Map<String, Object> g) -> com.bpm.music.services.EstilosService.porClave((String) g.get("clave"))
+                .map(x -> com.bpm.music.services.EstilosService.esAparte(x) && !apartesOk.contains(x.familia())).orElse(false)));
+        return l;
+    }
+
+    /**
+     * Página de un género por secciones cortas (lo esencial, lo nuevo, clásicos, recién llegadas, lo que aún
+     * no escuchas). Acepta el nombre o la clave del estilo y, por compatibilidad, cualquier género.
+     */
     @GetMapping("/generos/{nombre}")
     public Map<String, Object> genero(@PathVariable String nombre) {
-        List<CancionDTO> cs = biblioteca.cancionesDeGenero(nombre).stream()
-                .sorted(Comparator.comparingInt(CancionDTO::getReproducciones).reversed()).toList();
-        if (cs.isEmpty()) throw new NoSuchElementException("Género no encontrado");
-        return Map.of("nombre", cs.get(0).getGenero(), "canciones", cs);
+        var x = estilos.buscar(nombre).filter(e -> !estilos.canciones(e.clave()).isEmpty())
+                .orElseThrow(() -> new NoSuchElementException("Género no encontrado"));
+        return estilos.pagina(x, recomendaciones.escuchadas(CurrentUser.id()));
+    }
+
+    /** Todas las canciones de un género, por páginas y en orden variado. */
+    @GetMapping("/generos/{nombre}/todas")
+    public Map<String, Object> generoTodas(@PathVariable String nombre, @RequestParam(defaultValue = "0") int pagina,
+                                           @RequestParam(defaultValue = "50") int tam) {
+        var x = estilos.buscar(nombre).orElseThrow(() -> new NoSuchElementException("Género no encontrado"));
+        return estilos.todas(x, Math.max(0, pagina), Math.min(Math.max(tam, 10), 100));
     }
 
     // ── Reproducción, radio y mezclas ──

@@ -15,21 +15,21 @@ bus.on('route', () => { clearInterval(poll); poll = null; });
 
 export async function adminView(el, _p, query, isStale) {
   if (!session.isAdmin) { el.innerHTML = emptyState('lock', 'Solo para administradores'); return; }
-  // Soporte tiene su propia página (los enlaces viejos llevan ahí)
-  if (query.tab === 'soporte') { location.replace('#/soporte' + (query.sec ? '?sec=' + encodeURIComponent(query.sec) : '')); return; }
   const tab = query.tab || 'resumen';
   setTitle('Administración');
   setHero([120, 40, 50]);
-  const tabs = [['resumen', 'Resumen'], ['descargas', 'Descargar música'], ['biblioteca', 'Biblioteca'], ['generos', 'Géneros'], ['usuarios', 'Usuarios'], ['cuentas', 'Cuentas nuevas'], ['solicitudes', 'Colaboradores'], ['reportes', 'Reportes']];
-  const [resumen, com] = await Promise.all([api('/api/admin/resumen'), api('/api/admin/comunidad/conteos').catch(() => ({}))]);
+  const tabs = [['resumen', 'Resumen'], ['descargas', 'Descargar música'], ['subir', 'Subir canciones'], ['biblioteca', 'Biblioteca'], ['generos', 'Géneros'], ['usuarios', 'Usuarios'], ['cuentas', 'Cuentas nuevas'], ['solicitudes', 'Colaboradores'], ['reportes', 'Reportes'], ['soporte', 'Soporte técnico']];
+  const [resumen, com] = tab === 'soporte' ? [{}, {}] : await Promise.all([api('/api/admin/resumen'), api('/api/admin/comunidad/conteos').catch(() => ({}))]);
   const pendCom = com.reportesAbiertos || 0;
   if (isStale()) return;
   el.innerHTML = `<div class="section-head" style="margin-top:8px"><h2 style="font-size:28px">${icon('shield')} Administración</h2></div>
-    <div class="adm-top"><a class="btn sm" href="#/soporte">${icon('sliders', 'sm')} Centro de soporte técnico</a></div>
+    <div class="adm-top"><a class="btn sm" href="#/">${icon('left', 'sm')} Volver a la música</a></div>
     <div class="chips">${tabs.map(([k, l]) => `<a class="chip ${tab === k ? 'active' : ''}" href="#/admin?tab=${k}">${l}${k === 'solicitudes' && resumen.solicitudesPendientes ? ` <span class="badge warning">${resumen.solicitudesPendientes}</span>` : ''}${k === 'cuentas' && resumen.cuentasPendientes ? ` <span class="badge warning">${resumen.cuentasPendientes}</span>` : ''}${k === 'reportes' && pendCom ? ` <span class="badge warning">${pendCom}</span>` : ''}</a>`).join('')}</div>
     <div data-body></div>`;
   const body = el.querySelector('[data-body]');
-  if (tab === 'resumen') await resumenTab(body, resumen);
+  if (tab === 'soporte') await (await import('./soporte.js')).soporteView(body, _p, query);
+  else if (tab === 'subir') await uploadView(body);
+  else if (tab === 'resumen') await resumenTab(body, resumen);
   else if (tab === 'biblioteca') await bibliotecaTab(body);
   else if (tab === 'usuarios') await usuariosTab(body);
   else if (tab === 'cuentas') await cuentasTab(body);
@@ -88,7 +88,7 @@ async function bibliotecaTab(el) {
         <span class="badge info">${s.reubicadas} reubicadas</span><span class="badge ${s.errores ? 'danger' : ''}">${s.errores} errores</span></div>
         ${s.ultimoError ? `<p class="muted" style="font-size:12px;word-break:break-all">Último error: ${esc(s.ultimoError)}</p>` : ''}
       </div></div>
-      <a class="btn" href="#/subir">${icon('upload', 'sm')} Subir canciones desde aquí</a>`;
+      <a class="btn" href="#/admin?tab=subir">${icon('upload', 'sm')} Subir canciones desde aquí</a>`;
     const act = async (path, msg) => {
       try { draw(await api(path, { method: 'POST' })); toast(msg); startPoll(); } catch (e) { errorToast(e); }
     };

@@ -12,6 +12,11 @@ import java.util.Optional;
 
 public interface PlaylistRepository extends JpaRepository<Playlist, Long> {
 
+    // Serializa las escrituras antes de tocar la tabla de canciones o el contador.
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Playlist p WHERE p.id = :id")
+    Optional<Playlist> findForUpdate(@Param("id") Long id);
+
     List<Playlist> findByUsuarioIdOrderByFechaCreacionDesc(Long usuarioId);
 
     Optional<Playlist> findByIdAndUsuarioId(Long id, Long usuarioId);

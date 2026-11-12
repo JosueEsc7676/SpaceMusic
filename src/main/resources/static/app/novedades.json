@@ -1,13 +1,23 @@
 {
-  "version": "3.2",
-  "titulo": "Novedades: arreglos del reproductor",
+  "version": "3.3",
+  "titulo": "Novedades: música mejor organizada",
   "puntos": [
-    "Arreglado: en una playlist, “Agregar” en las canciones recomendadas ahora la agrega (antes empezaba a sonar).",
-    "Arreglado: con la pantalla apagada (sobre todo en iPhone) al terminar una canción sigue la siguiente; el reproductor ya no se cierra.",
-    "Si el servidor se reinicia, verás “SpaceMusic está en mantenimiento” más rápido y sin confusiones.",
-    "Ya no llega una notificación cada vez que se suben canciones."
+    "Explorar ahora separa la música por estilos de verdad: Bachata, Reggaetón, Trap latino, Regional mexicano, Pop latino y más (antes “Latino” juntaba más de mil canciones).",
+    "Cada género se ve por secciones cortas: lo esencial, lo nuevo, clásicos, recién llegadas y lo que aún no escuchas. Si quieres todas, se cargan de 50 en 50.",
+    "Mix del día, Descubrir y los mixes de género se arman con tus estilos favoritos y van por bloques: ya no saltan de bachata a hip hop y de vuelta.",
+    "La radio y los mixes de artista eligen canciones del mismo estilo y evitan repetir artista seguido."
   ],
   "anteriores": [
+    {
+      "version": "3.2",
+      "titulo": "Novedades: arreglos del reproductor",
+      "puntos": [
+        "Arreglado: en una playlist, “Agregar” en las canciones recomendadas ahora la agrega (antes empezaba a sonar).",
+        "Arreglado: con la pantalla apagada (sobre todo en iPhone) al terminar una canción sigue la siguiente; el reproductor ya no se cierra.",
+        "Si el servidor se reinicia, verás “SpaceMusic está en mantenimiento” más rápido y sin confusiones.",
+        "Ya no llega una notificación cada vez que se suben canciones."
+      ]
+    },
     {
       "version": "3.1",
       "titulo": "Novedades: transiciones, volumen parejo y tu año en SpaceMusic",
