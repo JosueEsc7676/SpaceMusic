@@ -14,6 +14,7 @@ struct AdminVista: View {
     @State private var mensaje: String?
     @State private var trabajando = false
     @State private var aprobandoEnlace = false
+    @State private var reportesAbiertos = 0
 
     var body: some View {
         List {
@@ -22,7 +23,17 @@ struct AdminVista: View {
             }
             Section("Herramientas") {
                 NavigationLink("Estadísticas del servidor", value: Destino.resumenAdmin)
-                NavigationLink("Soporte y errores", value: Destino.soporte)
+                NavigationLink { SoporteTecnicoVista() } label: { Label("Soporte técnico", systemImage: "stethoscope") }
+                NavigationLink { DescargasAdminVista() } label: { Label("Descargar música", systemImage: "arrow.down.circle") }
+                NavigationLink { ReportesAdminVista() } label: {
+                    HStack {
+                        Label("Reportes de la comunidad", systemImage: "flag")
+                        Spacer()
+                        if reportesAbiertos > 0 { Chip(texto: "\(reportesAbiertos)", color: Tema.peligro) }
+                    }
+                }
+                NavigationLink { OrganizacionAdminVista() } label: { Label("Organización y catálogo", systemImage: "square.stack.3d.up") }
+                NavigationLink("Errores recientes (vista anterior)", value: Destino.soporte)
                 NavigationLink("Géneros y artistas", value: Destino.generosAdmin)
                 NavigationLink("Mantenimiento de biblioteca", value: Destino.bibliotecaAdmin)
                 Button { aprobandoEnlace = true } label: { Label("Aprobar cuenta con el enlace del correo", systemImage: "envelope.badge") }
@@ -168,6 +179,7 @@ struct AdminVista: View {
     }
 
     private func cargar() async {
+        if let c: ValorAdmin = try? await API.get("/api/admin/comunidad/conteos") { reportesAbiertos = c["reportesAbiertos"].entero }
         do {
             async let r: AdminResumen = API.get("/api/admin/resumen")
             async let p: [Usuario] = API.get("/api/admin/cuentas/pendientes")
