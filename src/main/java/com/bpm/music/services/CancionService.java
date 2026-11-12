@@ -42,9 +42,21 @@ public class CancionService {
         return escaner.resolverArchivo(ruta);
     }
 
+    private com.bpm.music.organizador.RegistroMetadatos registro;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setRegistro(com.bpm.music.organizador.RegistroMetadatos registro) { this.registro = registro; }
+
+    private void anotar(Long id, String campo, Object antes, Object despues) {
+        if (registro == null || java.util.Objects.equals(antes, despues)) return;
+        Long uid = com.bpm.music.security.CurrentUser.idOrNull();
+        registro.manual(id, campo, antes == null ? null : String.valueOf(antes), despues == null ? null : String.valueOf(despues), uid == null ? null : "usuario #" + uid);
+    }
+
     @Transactional
     public CancionDTO editar(Long id, Map<String, Object> datos) {
         Cancion c = repo.findById(id).orElseThrow(() -> new NoSuchElementException("Canción no encontrada"));
+        String[] antes = {c.getNombre(), c.getArtista(), c.getAlbum(), c.getGenero(), String.valueOf(c.getAnio())};
         String nombre = texto(datos.get("nombre"), 250);
         String artista = texto(datos.get("artista"), 250);
         if (nombre != null) {
@@ -59,6 +71,12 @@ public class CancionService {
         if (datos.containsKey("anio")) c.setAnio(entero(datos.get("anio"), 1000, 2999));
         if (datos.containsKey("numeroPista")) c.setNumeroPista(entero(datos.get("numeroPista"), 1, 999));
         repo.save(c);
+        // Correcciones manuales: el completado automático no las vuelve a tocar
+        anotar(id, "nombre", antes[0], c.getNombre());
+        anotar(id, "artista", antes[1], c.getArtista());
+        anotar(id, "album", antes[2], c.getAlbum());
+        anotar(id, "genero", antes[3], c.getGenero());
+        anotar(id, "anio", antes[4], String.valueOf(c.getAnio()));
         biblioteca.invalidar();
         return biblioteca.requerir(id);
     }
@@ -71,6 +89,7 @@ public class CancionService {
         byte[] jpg = imagenes.redimensionar(file.getBytes(), 1200);
         if (jpg == null) throw new IllegalArgumentException("No se pudo leer la imagen (usa JPG o PNG)");
         repo.actualizarPortada(id, jpg, ImagenService.huella(jpg));
+        anotar(id, "portada", null, ImagenService.huella(jpg));
         imagenes.invalidarMiniaturas(id);
         biblioteca.invalidar();
         return biblioteca.requerir(id);

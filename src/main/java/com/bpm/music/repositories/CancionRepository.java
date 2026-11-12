@@ -81,6 +81,16 @@ public interface CancionRepository extends JpaRepository<Cancion, Long> {
 
     @Transactional
     @Modifying
+    @Query("UPDATE Cancion c SET c.nombre = :nombre WHERE c.id = :id")
+    int actualizarNombre(@Param("id") Long id, @Param("nombre") String nombre);
+
+    @Transactional
+    @Modifying
+    @Query("UPDATE Cancion c SET c.anio = :anio WHERE c.id = :id")
+    int actualizarAnio(@Param("id") Long id, @Param("anio") Integer anio);
+
+    @Transactional
+    @Modifying
     @Query("UPDATE Cancion c SET c.portada = :portada, c.portadaHash = :hash WHERE c.id = :id")
     int actualizarPortada(@Param("id") Long id, @Param("portada") byte[] portada, @Param("hash") String hash);
 

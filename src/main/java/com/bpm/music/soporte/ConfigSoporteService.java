@@ -30,6 +30,18 @@ public class ConfigSoporteService {
         AJUSTES.put("retencion.incidenciasDias", new Object[]{90.0, 7.0, 730.0, "Días que se guardan las incidencias cerradas y su conteo diario"});
         AJUSTES.put("retencion.diagnosticosDias", new Object[]{60.0, 7.0, 365.0, "Días que se guarda el historial de diagnósticos y alertas resueltas"});
         AJUSTES.put("respaldo.copias", new Object[]{7.0, 1.0, 60.0, "Copias de seguridad de la base de datos que se conservan"});
+        // Organizador automático (hora de El Salvador)
+        AJUSTES.put("org.activo", new Object[]{1.0, 0.0, 1.0, "Organizador automático encendido (1) o apagado (0)"});
+        AJUSTES.put("org.horaDiaria", new Object[]{3.0, 0.0, 23.0, "Hora de la revisión diaria (canciones nuevas o cambiadas)"});
+        AJUSTES.put("org.minutoDiario", new Object[]{15.0, 0.0, 59.0, "Minuto de la revisión diaria"});
+        AJUSTES.put("org.diaSemanal", new Object[]{7.0, 1.0, 7.0, "Día de la revisión general (1 = lunes … 7 = domingo)"});
+        AJUSTES.put("org.horaSemanal", new Object[]{5.0, 0.0, 23.0, "Hora de la revisión general semanal"});
+        AJUSTES.put("org.lote", new Object[]{40.0, 5.0, 200.0, "Canciones por lote (se guarda el avance después de cada lote)"});
+        AJUSTES.put("org.maxMinutos", new Object[]{120.0, 10.0, 600.0, "Minutos máximos por ejecución"});
+        AJUSTES.put("org.cpuMax", new Object[]{70.0, 20.0, 100.0, "CPU del sistema (%) por encima de la cual el trabajo espera"});
+        AJUSTES.put("org.pausaSiReproduce", new Object[]{1.0, 0.0, 1.0, "Esperar mientras alguien escucha música (1 = sí)"});
+        AJUSTES.put("org.iaActiva", new Object[]{0.0, 0.0, 1.0, "Etiquetas con IA local (solo si la última evaluación llega al 80 %)"});
+        AJUSTES.put("org.iaHilos", new Object[]{1.0, 1.0, 4.0, "Núcleos de CPU que puede usar la IA local"});
     }
 
     private final ConfigSoporteRepository repo;
@@ -50,8 +62,18 @@ public class ConfigSoporteService {
     }
 
     public Map<String, Object> todos() {
+        return grupo(false);
+    }
+
+    /** Ajustes del organizador (los de alertas y retención van en {@link #todos()}). */
+    public Map<String, Object> organizador() {
+        return grupo(true);
+    }
+
+    private Map<String, Object> grupo(boolean org) {
         Map<String, Object> r = new LinkedHashMap<>();
         AJUSTES.forEach((k, d) -> {
+            if (k.startsWith("org.") != org) return;
             var fila = repo.findById(k).orElse(null);
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("valor", valor(k));
@@ -82,6 +104,6 @@ public class ConfigSoporteService {
         repo.save(c);
         cache.put(clave, v);
         auditoria.registrar("config.cambiar", clave + ": " + antes + " → " + v, "OK");
-        return todos();
+        return clave.startsWith("org.") ? organizador() : todos();
     }
 }

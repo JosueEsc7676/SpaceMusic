@@ -52,6 +52,17 @@ public class LetrasService {
         return respuesta(letra, lrc, null);
     }
 
+    private com.bpm.music.organizador.RegistroMetadatos registro;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setRegistro(com.bpm.music.organizador.RegistroMetadatos registro) { this.registro = registro; }
+
+    private void anotar(Long id, String campo, Object antes, Object despues) {
+        if (registro == null || java.util.Objects.equals(antes, despues)) return;
+        Long uid = com.bpm.music.security.CurrentUser.idOrNull();
+        registro.manual(id, campo, antes == null ? null : String.valueOf(antes), despues == null ? null : String.valueOf(despues), uid == null ? null : "usuario #" + uid);
+    }
+
     public Map<String, Object> guardar(Long id, String texto) {
         biblioteca.requerir(id);
         if (texto == null) texto = "";
@@ -62,6 +73,7 @@ public class LetrasService {
         String letra = esLrc ? textoPlanoDeLrc(texto) : texto;
         String lrc = esLrc ? texto : "";
         repo.actualizarLetras(id, letra, lrc);
+        anotar(id, "letra", null, texto.length() > 120 ? texto.substring(0, 120) + "…" : texto);
         sinResultado.remove(id);
         biblioteca.invalidar();
         return respuesta(letra, lrc, null);
@@ -70,6 +82,7 @@ public class LetrasService {
     public void borrar(Long id) {
         biblioteca.requerir(id);
         repo.actualizarLetras(id, "", "");
+        anotar(id, "letra", "(tenía letra)", "");
         biblioteca.invalidar();
     }
 
@@ -100,6 +113,7 @@ public class LetrasService {
                 return Map.of("encontrada", false, "message", "No se encontró la letra en línea");
             }
             repo.actualizarLetras(id, plano.isBlank() ? textoPlanoDeLrc(lrc) : plano.trim(), lrc.trim());
+            if (registro != null) registro.automatico(id, "letra", lrc.isBlank() ? plano.trim() : lrc.trim(), "LRCLIB", "Al abrir la letra: artista + título + duración");
             biblioteca.invalidar();
             Map<String, Object> r = new HashMap<>(respuesta(plano, lrc, "LRCLIB"));
             r.put("encontrada", true);
@@ -108,6 +122,26 @@ public class LetrasService {
             log.debug("Error buscando letra de {}: {}", id, e.getMessage());
             return Map.of("encontrada", false, "message", "No se pudo conectar con el servicio de letras");
         }
+    }
+
+    /** Propuesta de letra para el completado automático (no guarda nada). null = sin resultado. */
+    public record PropuestaLetra(String plano, String lrc, String metodo, int diferencia, boolean instrumental) {}
+
+    public PropuestaLetra propuesta(CancionDTO c) throws Exception {
+        JsonNode hit = buscarExacta(c);
+        String metodo = "artista + título" + (c.getAlbum() != null && !"Single".equals(c.getAlbum()) ? " + álbum" : "") + " + duración (búsqueda exacta)";
+        int dif = 0;
+        if (hit == null) {
+            hit = buscarAproximada(c);
+            if (hit == null) return null;
+            dif = c.getDuracionSegundos() > 0 ? Math.abs(hit.path("duration").asInt(0) - c.getDuracionSegundos()) : 99;
+            metodo = "búsqueda aproximada por artista y título (duración ±" + dif + " s)";
+        }
+        if (hit.path("instrumental").asBoolean(false)) return new PropuestaLetra("", "", metodo, dif, true);
+        String lrc = hit.path("syncedLyrics").asText("").trim();
+        String plano = hit.path("plainLyrics").asText("").trim();
+        if (lrc.isBlank() && plano.isBlank()) return null;
+        return new PropuestaLetra(plano.isBlank() ? textoPlanoDeLrc(lrc) : plano, lrc, metodo, dif, false);
     }
 
     private JsonNode buscarExacta(CancionDTO c) throws Exception {

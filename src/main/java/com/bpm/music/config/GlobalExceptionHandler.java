@@ -38,6 +38,18 @@ public class GlobalExceptionHandler {
                 e.getReason() != null ? e.getReason() : "Error");
     }
 
+    /** Algo que ya está en marcha o un estado que no lo permite ("ya hay un trabajo en curso"). */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> conflicto(IllegalStateException e) {
+        String m = e.getMessage();
+        // Los mensajes técnicos de librerías no se muestran (solo los nuestros, cortos y en español)
+        if (m == null || m.length() > 200 || m.matches("(?s).*(org[.]|java[.]|jakarta[.]|Exception|SQL).*")) {
+            log.warn("Conflicto inesperado: {}", m);
+            m = "No se puede hacer ahora. Inténtalo de nuevo en un momento.";
+        }
+        return error(HttpStatus.CONFLICT, m);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> argumento(IllegalArgumentException e) {
         return error(HttpStatus.BAD_REQUEST, e.getMessage() != null ? e.getMessage() : "Datos inválidos");

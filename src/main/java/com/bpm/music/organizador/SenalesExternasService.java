@@ -98,7 +98,8 @@ public class SenalesExternasService {
         for (CancionDTO c : biblioteca.todas()) {
             if (procesadas >= n || !seguir.getAsBoolean()) break;
             if (hechas.contains(c.getId())) continue;
-            vincular(c);
+            // Si el proveedor no está disponible no se guarda nada: se para y se sigue otro día
+            if (!vincular(c)) break;
             procesadas++;
         }
         if (procesadas > 0) recargar();
@@ -110,7 +111,8 @@ public class SenalesExternasService {
         return Math.max(0, biblioteca.total() - vinculos.cancionesConVinculo(FUENTE).size());
     }
 
-    void vincular(CancionDTO c) {
+    /** Devuelve true si guardó una decisión (vinculada, ambigua o sin coincidencia). */
+    boolean vincular(CancionDTO c) {
         CancionExterna v = vinculos.findByProveedorAndCancionId(FUENTE, c.getId()).orElseGet(CancionExterna::new);
         v.setCancionId(c.getId());
         v.setProveedor(FUENTE);
@@ -122,9 +124,9 @@ public class SenalesExternasService {
             v.setMetodo("etiqueta-archivo");
             v.setDetalle("Enlace guardado en la etiqueta del archivo");
             vinculos.save(v);
-            return;
+            return true;
         }
-        if (!ytm.disponible()) return; // sin proveedor: se intentará otro día
+        if (!ytm.disponible()) return false; // sin proveedor: se intentará otro día
         try {
             JsonNode r = ytm.buscar(c.getArtista() + " " + c.getNombre(), "songs", 5).path("resultados");
             CancionExterna mejor = null;
@@ -139,7 +141,7 @@ public class SenalesExternasService {
                     v.setMetodo("busqueda-exacta");
                     v.setDetalle(recortar(it.path("titulo").asText() + " · " + String.join(", ", arts) + " · " + dur + " s"));
                     vinculos.save(v);
-                    return;
+                    return true;
                 }
                 if (res == Coincidencias.Resultado.AMBIGUA && mejor == null) {
                     mejor = v;
@@ -151,9 +153,11 @@ public class SenalesExternasService {
             v.setMetodo("busqueda");
             if (mejor == null) { v.setIdExterno(null); v.setDetalle("Sin coincidencia fiable"); }
             vinculos.save(v);
+            return true;
         } catch (Exception e) {
             // Proveedor caído o en pausa: no se guarda nada y se reintenta en otra pasada
             log.debug("No se pudo vincular {}: {}", c.getId(), e.getMessage());
+            return false;
         }
     }
 

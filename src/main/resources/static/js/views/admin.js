@@ -18,8 +18,8 @@ export async function adminView(el, _p, query, isStale) {
   const tab = query.tab || 'resumen';
   setTitle('Administración');
   setHero([120, 40, 50]);
-  const tabs = [['resumen', 'Resumen'], ['descargas', 'Descargar música'], ['subir', 'Subir canciones'], ['biblioteca', 'Biblioteca'], ['generos', 'Géneros'], ['usuarios', 'Usuarios'], ['cuentas', 'Cuentas nuevas'], ['solicitudes', 'Colaboradores'], ['reportes', 'Reportes'], ['soporte', 'Soporte técnico']];
-  const [resumen, com] = tab === 'soporte' ? [{}, {}] : await Promise.all([api('/api/admin/resumen'), api('/api/admin/comunidad/conteos').catch(() => ({}))]);
+  const tabs = [['resumen', 'Resumen'], ['descargas', 'Descargar música'], ['subir', 'Subir canciones'], ['biblioteca', 'Biblioteca'], ['generos', 'Géneros'], ['usuarios', 'Usuarios'], ['cuentas', 'Cuentas nuevas'], ['solicitudes', 'Colaboradores'], ['reportes', 'Reportes'], ['organizacion', 'Organización'], ['soporte', 'Soporte técnico']];
+  const [resumen, com] = tab === 'soporte' || tab === 'organizacion' ? [{}, {}] : await Promise.all([api('/api/admin/resumen'), api('/api/admin/comunidad/conteos').catch(() => ({}))]);
   const pendCom = com.reportesAbiertos || 0;
   if (isStale()) return;
   el.innerHTML = `<div class="section-head" style="margin-top:8px"><h2 style="font-size:28px">${icon('shield')} Administración</h2></div>
@@ -36,6 +36,7 @@ export async function adminView(el, _p, query, isStale) {
   else if (tab === 'generos') await generosTab(body);
   else if (tab === 'reportes') await reportesTab(body);
   else if (tab === 'descargas') await descargasTab(body);
+  else if (tab === 'organizacion') await (await import('./organizacion-admin.js')).organizacionTab(body);
   else await solicitudesTab(body);
 }
 

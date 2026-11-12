@@ -29,7 +29,9 @@ public class AuditoriaInterceptor implements HandlerInterceptor, WebMvcConfigure
             "/api/admin/aviso", 3,
             "/api/admin/soporte/exportar", 6,
             "/api/admin/soporte/respaldos", 3,
-            "/api/admin/descargas", 20);
+            "/api/admin/descargas", 20,
+            "/api/admin/organizacion/evaluar", 2,
+            "/api/admin/organizacion/iniciar", 4);
     private final Map<String, ConcurrentLinkedDeque<Long>> usos = new ConcurrentHashMap<>();
     private static final Set<String> LECTURA = Set.of("GET", "HEAD", "OPTIONS");
 

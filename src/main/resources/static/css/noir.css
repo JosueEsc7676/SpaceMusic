@@ -961,3 +961,25 @@ body.admin-mode .sop-lado, body.admin-mode .sop-contenido { min-width: 0; }
 .dl-yt-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .dl-yt-dur { font-size: 13px; font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) { .dl-yt-dur { display: none; } .dl-yt-fila .sop-chip { font-size: 11px; } }
+
+/* ── Administración → Organización ── */
+.org { display: flex; flex-direction: column; gap: 16px; margin-top: 8px; }
+.org-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+.org-etapas { margin: 8px 0; padding-left: 20px; display: grid; gap: 4px; font-size: 14px; }
+.org-etapas li.hecha { color: var(--text-2); }
+.org-etapas li.actual { font-weight: 700; }
+.org-cifras { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.org-cifras div { background: var(--bg-elev-3); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; }
+.org-cifras b { font-size: 22px; }
+.org-cifras span { color: var(--text-2); font-size: 12px; }
+.org-cambios { display: flex; flex-direction: column; gap: 8px; }
+.org-cambio { display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; background: var(--bg-elev-2); border-radius: var(--radius); }
+.org-cambio > img, .org-cambio .cover-img { width: 56px; height: 56px; border-radius: 6px; flex-shrink: 0; object-fit: cover; }
+.org-cambio-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.org-prop-img { width: 120px; height: 120px; object-fit: cover; border-radius: 8px; margin-top: 6px; }
+.org-pre { white-space: pre-wrap; max-height: 200px; overflow: auto; font-size: 12px; background: var(--bg-elev-3); padding: 8px; border-radius: 8px; }
+.org-ajustes { display: grid; gap: 8px; }
+.org-ajuste { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 14px; }
+.org-ajuste input { width: 80px; background: var(--bg-elev-3); border: 1px solid var(--line-strong); color: var(--text); border-radius: 8px; padding: 6px 8px; }
+.org-errores { font-size: 12px; color: var(--text-2); }
+@media (max-width: 640px) { .org-cambio { flex-wrap: wrap; } }
