@@ -252,17 +252,23 @@ struct Destacado: View {
                     HStack(spacing: 10) {
                         Button { Task { await reproducir() } } label: {
                             Label(cargando ? "Cargando…" : "Reproducir", systemImage: "play.fill")
+                                .lineLimit(1).fixedSize()
                         }
                         .buttonStyle(BotonPrincipal())
                         .disabled(cargando)
-                        NavigationLink(value: Destino.mix(id: mix.id, titulo: mix.titulo)) { Text("Ver mezcla") }
-                            .buttonStyle(BotonSecundario())
+                        NavigationLink(value: Destino.mix(id: mix.id, titulo: mix.titulo)) {
+                            Text("Ver mezcla").lineLimit(1).fixedSize()
+                        }
+                        .buttonStyle(BotonSecundario())
                     }
                     .padding(.top, 4)
                 }
+                // Los botones nunca se parten en sílabas: si no cabe, la portada se achica.
+                .layoutPriority(1)
                 Spacer(minLength: 0)
                 Mosaico(rutas: mix.portadas, radio: 12)
-                    .frame(width: 96, height: 96)
+                    .frame(minWidth: 0, maxWidth: 96)
+                    .frame(height: 96, alignment: .trailing)
                     .rotationEffect(.degrees(6))
                     .shadow(color: .black.opacity(0.5), radius: 14, y: 8)
                     .accessibilityHidden(true)

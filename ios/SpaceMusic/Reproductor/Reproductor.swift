@@ -336,7 +336,6 @@ final class Reproductor {
         }
         let item = AVPlayerItem(asset: AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: false]))
         item.preferredForwardBufferDuration = 5
-        ProcesadorAudio.compartido.conectar(item)
         return item
     }
 
@@ -364,12 +363,20 @@ final class Reproductor {
         cambioDeCancion()
     }
 
-    /// Si en 12 s la canción no está lista, reintenta una vez (renovando la sesión por si el permiso del audio venció);
-    /// si vuelve a fallar, salta a la siguiente con el motivo, en vez de dejar la rueda girando en 0:00.
+    /// Si la canción no avanza, reintenta una vez (renovando la sesión por si el permiso del audio venció) y,
+    /// si vuelve a fallar, salta a la siguiente con el motivo. Mientras sigan llegando datos se espera:
+    /// una conexión lenta no es un fallo (antes se saltaban canciones que solo tardaban en cargar).
     private func vigilar(_ item: AVPlayerItem, cancion c: Cancion) {
         vigilante?.cancel()
         vigilante = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(12))
+            var cargado = 0.0, sinAvance = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(4))
+                guard let self, !Task.isCancelled, item === self.itemActual, item.status != .readyToPlay, self.intencionSonar else { return }
+                let ahora = item.loadedTimeRanges.map { $0.timeRangeValue.end.seconds }.max() ?? 0
+                if ahora > cargado + 0.1 { cargado = ahora; sinAvance = 0 } else { sinAvance += 1 }
+                if sinAvance >= 5 { break }   // 20 s sin recibir nada
+            }
             guard let self, !Task.isCancelled, item === self.itemActual, item.status != .readyToPlay, self.intencionSonar else { return }
             if self.reintentada != c.id {
                 self.reintentada = c.id
@@ -414,8 +421,36 @@ final class Reproductor {
         }
     }
 
+    /// La canción actual ya está completa en memoria (no compite con la siguiente por la conexión).
+    private var actualCompleta: Bool {
+        guard let item = jugador.currentItem else { return false }
+        let total = item.duration.seconds.isFinite ? item.duration.seconds : duracion
+        let fin = item.loadedTimeRanges.map { $0.timeRangeValue.end.seconds }.max() ?? 0
+        return total > 0 && fin >= total - 1
+    }
+
+    /// Una sola descarga a la vez: la siguiente canción (y guardar la actual para sin conexión) solo empiezan
+    /// cuando la actual ya bajó completa, o si le quedan menos de 40 s.
+    private func quizaPrecargar() {
+        guard siguientePendiente, jugador.currentItem != nil else { return }
+        let restante = duracion > 0 ? duracion - tiempo : .infinity
+        if restante < 40 || (actualCompleta && !Descargas.compartido.guardandoAlEscuchar) { prepararSiguiente() }
+    }
+
     /// Deja lista la siguiente canción dentro del reproductor.
     private func prepararSiguiente() {
+        let restante = duracion > 0 ? duracion - tiempo : .infinity
+        if jugador.currentItem != nil, itemActual != nil, !actualCompleta, restante >= 40, cola.count - indice > 1 {
+            // Aún se está bajando la actual: se deja pendiente para no repartir la conexión entre dos canciones.
+            for it in jugador.items() where it !== jugador.currentItem { jugador.remove(it) }
+            itemSiguiente = nil
+            indiceSiguiente = nil
+            siguientePendiente = true
+            if radioAutomatica, repetir == .no, cola.count - indice <= 3, actual != nil {
+                Task { await pedirRadio(cantidad: 20) }
+            }
+            return
+        }
         siguientePendiente = false
         for it in jugador.items() where it !== jugador.currentItem { jugador.remove(it) }
         itemSiguiente = nil
@@ -554,7 +589,8 @@ final class Reproductor {
                     self.saltosSeguidos = 0
                     if dur.isFinite, dur > 0 { self.duracion = dur }
                     self.actualizarNowPlaying()
-                    if self.siguientePendiente { self.siguientePendiente = false; self.prepararSiguiente() }
+                    ProcesadorAudio.compartido.conectar(it)
+                    self.quizaPrecargar()
                 }
             }
         }
@@ -584,14 +620,13 @@ final class Reproductor {
         ultimoTick = t
         let umbral = duracion > 0 ? min(30, duracion * 0.5) : 30
         if !registrada, escuchado >= umbral { registrarEscucha(forzar: true) }
-        // Como la web: a los 20 s de escuchar se guarda la canción (y la siguiente) para tenerla sin conexión.
-        if escuchado >= 20, !guardadaAlEscuchar, let c = actual {
+        // Como la web: tras 20 s de escucha se guarda la canción para tenerla sin conexión, pero solo cuando
+        // ya bajó completa, para no competir con lo que suena ni con la siguiente.
+        if escuchado >= 20, !guardadaAlEscuchar, actualCompleta, let c = actual {
             guardadaAlEscuchar = true
             Descargas.compartido.guardarAlEscucharla(c)
-            if let j = calcularSiguiente(manual: false), j != indice, cola.indices.contains(j) {
-                Descargas.compartido.guardarAlEscucharla(cola[j])
-            }
         }
+        quizaPrecargar()
         if Date().timeIntervalSince(ultimoGuardado) >= 5 { guardarEstado(); ultimoGuardado = Date() }
     }
 

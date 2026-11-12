@@ -98,6 +98,9 @@ final class Descargas {
         }
     }
 
+    /// Hay una canción guardándose para sin conexión (el reproductor espera a que termine para precargar).
+    var guardandoAlEscuchar: Bool { !bajandoAutomatica.isEmpty }
+
     func borrarAutomaticas() {
         if let dir = carpetaAutomaticas { try? FileManager.default.removeItem(at: dir) }
         automaticas = []

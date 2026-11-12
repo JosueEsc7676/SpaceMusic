@@ -668,7 +668,9 @@ struct LineaLetraVista: View {
                 }
                 .accessibilityLabel(linea.texto)
             } else {
-                Text(linea.texto).foregroundStyle(.white.opacity(pasada ? 0.3 : 0.36))
+                // Mismo texto palabra por palabra que la línea activa: al activarse no cambia el corte de líneas
+                // (antes la línea se recolocaba y parecía vibrar).
+                karaoke(nil)
             }
         }
         .font(.system(size: tamano, weight: .heavy))
@@ -677,17 +679,18 @@ struct LineaLetraVista: View {
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
         .blur(radius: activa || enfocada ? 0 : min(Double(distancia) * 0.9, 3.2))
-        .scaleEffect(activa ? 1 : 0.97, anchor: .leading)
-        .animation(.spring(response: 0.55, dampingFraction: 0.85), value: activa)
+        .animation(.easeInOut(duration: 0.35), value: activa)
         .animation(.easeInOut(duration: 0.3), value: enfocada)
     }
 
     /// Cada palabra pasa de atenuada a blanca durante su propio tiempo, así la luz avanza con la voz.
-    private func karaoke(_ t: Double) -> Text {
+    /// `t` nil: línea inactiva (toda atenuada). Con tiempo: cada palabra se ilumina en su momento.
+    private func karaoke(_ t: Double?) -> Text {
         let palabras = LectorLRC.tiemposPalabras(linea)
+        let base = pasada ? 0.3 : 0.36
         return palabras.reduce(Text("")) { texto, p in
-            let progreso = min(max((t - p.inicio) / max(p.fin - p.inicio, 0.05), 0), 1)
-            return texto + Text(p.texto).foregroundColor(.white.opacity(0.36 + 0.64 * progreso))
+            let progreso = t.map { min(max(($0 - p.inicio) / max(p.fin - p.inicio, 0.05), 0), 1) } ?? 0
+            return texto + Text(p.texto).foregroundColor(.white.opacity(base + (1 - base) * progreso))
         }
     }
 }
