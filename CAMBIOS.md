@@ -1,5 +1,11 @@
 # Registro de cambios
 
+## Versión 3.4.1
+- **Arreglo visual:** la portada en la ventana "Dedicar" no tenía tamaño y ocupaba toda la pantalla (web y APK, que carga las mismas páginas). Regla general para portadas en filas de ventanas.
+- **Dedicatorias con letra** (`js/dedicatorias.js`): 3 pasos (para quién → qué parte → mensaje). Lista de seguidores con buscador (`GET /api/dedicatorias/personas`, mutuos primero); bloques de la letra (LRC o texto, sin marcas de tiempo por palabra) con inicio y fin, o "Toda la canción"; tarjeta 1080×1350 con portada, título, artista y letra, para compartir o descargar.
+- **Servidor:** `Dedicatoria` con `completa`, `segundoFin` y `letra`; el fragmento se valida contra la letra real (líneas seguidas, máximo 16).
+- **Detalle rediseñado:** fondo con la portada, rango del fragmento, letra destacada o "Te dedicaron esta canción completa", mensaje, escuchar, guardar y compartir tarjeta.
+
 ## Versión 3.4
 - **Recuperado el trabajo de Codex** (desplegado el 10/11/2026 y sobrescrito por 3.3/3.3.1): administración unificada (oculta la música dentro del panel), portadas consultadas por huella (sin leer el LONGBLOB), bloqueo de escrituras en playlists (`findForUpdate`). Unido con historial en la rama `codex-20261110`.
 - **A. Buscar en YouTube Music** (Administración → Descargar música): adaptador `ytmusicapi` (biblioteca no oficial) por `scripts/ytm-proveedor.py`, con 20 s de espera, una consulta a la vez, caché de 30 min, 1 reintento y pausa automática; estados por resultado; encolar por id sin duplicados (sincronizado); álbumes completos o por canción; la descarga sigue en la cola de siempre.

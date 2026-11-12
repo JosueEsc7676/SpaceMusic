@@ -29,4 +29,10 @@ public class Dedicatoria {
     private boolean oculta;
     private LocalDateTime fecha = LocalDateTime.now();
     private LocalDateTime respondidaEn;
+    /** La canción completa (no un fragmento). */
+    private Boolean completa; // objeto (no primitivo): la columna nueva admite nulos en las filas ya existentes
+    /** Hasta qué segundo llega el fragmento elegido (null si no se eligió letra). */
+    private Integer segundoFin;
+    /** Las líneas de letra elegidas, tal cual están en la canción (una por renglón). */
+    @Column(columnDefinition = "TEXT") private String letra;
 }

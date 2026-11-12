@@ -1,15 +1,26 @@
 {
-  "version": "3.4",
-  "titulo": "Novedades: rutas musicales, dedicatorias y más",
+  "version": "3.4.1",
+  "titulo": "Novedades: dedicatorias con letra",
   "puntos": [
-    "Rutas musicales: elige cuánto dura, cómo empieza y adónde quieres llegar (por ejemplo, de tranquilo a con energía) y ajústala sobre la marcha.",
-    "Descubrir con control: Familiar, Cercano o Sorpréndeme, con el porqué de cada canción. «Hoy no» y «No me gusta este estilo» son cosas distintas.",
-    "El punto donde coincidimos: invita a alguien que sigues o te sigue; si acepta, verán lo que comparten y canciones puente para los dos.",
-    "Dedicatorias: dedica una canción desde el segundo exacto, con un mensaje. Las que te dedican puedes guardarlas en «Canciones que me dedicaron».",
-    "Preparar escucha sin internet: elige tiempo, espacio y cuántas favoritas o nuevas; revisa la selección antes de descargar.",
-    "Recomendaciones más afinadas y búsqueda, mixes y radio mucho más rápidos."
+    "Al dedicar, elige a quién desde una lista con buscador: primero las personas que se siguen mutuamente.",
+    "Elige qué parte dedicar: toca un bloque de la letra para el inicio y otro para el fin, o dedica la canción completa.",
+    "Se genera una tarjeta con la portada, el nombre, el artista y la letra dedicada, que puedes compartir.",
+    "Quien la recibe ve la letra elegida (o «Te dedicaron esta canción completa») y puede escuchar justo ese fragmento.",
+    "Arreglado: la portada se veía gigante en la ventana de dedicar (web y app de Android)."
   ],
   "anteriores": [
+    {
+      "version": "3.4",
+      "titulo": "Novedades: rutas musicales, dedicatorias y más",
+      "puntos": [
+        "Rutas musicales: elige cuánto dura, cómo empieza y adónde quieres llegar (por ejemplo, de tranquilo a con energía) y ajústala sobre la marcha.",
+        "Descubrir con control: Familiar, Cercano o Sorpréndeme, con el porqué de cada canción. «Hoy no» y «No me gusta este estilo» son cosas distintas.",
+        "El punto donde coincidimos: invita a alguien que sigues o te sigue; si acepta, verán lo que comparten y canciones puente para los dos.",
+        "Dedicatorias: dedica una canción desde el segundo exacto, con un mensaje. Las que te dedican puedes guardarlas en «Canciones que me dedicaron».",
+        "Preparar escucha sin internet: elige tiempo, espacio y cuántas favoritas o nuevas; revisa la selección antes de descargar.",
+        "Recomendaciones más afinadas y búsqueda, mixes y radio mucho más rápidos."
+      ]
+    },
     {
       "version": "3.3.1",
       "titulo": "Arreglo: suena la canción que eliges",

@@ -170,4 +170,38 @@ class ExperienciasTest {
         Map<String, Object> pocas = preparar.proponer(carla.getId(), 600, 50, 100);
         assertTrue(((List<?>) pocas.get("canciones")).size() <= 260);
     }
+
+    @Test
+    void dedicatoriaConLetraElegidaYCancionCompleta() {
+        Cancion c = lista.get(3);
+        c.setLetraSincronizada("[00:10.00] primera linea\n[00:14.00] segunda linea\n\n[00:20.00] tercera linea");
+        c.setLetra("primera linea\nsegunda linea\n\ntercera linea");
+        canciones.save(c);
+        biblioteca.invalidar();
+        sigue(carla, beto);
+        // Fragmento real (líneas seguidas): se guarda tal cual
+        Dedicatoria d = dedicatorias.enviar(beto.getId(), "carla_exp", c.getId(), 10, "mira", false, List.of("primera linea", "segunda linea"), 20);
+        assertEquals("primera linea\nsegunda linea", d.getLetra());
+        assertEquals(20, d.getSegundoFin());
+        // Texto inventado o líneas no seguidas: no
+        assertThrows(IllegalArgumentException.class, () -> dedicatorias.enviar(beto.getId(), "carla_exp", c.getId(), 0, null, false, List.of("te amo mucho"), null));
+        assertThrows(IllegalArgumentException.class, () -> dedicatorias.enviar(beto.getId(), "carla_exp", c.getId(), 0, null, false, List.of("primera linea", "tercera linea"), null));
+        // Canción completa: sin fragmento y desde el inicio
+        Dedicatoria completa = dedicatorias.enviar(beto.getId(), "carla_exp", c.getId(), 50, null, true, List.of("primera linea"), null);
+        assertTrue(completa.getCompleta());
+        assertNull(completa.getLetra());
+        assertEquals(0, completa.getSegundo());
+        assertEquals(true, dedicatorias.ver(completa.getId(), carla.getId()).get("completa"));
+    }
+
+    @Test
+    void personasParaDedicarSonLasQueTeSiguen() {
+        sigue(carla, ana);   // Carla sigue a Ana: Ana puede dedicarle
+        sigue(ana, carla);   // y se siguen las dos
+        var l = dedicatorias.personas(ana.getId(), null);
+        assertTrue(l.stream().anyMatch(p -> p.get("username").equals("carla_exp") && Boolean.TRUE.equals(p.get("mutuo"))));
+        assertTrue(l.stream().noneMatch(p -> p.get("username").equals("ana_exp")));
+        assertTrue(dedicatorias.personas(ana.getId(), "zzz").isEmpty());
+        assertEquals(1, dedicatorias.personas(ana.getId(), "@carla").stream().filter(p -> p.get("username").equals("carla_exp")).count());
+    }
 }

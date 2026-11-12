@@ -220,71 +220,9 @@ async function elegirCancion(titulo, alElegir) {
   });
 }
 
-// ═══════════════════ 3. Dedicatorias ═══════════════════
+// ═══════════════════ 3. Dedicatorias (en dedicatorias.js) ═══════════════════
 
-/** Desde el menú de una canción: dedicarla desde el segundo actual (si es la que suena). */
-export async function dedicarCancion(song) {
-  const seg = player.current?.id === song.id ? Math.floor(player.audio.currentTime || 0) : 0;
-  await modal({
-    title: 'Dedicar esta canción',
-    body: `<div class="row" style="gap:12px;margin-bottom:12px">${coverImg(song.portadaUrl, 48)}<div style="min-width:0"><b class="ellipsis" style="display:block">${esc(song.nombre)}</b><span class="muted">${esc(song.artista)}</span></div></div>
-      <div class="field"><label>Para (alguien que te sigue)</label><input data-para placeholder="@usuario" autocomplete="off"></div>
-      <div class="field"><label>Desde el segundo</label><input data-seg type="number" min="0" max="${song.duracionSegundos}" value="${seg}"> <span class="muted" style="font-size:12px">${fmtTime(seg)}</span></div>
-      <div class="field"><label>Mensaje (opcional)</label><textarea data-msg maxlength="280" placeholder="Por qué esta canción, por qué este momento"></textarea></div>
-      <p class="muted" style="font-size:12px;margin:0">Se envía solo cuando pulsas Enviar.</p>`,
-    actions: [{ label: 'Cancelar', value: null }, { label: 'Enviar', value: 'ok', primary: true }],
-    onAction: async (v, m) => {
-      if (v !== 'ok') return;
-      await api('/api/dedicatorias', { method: 'POST', body: { username: m.querySelector('[data-para]').value, cancionId: song.id, segundo: +m.querySelector('[data-seg]').value || 0, mensaje: m.querySelector('[data-msg]').value } });
-      toast('Dedicatoria enviada');
-    },
-  });
-}
-
-export async function dedicatoriasView(el, params) {
-  setHero([200, 70, 110]);
-  setTitle('Dedicatorias');
-  if (params?.id) {
-    let d;
-    try { d = await api('/api/dedicatorias/' + params.id); } catch (e) { el.innerHTML = emptyState('lock', 'No puedes ver esta dedicatoria', e.message); return; }
-    const c = d.cancion;
-    el.innerHTML = cabecera(d.recibida ? `${d.persona.nombre} te dedicó una canción` : `Dedicaste a ${d.persona.nombre}`, new Date(d.fecha).toLocaleString(), 'heart') + (c ? `
-      <section class="panel exp-ded"><div class="exp-ded-portada">${coverImg(c.portadaUrl, 300)}</div>
-        <div><h2 style="margin:0">${esc(c.nombre)}</h2><p class="muted">${esc(c.artista)}${d.segundo ? ' · desde el ' + fmtTime(d.segundo) : ''}</p>
-          ${d.mensaje ? `<blockquote class="exp-msg">“${esc(d.mensaje)}”</blockquote>` : ''}
-          <div class="row wrap" style="gap:8px"><button class="btn primary" data-oir>${icon('play', 'sm')} Escuchar ${d.segundo ? 'desde ese momento' : ''}</button>
-            ${d.recibida ? `<button class="btn" data-guardar>${icon(d.guardada ? 'heartFill' : 'heart', 'sm')} ${d.guardada ? 'Guardada' : 'Guardar'}</button>` : ''}</div>
-          ${d.respuesta ? `<p class="exp-resp"><b>${d.recibida ? 'Tu respuesta' : 'Respondió'}:</b> ${esc(d.respuesta)}</p>` : d.recibida ? `<div class="field" style="margin-top:12px"><textarea data-resp maxlength="280" placeholder="Responder…"></textarea><button class="btn sm" data-responder style="margin-top:6px">Responder</button></div>` : '<p class="muted">Todavía no responde.</p>'}
-        </div></section>` : emptyState('note', 'La canción ya no está en el servidor'));
-    el.querySelector('[data-oir]')?.addEventListener('click', () => {
-      player.play([c], 0, { type: 'dedicatoria', label: 'Dedicatoria', route: '#/dedicatorias/' + d.id });
-      if (d.segundo) player.audio.addEventListener('loadedmetadata', () => player.seek(d.segundo), { once: true });
-    });
-    el.querySelector('[data-guardar]')?.addEventListener('click', async () => { await api(`/api/dedicatorias/${d.id}/guardar`, { method: 'POST', body: { guardar: !d.guardada } }).catch(errorToast); dedicatoriasView(el, params); });
-    el.querySelector('[data-responder]')?.addEventListener('click', async () => {
-      try { await api(`/api/dedicatorias/${d.id}/respuesta`, { method: 'POST', body: { texto: el.querySelector('[data-resp]').value } }); toast('Respuesta enviada'); dedicatoriasView(el, params); } catch (e) { errorToast(e); }
-    });
-    return;
-  }
-  const l = await api('/api/dedicatorias');
-  const guardadas = l.recibidas.filter((d) => d.guardada && d.cancion);
-  const item = (d) => `<a class="exp-item" href="#/dedicatorias/${d.id}">${d.cancion ? coverImg(d.cancion.portadaUrl, 48) : ''}<div class="exp-desc-txt"><b class="ellipsis">${esc(d.cancion?.nombre || 'Canción eliminada')}</b>
-    <span class="muted ellipsis">${d.recibida ? 'De' : 'Para'} ${esc(d.persona.nombre || '')}${d.mensaje ? ' · “' + esc(d.mensaje) + '”' : ''}</span></div>${d.recibida && !d.vista ? '<span class="sop-chip warn">Nueva</span>' : ''}</a>`;
-  el.innerHTML = cabecera('Dedicatorias', 'Canciones para un momento. Dedícalas desde el menú de cualquier canción (⋯ → Dedicar).', 'heart') + `
-    ${guardadas.length ? `<section class="panel"><div class="row" style="justify-content:space-between"><h3 style="margin:0">Canciones que me dedicaron</h3><button class="btn sm" data-oir-g>${icon('play', 'sm')}</button></div>
-      ${trackList(guardadas.map((d) => d.cancion), { context: { type: 'dedicadas', label: 'Canciones que me dedicaron', route: '#/dedicatorias' }, showAlbum: false })}</section>` : ''}
-    <section class="panel"><h3>Recibidas</h3>${l.recibidas.length ? `<div class="exp-lista">${l.recibidas.map(item).join('')}</div>` : '<p class="muted">Aún no te han dedicado canciones.</p>'}</section>
-    <section class="panel"><h3>Enviadas</h3>${l.enviadas.length ? `<div class="exp-lista">${l.enviadas.map(item).join('')}</div>` : '<p class="muted">Todavía no dedicas ninguna.</p>'}</section>
-    <section class="panel"><h3>Privacidad</h3><p class="muted" style="margin-top:0">Solo pueden dedicarte canciones las personas que tú sigues. También puedes dejar de recibir de alguien.</p>
-      ${l.bloqueadas.length ? `<p>No recibes de: ${l.bloqueadas.map((u) => `<button class="chip" data-desbloq="${esc(u)}">@${esc(u)} ✕</button>`).join(' ')}</p>` : ''}
-      <button class="btn sm" data-bloq>Dejar de recibir de alguien</button></section>`;
-  el.querySelector('[data-oir-g]')?.addEventListener('click', () => player.play(guardadas.map((d) => d.cancion), 0, { type: 'dedicadas', label: 'Canciones que me dedicaron', route: '#/dedicatorias' }));
-  el.querySelector('[data-bloq]').onclick = async () => {
-    const u = await promptDialog('Dejar de recibir dedicatorias', { label: 'Usuario', placeholder: '@usuario', ok: 'Bloquear' });
-    if (u) { await api('/api/dedicatorias/bloqueos', { method: 'POST', body: { username: u, bloquear: true } }).catch(errorToast); dedicatoriasView(el, params); }
-  };
-  el.querySelectorAll('[data-desbloq]').forEach((b) => b.onclick = async () => { await api('/api/dedicatorias/bloqueos', { method: 'POST', body: { username: b.dataset.desbloq, bloquear: false } }).catch(errorToast); dedicatoriasView(el, params); });
-}
+export { dedicarCancion, dedicatoriasView } from './dedicatorias.js';
 
 // ═══════════════════ 5. Preparar escucha sin internet ═══════════════════
 

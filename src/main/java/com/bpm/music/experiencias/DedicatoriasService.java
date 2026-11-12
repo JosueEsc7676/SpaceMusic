@@ -5,6 +5,7 @@ import com.bpm.music.models.Usuario;
 import com.bpm.music.repositories.SeguimientoRepository;
 import com.bpm.music.repositories.UsuarioRepository;
 import com.bpm.music.services.BibliotecaService;
+import com.bpm.music.services.LetrasService;
 import com.bpm.music.services.NotificacionesService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +27,10 @@ public class DedicatoriasService {
     private final SeguimientoRepository seguimientos;
     private final NotificacionesService notificaciones;
     private final BibliotecaService biblioteca;
+    private LetrasService letras;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setLetras(LetrasService letras) { this.letras = letras; }
 
     public DedicatoriasService(DedicatoriaRepository dedicatorias, BloqueoDedicatoriaRepository bloqueos, UsuarioRepository usuarios,
                                SeguimientoRepository seguimientos, NotificacionesService notificaciones, BibliotecaService biblioteca) {
@@ -39,6 +44,33 @@ public class DedicatoriasService {
 
     @Transactional
     public Dedicatoria enviar(Long uid, String username, Long cancionId, Integer segundo, String mensaje) {
+        return enviar(uid, username, cancionId, segundo, mensaje, false, null, null);
+    }
+
+    /** Líneas de la letra de la canción (de la sincronizada si la hay), sin marcas de tiempo. */
+    List<String> lineasDe(Long cancionId) {
+        Map<String, Object> l = letras.obtener(cancionId);
+        String lrc = Objects.toString(l.get("letraSincronizada"), ""), plano = Objects.toString(l.get("letra"), "");
+        String base = lrc.isBlank() ? plano : lrc;
+        List<String> r = new ArrayList<>();
+        for (String linea : base.split("\\r?\\n")) {
+            String t = linea.replaceAll("\\[[^\\]]*]|<\\d{1,3}:\\d{2}(?:[.:]\\d{1,3})?>", "").replaceAll("\\s{2,}", " ").trim();
+            if (!t.isEmpty()) r.add(t);
+        }
+        return r;
+    }
+
+    private static String clave(String linea) {
+        return BibliotecaService.normalizar(linea);
+    }
+
+    /**
+     * Envía una dedicatoria. Si se eligió letra, deben ser líneas seguidas que estén de verdad en la letra
+     * de la canción (no se puede escribir texto inventado como si fuera la letra).
+     */
+    @Transactional
+    public Dedicatoria enviar(Long uid, String username, Long cancionId, Integer segundo, String mensaje,
+                              boolean completa, List<String> lineas, Integer segundoFin) {
         Usuario para = usuarios.findByUsernameIgnoreCase(username == null ? "" : username.trim().replaceFirst("^@", ""))
                 .filter(Usuario::isActivo).orElseThrow(() -> new IllegalArgumentException("No encontramos a esa persona"));
         if (para.getId().equals(uid)) throw new IllegalArgumentException("Dedícala a otra persona");
@@ -52,15 +84,32 @@ public class DedicatoriasService {
         int seg = segundo == null ? 0 : Math.max(0, Math.min(segundo, Math.max(0, c.getDuracionSegundos() - 5)));
         String texto = mensaje == null ? "" : mensaje.replaceAll("\\p{Cntrl}", " ").trim();
         if (texto.length() > 280) throw new IllegalArgumentException("El mensaje puede tener hasta 280 caracteres");
+        String fragmento = null;
+        Integer fin = null;
+        if (!completa && lineas != null && !lineas.isEmpty()) {
+            if (lineas.size() > 16) throw new IllegalArgumentException("Elige un fragmento más corto (hasta 16 líneas)");
+            List<String> letra = lineasDe(cancionId).stream().map(DedicatoriasService::clave).toList();
+            List<String> elegidas = lineas.stream().map(x -> x == null ? "" : x.trim()).filter(x -> !x.isEmpty()).toList();
+            if (elegidas.isEmpty()) throw new IllegalArgumentException("Elige al menos una línea de la letra");
+            List<String> claves = elegidas.stream().map(DedicatoriasService::clave).toList();
+            if (java.util.Collections.indexOfSubList(letra, claves) < 0) throw new IllegalArgumentException("El fragmento no coincide con la letra de la canción");
+            fragmento = String.join("\n", elegidas);
+            if (fragmento.length() > 2000) throw new IllegalArgumentException("Elige un fragmento más corto");
+            if (segundoFin != null) fin = Math.max(seg, Math.min(segundoFin, c.getDuracionSegundos()));
+        }
         Dedicatoria d = new Dedicatoria();
         d.setDeId(uid);
         d.setParaId(para.getId());
         d.setCancionId(cancionId);
-        d.setSegundo(seg);
+        d.setSegundo(completa ? 0 : seg);
         d.setMensaje(texto.isEmpty() ? null : texto);
+        d.setCompleta(completa);
+        d.setLetra(fragmento);
+        d.setSegundoFin(fin);
         d = dedicatorias.save(d);
         String quien = usuarios.findById(uid).map(Usuario::getNombreVisible).orElse("Alguien");
-        notificaciones.crear(para.getId(), "DEDICATORIA", uid, quien + " te dedicó «" + c.getNombre() + "»" + (seg > 0 ? " desde el " + (seg / 60) + ":" + String.format("%02d", seg % 60) : ""), "#/dedicatorias/" + d.getId());
+        String como = completa ? " completa" : fragmento != null ? " con un fragmento de la letra" : seg > 0 ? " desde el " + (seg / 60) + ":" + String.format("%02d", seg % 60) : "";
+        notificaciones.crear(para.getId(), "DEDICATORIA", uid, quien + " te dedicó «" + c.getNombre() + "»" + como, "#/dedicatorias/" + d.getId());
         return d;
     }
 
@@ -113,6 +162,29 @@ public class DedicatoriasService {
         else bloqueos.deleteByUsuarioIdAndBloqueadoId(uid, otro.getId());
     }
 
+    /**
+     * Personas a las que puedes dedicar: las que te siguen (primero las que también sigues).
+     * Con texto, filtra por usuario o nombre.
+     */
+    public List<Map<String, Object>> personas(Long uid, String q) {
+        Set<Long> sigo = new HashSet<>(seguimientos.siguiendo(uid));
+        String f = q == null ? "" : BibliotecaService.normalizar(q.replaceFirst("^@", ""));
+        List<Map<String, Object>> r = new ArrayList<>();
+        for (Long id : seguimientos.seguidores(uid)) {
+            Usuario u = usuarios.findById(id).filter(Usuario::isActivo).orElse(null);
+            if (u == null) continue;
+            if (!f.isEmpty() && !BibliotecaService.normalizar(u.getUsername() + " " + u.getNombreVisible()).contains(f)) continue;
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("username", u.getUsername());
+            m.put("nombre", u.getNombreVisible());
+            m.put("fotoPerfil", Objects.toString(u.getFotoPerfil(), ""));
+            m.put("mutuo", sigo.contains(id));
+            r.add(m);
+        }
+        r.sort(Comparator.comparing((Map<String, Object> m) -> !(Boolean) m.get("mutuo")).thenComparing(m -> ((String) m.get("nombre")).toLowerCase()));
+        return r.stream().limit(60).toList();
+    }
+
     public Map<String, Object> listas(Long uid) {
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("recibidas", dedicatorias.findTop100ByParaIdAndOcultaFalseOrderByFechaDesc(uid).stream().map(d -> fila(d, uid)).toList());
@@ -126,6 +198,9 @@ public class DedicatoriasService {
         m.put("id", d.getId());
         m.put("cancion", biblioteca.porId(d.getCancionId()).orElse(null));
         m.put("segundo", d.getSegundo());
+        m.put("segundoFin", d.getSegundoFin());
+        m.put("completa", Boolean.TRUE.equals(d.getCompleta()));
+        m.put("letra", d.getLetra());
         m.put("mensaje", d.getMensaje());
         m.put("respuesta", d.getRespuesta());
         m.put("fecha", d.getFecha());

@@ -124,9 +124,16 @@ public class ExperienciasController {
 
     @PostMapping("/dedicatorias")
     public Map<String, Object> dedicar(@RequestBody Map<String, Object> b) {
+        List<String> lineas = b.get("lineas") instanceof List<?> l ? l.stream().map(x -> Objects.toString(x, "")).limit(40).toList() : null;
+        Integer fin = b.get("segundoFin") == null ? null : entero(b.get("segundoFin"), 0);
         Dedicatoria d = dedicatorias.enviar(CurrentUser.id(), Objects.toString(b.get("username"), null), id(b.get("cancionId")),
-                entero(b.get("segundo"), 0), Objects.toString(b.get("mensaje"), null));
+                entero(b.get("segundo"), 0), Objects.toString(b.get("mensaje"), null), Boolean.TRUE.equals(b.get("completa")), lineas, fin);
         return Map.of("id", d.getId());
+    }
+
+    @GetMapping("/dedicatorias/personas")
+    public List<Map<String, Object>> personasParaDedicar(@RequestParam(required = false) String q) {
+        return dedicatorias.personas(CurrentUser.id(), q);
     }
 
     @GetMapping("/dedicatorias/{id}")
