@@ -202,13 +202,13 @@ public class PlaylistService {
     // ═══════════════════════ Helpers ═══════════════════════
 
     private Playlist propia(Long id, Long userId) {
-        return repo.findByIdAndUsuarioId(id, userId)
+        return repo.findForUpdate(id).filter(p -> Objects.equals(p.getUsuarioId(), userId))
                 .orElseThrow(() -> new NoSuchElementException("Playlist no encontrada"));
     }
 
     /** Dueño o invitado: pueden cambiar las canciones (no el nombre, la portada ni la visibilidad). */
     private Playlist editable(Long id, Long userId) {
-        Playlist p = repo.findById(id).orElseThrow(() -> new NoSuchElementException("Playlist no encontrada"));
+        Playlist p = repo.findForUpdate(id).orElseThrow(() -> new NoSuchElementException("Playlist no encontrada"));
         if (Objects.equals(p.getUsuarioId(), userId) || colaboradores.existsByPlaylistIdAndUsuarioId(id, userId)) return p;
         throw new NoSuchElementException("Playlist no encontrada");
     }

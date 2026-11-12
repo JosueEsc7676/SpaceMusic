@@ -13,12 +13,12 @@ import java.util.Optional;
 
 public interface CancionRepository extends JpaRepository<Cancion, Long> {
 
-    /** Todas las canciones como DTO ligero, sin cargar portadas ni letras. */
+    /** La huella indica la portada sin leer el LONGBLOB de cada canción. */
     @Query("""
         SELECT new com.bpm.music.dtos.CancionDTO(
             c.id, c.nombre, c.artista, c.album, c.genero,
             c.duracionSegundos, c.reproducciones,
-            CASE WHEN c.portada IS NOT NULL THEN true ELSE false END,
+            CASE WHEN c.portadaHash IS NOT NULL THEN true ELSE false END,
             c.portadaHash, c.portadaUrl, c.formato, c.anio, c.numeroPista,
             CASE WHEN LENGTH(c.letraSincronizada) > 0 THEN true ELSE false END,
             CASE WHEN LENGTH(c.letra) > 0 THEN true ELSE false END,
@@ -37,7 +37,7 @@ public interface CancionRepository extends JpaRepository<Cancion, Long> {
     Optional<String> findRutaById(@Param("id") Long id);
 
     /** [id, huella] de las canciones con portada (para preparar miniaturas). */
-    @Query("SELECT c.id, c.portadaHash FROM Cancion c WHERE c.portada IS NOT NULL")
+    @Query("SELECT c.id, c.portadaHash FROM Cancion c WHERE c.portadaHash IS NOT NULL")
     List<Object[]> findIdsYHuellasConPortada();
 
     @Query("SELECT c.portada FROM Cancion c WHERE c.id = :id")

@@ -37,6 +37,9 @@ public class ServiceWorkerController {
             String ruta = url.substring(i + 7);
             if (ruta.endsWith(".html") && !ruta.equals("/index.html")) continue; // páginas de acceso: siempre de la red
             if (ruta.startsWith("/app/") || ruta.startsWith("/sonidos/")) continue;   // instaladores y sonidos: no se precargan
+            // La administración requiere red: no descargarla para cada oyente al instalar la app.
+            if (java.util.Set.of("/js/views/admin.js", "/js/views/soporte.js",
+                    "/js/views/reportes-admin.js", "/js/views/descargas-admin.js").contains(ruta)) continue;
             archivos.add(ruta);
         }
         archivos.add("/");

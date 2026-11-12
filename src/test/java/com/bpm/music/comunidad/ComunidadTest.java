@@ -40,6 +40,35 @@ class ComunidadTest {
     @Autowired JwtUtil jwt;
     final ObjectMapper json = new ObjectMapper();
 
+    @Autowired com.bpm.music.services.PlaylistService playlists;
+    @Autowired com.bpm.music.services.BibliotecaService biblioteca;
+    @Autowired com.bpm.music.repositories.CancionRepository canciones;
+    @Autowired com.bpm.music.repositories.PlaylistRepository playlistRepo;
+
+    @Test
+    void agregarSimultaneamenteNoDuplicaCancionesNiPierdeElConteo() throws Exception {
+        Usuario u = cuenta("concurrente", Usuario.Rol.USER);
+        var c = canciones.save(com.bpm.music.models.Cancion.builder()
+                .nombre("Concurrencia").artista("Prueba").build());
+        biblioteca.invalidar();
+        biblioteca.requerir(c.getId());
+        Long id = playlists.crear(u.getId(), "Concurrente", "", false, null).getId();
+        var inicio = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(4)) {
+            var tareas = new java.util.ArrayList<java.util.concurrent.Future<Integer>>();
+            for (int i = 0; i < 4; i++) tareas.add(pool.submit(() -> {
+                inicio.await();
+                return (Integer) playlists.agregar(id, u.getId(), java.util.List.of(c.getId())).get("agregadas");
+            }));
+            inicio.countDown();
+            int agregadas = 0;
+            for (var tarea : tareas) agregadas += tarea.get(15, java.util.concurrent.TimeUnit.SECONDS);
+            org.junit.jupiter.api.Assertions.assertEquals(1, agregadas);
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(1, playlistRepo.findCancionIds(id).size());
+        org.junit.jupiter.api.Assertions.assertEquals(1, playlistRepo.findById(id).orElseThrow().getCancionesCount());
+    }
+
     private Usuario cuenta(String nombre, Usuario.Rol rol) {
         return usuarios.findByUsernameIgnoreCase(nombre).orElseGet(() -> {
             Usuario n = new Usuario();
