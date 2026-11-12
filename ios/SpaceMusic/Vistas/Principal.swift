@@ -29,9 +29,11 @@ struct Principal: View {
                 .tag(Pestana.perfil)
                 .badge(eventos.notificacionesSinLeer)
         }
-        .sheet(isPresented: $nav.reproductorAbierto) {
+        // Pantalla completa como Apple Music y Spotify (sin la tarjeta de hoja ni bandas arriba y abajo).
+        // Se cierra deslizando hacia abajo; el fondo transparente deja ver la app mientras se arrastra.
+        .fullScreenCover(isPresented: $nav.reproductorAbierto) {
             ReproductorVista()
-                .presentationDragIndicator(.visible)
+                .presentationBackground(.clear)
         }
         .hojasGlobales(activas: !nav.reproductorAbierto)
         .task {

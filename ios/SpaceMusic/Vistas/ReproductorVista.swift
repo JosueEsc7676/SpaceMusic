@@ -3,10 +3,10 @@ import CoreImage
 import MediaPlayer
 import SwiftUI
 
-/// Reproductor a pantalla completa con el estilo limpio de Apple Music:
-/// portada a todo el ancho que se funde con el color de la canción, título y menú, barra de tiempo,
-/// tres controles grandes, volumen del sistema y abajo Letra · AirPlay · Cola.
-/// Aleatorio y repetir viven en la cola; temporizador, enviar y demás opciones, en el menú "…".
+/// Reproductor a pantalla completa con el estilo de Apple Music:
+/// portada a todo el ancho (desde arriba del todo) que se funde con el color de la canción, título y menú,
+/// barra de tiempo, tres controles grandes, volumen del sistema y abajo Letra · AirPlay · Cola.
+/// Se cierra deslizando hacia abajo. Aleatorio, repetir y radio viven en la cola; el resto, en el menú "…".
 struct ReproductorVista: View {
     enum Panel { case portada, letra, cola }
 
@@ -15,59 +15,111 @@ struct ReproductorVista: View {
     @State private var panel: Panel = .portada
     @State private var arrastrando: Double?
     @State private var colores = ColoresPortada.neutros
+    @State private var desplazamiento: CGFloat = 0
+    @State private var altoControles: CGFloat = 340
 
     var body: some View {
         GeometryReader { espacio in
+            let altoPantalla = espacio.size.height + espacio.safeAreaInsets.top + espacio.safeAreaInsets.bottom
+            let ocupadoAbajo = altoControles + espacio.safeAreaInsets.bottom
             ZStack(alignment: .top) {
-                fondo(espacio.size)
+                fondo(ancho: espacio.size.width, alto: altoPantalla, ocupadoAbajo: ocupadoAbajo, horizontal: espacio.size.width > espacio.size.height)
                 if let c = r.actual {
                     if espacio.size.width > espacio.size.height {
                         horizontal(c, espacio.size)
                     } else {
-                        vertical(c, espacio.size)
+                        vertical(c)
                     }
                 } else {
                     EstadoVista(icono: "music.note", titulo: "No suena nada")
                 }
+                agarradera
             }
-            .frame(width: espacio.size.width, height: espacio.size.height)
-            .clipped()
         }
         .background(colores.fondo.ignoresSafeArea())
+        .offset(y: desplazamiento)
         .preferredColorScheme(.dark)
+        .onAppear { desplazamiento = 0 }
         .onChange(of: r.actual?.id) { _, _ in arrastrando = nil }
+        .onPreferenceChange(AltoControlesReproductor.self) { if $0 > 0 { altoControles = $0 } }
         .task(id: r.actual?.portadaUrl) { await calcularColores() }
-        .accessibilityAction(.escape) { Navegacion.compartida.reproductorAbierto = false }
+        .accessibilityAction(.escape) { cerrar() }
         .hojasGlobales()
+    }
+
+    // MARK: - Cerrar deslizando
+
+    private func cerrar() { Navegacion.compartida.reproductorAbierto = false }
+
+    /// Arrastrar hacia abajo cierra; hacia los lados (solo sobre la portada) cambia de canción.
+    private func gestoArrastre(cambiarCancion: Bool) -> some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .global)
+            .onChanged { g in
+                if g.translation.height > 0, abs(g.translation.height) > abs(g.translation.width) {
+                    desplazamiento = g.translation.height
+                }
+            }
+            .onEnded { g in
+                let vertical = abs(g.translation.height) > abs(g.translation.width)
+                if vertical, desplazamiento > 140 || g.predictedEndTranslation.height > 420 {
+                    cerrar()
+                } else {
+                    withAnimation(.spring(duration: 0.35)) { desplazamiento = 0 }
+                    if cambiarCancion, !vertical {
+                        if g.translation.width < -60 { r.siguiente() }
+                        if g.translation.width > 60 { r.anterior() }
+                    }
+                }
+            }
+    }
+
+    private var agarradera: some View {
+        Capsule()
+            .fill(.white.opacity(0.45))
+            .frame(width: 38, height: 5)
+            .frame(maxWidth: .infinity, minHeight: 30)
+            .contentShape(Rectangle())
+            .gesture(gestoArrastre(cambiarCancion: false))
+            .accessibilityElement()
+            .accessibilityLabel("Cerrar reproductor")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { cerrar() }
     }
 
     // MARK: - Distribución
 
-    private func vertical(_ c: Cancion, _ tamano: CGSize) -> some View {
+    private func vertical(_ c: Cancion) -> some View {
         VStack(spacing: 0) {
             if panel == .portada {
                 // Hueco transparente: la portada se ve detrás (ver `fondo`) y se funde con los controles.
                 Color.clear
                     .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
-                    .gesture(DragGesture(minimumDistance: 30).onEnded { g in
-                        if g.translation.width < -60 { r.siguiente() }
-                        if g.translation.width > 60 { r.anterior() }
-                    })
+                    .gesture(gestoArrastre(cambiarCancion: true))
                     .accessibilityHidden(true)
-                infoCancion(c).padding(.horizontal, 26)
+                VStack(spacing: 0) {
+                    infoCancion(c)
+                    controles(c)
+                }
+                .padding(.horizontal, 26)
+                .padding(.bottom, 8)
+                .background { GeometryReader { g in Color.clear.preference(key: AltoControlesReproductor.self, value: g.size.height) } }
             } else {
-                cabeceraCompacta(c).padding(.horizontal, 26).padding(.top, 34)
+                cabeceraCompacta(c)
+                    .padding(.horizontal, 26)
+                    .padding(.top, 30)
+                    .contentShape(Rectangle())
+                    .gesture(gestoArrastre(cambiarCancion: false))
                 Group {
                     if panel == .letra { LetraCompleta() } else { ColaVista() }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .mask(desvanecido)
                 .transition(.opacity)
+                controles(c)
+                    .padding(.horizontal, 26)
+                    .padding(.bottom, 8)
             }
-            controles(c)
-                .padding(.horizontal, 26)
-                .padding(.bottom, 10)
         }
     }
 
@@ -78,6 +130,7 @@ struct ReproductorVista: View {
                 case .portada:
                     Portada(ruta: c.portadaUrl, tamano: max(0, min(tamano.height - 40, tamano.width * 0.42)), radio: 12)
                         .shadow(color: .black.opacity(0.45), radius: 20, y: 10)
+                        .gesture(gestoArrastre(cambiarCancion: true))
                 case .letra: LetraCompleta().mask(desvanecido)
                 case .cola: ColaVista().mask(desvanecido)
                 }
@@ -95,33 +148,38 @@ struct ReproductorVista: View {
         .padding(.horizontal, 24)
     }
 
-    /// Fondo: color de la portada; en modo portada, la imagen a todo el ancho que se desvanece hacia abajo.
-    private func fondo(_ tamano: CGSize) -> some View {
+    /// Fondo de toda la pantalla (incluidas la barra de estado y la del inicio).
+    /// En modo portada, la imagen ocupa todo el ancho desde arriba y llega hasta justo encima del título,
+    /// donde se desvanece en el color de la canción (como Apple Music).
+    private func fondo(ancho: CGFloat, alto: CGFloat, ocupadoAbajo: CGFloat, horizontal: Bool) -> some View {
         ZStack(alignment: .top) {
             colores.fondo
-            if panel != .portada || tamano.width > tamano.height {
+            if panel != .portada || horizontal {
                 ImagenRemota(ruta: r.actual?.portadaUrl)
+                    .frame(width: ancho, height: alto)
                     .blur(radius: 70)
-                    .opacity(0.55)
-                    .scaleEffect(1.5)
-                LinearGradient(colors: [.black.opacity(0.15), .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
+                    .opacity(0.5)
+                    .scaleEffect(1.4)
+                LinearGradient(colors: [.black.opacity(0.1), .black.opacity(0.5)], startPoint: .top, endPoint: .bottom)
             } else {
+                let altoArte = max(ancho, alto - ocupadoAbajo + 80)
                 ImagenRemota(ruta: r.actual?.portadaUrl, pixeles: 900)
-                    .frame(width: tamano.width, height: tamano.width)
-                    .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.62),
+                    .frame(width: ancho, height: altoArte)
+                    .clipped()
+                    .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.7),
                                                  .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
-                    .scaleEffect(r.sonando ? 1 : 0.94, anchor: .top)
-                    .animation(.spring(duration: 0.45), value: r.sonando)
                     .accessibilityHidden(true)
             }
         }
+        .frame(width: ancho, height: alto, alignment: .top)
+        .clipped()
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.35), value: panel)
     }
 
     private var desvanecido: some View {
-        LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06),
-                               .init(color: .black, location: 0.92), .init(color: .clear, location: 1)],
+        LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.05),
+                               .init(color: .black, location: 0.93), .init(color: .clear, location: 1)],
                        startPoint: .top, endPoint: .bottom)
     }
 
@@ -160,7 +218,7 @@ struct ReproductorVista: View {
             botonFavorito(c)
             menuMas(c)
         }
-        .padding(.bottom, 8)
+        .padding(.bottom, 6)
     }
 
     private func botonFavorito(_ c: Cancion) -> some View {
@@ -364,7 +422,7 @@ struct ReproductorVista: View {
     }
 
     private func abrir(_ d: Destino) {
-        Navegacion.compartida.reproductorAbierto = false
+        cerrar()
         Navegacion.compartida.ir(d)
     }
 
@@ -376,6 +434,12 @@ struct ReproductorVista: View {
         guard !Task.isCancelled else { return }
         withAnimation(.easeInOut(duration: 0.6)) { colores = nuevos }
     }
+}
+
+/// Alto de título + controles, para que la portada llegue justo hasta ellos.
+private struct AltoControlesReproductor: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 /// Colores sacados de la portada (como hace Apple Music): un fondo oscuro legible y un acento claro.
@@ -431,12 +495,20 @@ struct SelectorSalida: UIViewRepresentable {
     func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
 }
 
-/// Letra completa al estilo Apple Music: líneas grandes alineadas a la izquierda, la actual en blanco
-/// (palabra por palabra si la letra trae tiempos), las demás atenuadas y algo desenfocadas.
-/// Tocar una línea salta a ese momento; si deslizas, la letra deja de seguirte unos segundos.
+// MARK: - Letra
+
+/// Letra sincronizada como Apple Music:
+/// - la línea activa se calcula 10 veces por segundo con el tiempo exacto del audio (no cada medio segundo);
+/// - se ilumina palabra por palabra (con los tiempos de la letra si los trae; si no, repartiendo la línea según su largo);
+/// - las demás líneas quedan atenuadas y más desenfocadas cuanto más lejos están;
+/// - la activa se coloca en el primer cuarto de la pantalla con un desplazamiento suave;
+/// - al deslizar con el dedo todo se enfoca y la letra deja de seguir la canción unos segundos;
+/// - tocar una línea salta a ese momento; las pausas largas muestran tres puntos que se van llenando.
 struct LetraCompleta: View {
     @State private var r = Reproductor.compartido
     @State private var letras = Letras.compartido
+    @State private var actual: Int?
+    @State private var manual = false
     @State private var manualHasta = Date.distantPast
 
     var body: some View {
@@ -470,17 +542,16 @@ struct LetraCompleta: View {
     }
 
     private var sincronizada: some View {
-        let actual = letras.indice(en: r.tiempo)
-        return ScrollViewReader { lector in
+        ScrollViewReader { lector in
             ScrollView(showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 26) {
+                LazyVStack(alignment: .leading, spacing: 30) {
                     ForEach(letras.lineas) { l in
-                        let distancia = actual.map { abs(l.id - $0) } ?? 3
-                        LineaLetraVista(linea: l, activa: l.id == actual, pasada: (actual ?? -1) > l.id, distancia: distancia)
+                        LineaLetraVista(linea: l, activa: l.id == actual, pasada: (actual ?? -1) > l.id,
+                                        distancia: actual.map { abs(l.id - $0) } ?? 2, enfocada: manual)
                             .id(l.id)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                manualHasta = .distantPast
+                                manual = false
                                 r.buscar(l.tiempo)
                                 if !r.sonando { r.continuar() }
                             }
@@ -489,119 +560,173 @@ struct LetraCompleta: View {
                     }
                 }
                 .padding(.horizontal, 26)
-                .padding(.top, 40)
-                .padding(.bottom, 320)
+                .padding(.top, 36)
+                .padding(.bottom, 380)
             }
-            .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { _ in manualHasta = Date().addingTimeInterval(3.5) })
-            .onChange(of: actual) { _, nuevo in
-                guard let nuevo, Date() >= manualHasta else { return }
-                withAnimation(.spring(duration: 0.7)) { lector.scrollTo(nuevo, anchor: UnitPoint(x: 0.5, y: 0.18)) }
+            .simultaneousGesture(DragGesture(minimumDistance: 6).onChanged { _ in
+                manual = true
+                manualHasta = Date().addingTimeInterval(3)
+            })
+            .task(id: "\(letras.cancionId ?? 0)-\(letras.lineas.count)") {
+                actual = nil
+                while !Task.isCancelled {
+                    let i = LectorLRC.indice(letras.lineas, en: r.tiempoExacto + 0.15)
+                    let volverASeguir = manual && Date() >= manualHasta
+                    if volverASeguir { manual = false }
+                    if i != actual || volverASeguir {
+                        let primera = actual == nil
+                        actual = i
+                        if !manual, let i {
+                            if primera {
+                                lector.scrollTo(i, anchor: UnitPoint(x: 0, y: 0.22))
+                            } else {
+                                withAnimation(.spring(response: 0.65, dampingFraction: 0.86)) {
+                                    lector.scrollTo(i, anchor: UnitPoint(x: 0, y: 0.22))
+                                }
+                            }
+                        }
+                    }
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
             }
-            .onAppear { if let actual { lector.scrollTo(actual, anchor: UnitPoint(x: 0.5, y: 0.18)) } }
         }
     }
 }
 
-/// Una línea de la letra. La activa se ilumina palabra por palabra con el tiempo exacto del audio.
+/// Una línea de la letra.
 struct LineaLetraVista: View {
     let linea: LineaLetra
     let activa: Bool
     let pasada: Bool
     let distancia: Int
+    /// Mientras el usuario desliza, todas las líneas se ven nítidas (como en Apple Music).
+    let enfocada: Bool
     @State private var r = Reproductor.compartido
+    @ScaledMetric(relativeTo: .largeTitle) private var tamano: CGFloat = 31
 
     var body: some View {
         Group {
             if linea.interludio {
-                Text("• • •").font(.title.weight(.heavy))
-                    .foregroundStyle(.white.opacity(activa ? 0.9 : 0.3))
-                    .scaleEffect(activa ? 1.15 : 1, anchor: .leading)
-                    .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: activa)
-                    .accessibilityLabel("Interludio")
-            } else if activa, !linea.palabras.isEmpty {
-                TimelineView(.periodic(from: .now, by: 0.1)) { _ in
-                    let t = r.tiempoExacto
-                    linea.palabras.reduce(Text("")) { texto, p in
-                        texto + Text(p.texto).foregroundColor(.white.opacity(t >= p.tiempo ? 1 : 0.38))
-                    }
+                PuntosInterludio(linea: linea, activa: activa)
+            } else if activa {
+                TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in
+                    karaoke(r.tiempoExacto)
                 }
                 .accessibilityLabel(linea.texto)
             } else {
-                Text(linea.texto)
-                    .foregroundStyle(.white.opacity(activa ? 1 : pasada ? 0.32 : 0.38))
+                Text(linea.texto).foregroundStyle(.white.opacity(pasada ? 0.3 : 0.36))
             }
         }
-        .font(.system(.title, design: .default).weight(.heavy))
+        .font(.system(size: tamano, weight: .heavy))
+        .lineSpacing(2)
         .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .blur(radius: activa ? 0 : min(Double(distancia) * 0.6, 1.8))
+        .blur(radius: activa || enfocada ? 0 : min(Double(distancia) * 0.9, 3.2))
         .scaleEffect(activa ? 1 : 0.97, anchor: .leading)
-        .animation(.spring(duration: 0.5), value: activa)
+        .animation(.spring(response: 0.55, dampingFraction: 0.85), value: activa)
+        .animation(.easeInOut(duration: 0.3), value: enfocada)
+    }
+
+    /// Cada palabra pasa de atenuada a blanca durante su propio tiempo, así la luz avanza con la voz.
+    private func karaoke(_ t: Double) -> Text {
+        let palabras = LectorLRC.tiemposPalabras(linea)
+        return palabras.reduce(Text("")) { texto, p in
+            let progreso = min(max((t - p.inicio) / max(p.fin - p.inicio, 0.05), 0), 1)
+            return texto + Text(p.texto).foregroundColor(.white.opacity(0.36 + 0.64 * progreso))
+        }
     }
 }
 
-/// Lo que sonará después, con los modos de reproducción arriba (como en Apple Music).
+/// Tres puntos de las pausas sin letra: se llenan uno tras otro mientras dura la pausa.
+struct PuntosInterludio: View {
+    let linea: LineaLetra
+    let activa: Bool
+    @State private var r = Reproductor.compartido
+
+    var body: some View {
+        Group {
+            if activa {
+                TimelineView(.animation(minimumInterval: 1.0 / 20)) { contexto in
+                    let progreso = min(max((r.tiempoExacto - linea.tiempo) / max(linea.fin - linea.tiempo, 0.5), 0), 1)
+                    let latido = 1 + 0.08 * sin(contexto.date.timeIntervalSinceReferenceDate * 3)
+                    puntos { i in min(max(progreso * 3 - Double(i), 0), 1) }
+                        .scaleEffect(latido, anchor: .leading)
+                }
+            } else {
+                puntos { _ in 0 }
+            }
+        }
+        .frame(height: 30, alignment: .leading)
+        .accessibilityLabel("Pausa instrumental")
+    }
+
+    private func puntos(_ lleno: @escaping (Int) -> Double) -> some View {
+        HStack(spacing: 9) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle().fill(.white.opacity(0.3 + 0.7 * lleno(i))).frame(width: 11, height: 11)
+            }
+        }
+    }
+}
+
+// MARK: - Cola
+
+/// Lo que sonará después, ordenado y sin huecos: modos arriba, la canción actual y la lista.
+/// Mantén pulsada una canción para moverla; desliza a la izquierda para quitarla.
 struct ColaVista: View {
     @State private var r = Reproductor.compartido
 
     var body: some View {
         List {
-            Section {
-                HStack(spacing: 10) {
-                    modo("Aleatorio", icono: "shuffle", activo: r.aleatorio) { r.cambiarAleatorio() }
-                    modo(r.repetir == .una ? "Repetir una" : "Repetir", icono: r.repetir == .una ? "repeat.1" : "repeat", activo: r.repetir != .no) { r.cambiarRepetir() }
-                    modo("Radio", icono: "infinity", activo: r.radioAutomatica) { r.radioAutomatica.toggle() }
-                }
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 8, leading: 26, bottom: 4, trailing: 26))
-            } footer: {
-                Text(r.radioAutomatica ? "Al terminar la cola seguirán canciones parecidas." : "La reproducción se detiene al terminar la cola.")
-                    .font(.caption).foregroundStyle(.white.opacity(0.55))
-                    .padding(.horizontal, 10)
+            HStack(spacing: 10) {
+                modo("Aleatorio", icono: "shuffle", activo: r.aleatorio) { r.cambiarAleatorio() }
+                modo(r.repetir == .una ? "Repetir una" : "Repetir", icono: r.repetir == .una ? "repeat.1" : "repeat", activo: r.repetir != .no) { r.cambiarRepetir() }
+                modo("Radio", icono: "infinity", activo: r.radioAutomatica) { r.radioAutomatica.toggle() }
             }
+            .fila(arriba: 14, abajo: 4)
+            Text(r.radioAutomatica ? "Al terminar la cola seguirán canciones parecidas." : "La reproducción se detiene al terminar la cola.")
+                .font(.footnote).foregroundStyle(.white.opacity(0.55))
+                .fila(arriba: 0, abajo: 10)
 
             if let c = r.actual {
-                Section {
-                    fila(c, actual: true)
-                        .listRowBackground(Color.white.opacity(0.08))
-                } header: { encabezado("Sonando ahora") }
+                encabezado("Sonando ahora").fila(arriba: 10, abajo: 4)
+                cancion(c, actual: true).fila(arriba: 4, abajo: 4)
             }
 
-            Section {
-                ForEach(Array(r.siguientes.enumerated()), id: \.offset) { i, c in
-                    fila(c, actual: false)
-                        .contentShape(Rectangle())
-                        .onTapGesture { r.saltarA(r.indice + 1 + i) }
-                        .listRowBackground(Color.clear)
-                        .contextMenu { OpcionesCancion(cancion: c) }
-                }
-                .onMove { r.moverSiguientes(desde: $0, hacia: $1) }
-                .onDelete { idx in for i in idx.sorted(by: >) { r.quitar(en: r.indice + 1 + i) } }
-            } header: {
-                HStack {
-                    encabezado(r.siguientes.isEmpty ? "No hay más canciones" : "A continuación")
-                    Spacer()
-                    if !r.siguientes.isEmpty {
-                        Button("Vaciar") { r.limpiarSiguientes() }
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(.white.opacity(0.8))
-                    }
+            HStack {
+                encabezado(r.siguientes.isEmpty ? "No hay más canciones" : "A continuación")
+                Spacer()
+                if !r.siguientes.isEmpty {
+                    Button("Vaciar") { r.limpiarSiguientes() }
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(.white.opacity(0.8))
+                        .buttonStyle(.plain)
                 }
             }
+            .fila(arriba: 18, abajo: 4)
+
+            ForEach(Array(r.siguientes.enumerated()), id: \.offset) { i, c in
+                cancion(c, actual: false)
+                    .contentShape(Rectangle())
+                    .onTapGesture { r.saltarA(r.indice + 1 + i) }
+                    .contextMenu { OpcionesCancion(cancion: c) }
+                    .fila(arriba: 4, abajo: 4)
+            }
+            .onMove { r.moverSiguientes(desde: $0, hacia: $1) }
+            .onDelete { idx in for i in idx.sorted(by: >) { r.quitar(en: r.indice + 1 + i) } }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .environment(\.editMode, .constant(.active))
+        .environment(\.defaultMinListRowHeight, 0)
     }
 
     private func encabezado(_ t: String) -> some View {
-        Text(t).font(.headline).foregroundStyle(.white).textCase(nil)
+        Text(t).font(.title3.weight(.bold)).foregroundStyle(.white)
     }
 
-    private func fila(_ c: Cancion, actual: Bool) -> some View {
+    private func cancion(_ c: Cancion, actual: Bool) -> some View {
         HStack(spacing: 12) {
-            Portada(ruta: c.portadaUrl, tamano: 46, radio: 6)
+            Portada(ruta: c.portadaUrl, tamano: 48, radio: 6)
             VStack(alignment: .leading, spacing: 2) {
                 Text(c.nombre).font(.body.weight(actual ? .semibold : .regular)).lineLimit(1)
                 Text(c.artista).font(.subheadline).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
@@ -611,21 +736,32 @@ struct ColaVista: View {
                 Image(systemName: r.sonando ? "waveform" : "pause.fill")
                     .symbolEffect(.variableColor.iterative, isActive: r.sonando)
                     .foregroundStyle(.white.opacity(0.8))
+            } else {
+                Image(systemName: "line.3.horizontal").foregroundStyle(.white.opacity(0.35))
+                    .accessibilityHidden(true)
             }
         }
-        .padding(.vertical, 2)
     }
 
     private func modo(_ nombre: String, icono: String, activo: Bool, accion: @escaping () -> Void) -> some View {
         Button(action: accion) {
             Image(systemName: icono)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(activo ? Color.black : .white)
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(activo ? Color.white.opacity(0.9) : .white.opacity(0.12)))
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background(Capsule().fill(activo ? Color.white.opacity(0.85) : .white.opacity(0.12)))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(nombre)
         .accessibilityAddTraits(activo ? .isSelected : [])
+    }
+}
+
+private extension View {
+    /// Fila de la cola sin fondo, separadores ni márgenes de sistema (evita los huecos y bandas grises).
+    func fila(arriba: CGFloat, abajo: CGFloat) -> some View {
+        listRowInsets(EdgeInsets(top: arriba, leading: 26, bottom: abajo, trailing: 26))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 }

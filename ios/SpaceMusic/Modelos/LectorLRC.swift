@@ -86,6 +86,30 @@ enum LectorLRC {
         }
     }
 
+    /// Inicio y fin de cada palabra para iluminarla como Apple Music.
+    /// Con LRC mejorado usa los tiempos reales; si la letra solo trae la línea, reparte su duración según el largo
+    /// de cada palabra (unas 13 letras por segundo, sin pasar del comienzo de la siguiente línea).
+    static func tiemposPalabras(_ l: LineaLetra) -> [(texto: String, inicio: Double, fin: Double)] {
+        if !l.palabras.isEmpty {
+            return l.palabras.enumerated().map { i, p in
+                let fin = i + 1 < l.palabras.count ? l.palabras[i + 1].tiempo : min(l.fin, p.tiempo + max(0.4, Double(p.texto.count) * 0.08))
+                return (p.texto, p.tiempo, max(fin, p.tiempo + 0.05))
+            }
+        }
+        let partes = l.texto.split(separator: " ").map(String.init)
+        guard !partes.isEmpty else { return [] }
+        let letras = max(1, partes.reduce(0) { $0 + $1.count })
+        let disponible = max(0.4, l.fin - l.tiempo - 0.15)
+        let duracion = min(disponible, max(0.6, 0.35 + Double(letras) * 0.075))
+        var acumulado = 0
+        return partes.enumerated().map { i, parte in
+            let inicio = l.tiempo + duracion * Double(acumulado) / Double(letras)
+            acumulado += parte.count
+            let fin = l.tiempo + duracion * Double(acumulado) / Double(letras)
+            return (i + 1 < partes.count ? parte + " " : parte, inicio, fin)
+        }
+    }
+
     /// Línea activa en el segundo dado (búsqueda binaria).
     static func indice(_ lineas: [LineaLetra], en t: Double) -> Int? {
         var bajo = 0, alto = lineas.count - 1, encontrada: Int?

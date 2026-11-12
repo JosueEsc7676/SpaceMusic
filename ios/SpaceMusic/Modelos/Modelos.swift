@@ -362,6 +362,7 @@ struct Usuario: Codable, Identifiable {
     var estadoCuenta: String?
     var motivoSolicitud: String?
     var fechaRegistro: String?
+    var ultimoLogin: String?
 
     var nombre: String { (nombreDisplay?.isEmpty == false ? nombreDisplay : nil) ?? username }
 
@@ -384,6 +385,7 @@ struct Usuario: Codable, Identifiable {
         estadoCuenta = c.texto("estadoCuenta")
         motivoSolicitud = c.texto("motivoSolicitud")
         fechaRegistro = c.texto("fechaRegistro")
+        ultimoLogin = c.texto("ultimoLogin")
     }
 }
 

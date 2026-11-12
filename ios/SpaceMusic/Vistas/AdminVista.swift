@@ -98,7 +98,15 @@ struct AdminVista: View {
             } header: { Text("Aviso para todos") } footer: { Text("Les llega como notificación en la campana.") }
 
             Section("Usuarios") {
-                ForEach(usuarios) { u in filaUsuario(u) }
+                // Lista completa en su propia pantalla, con búsqueda y filtros (como la tabla de la web).
+                NavigationLink { UsuariosAdminVista() } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.3.fill").foregroundStyle(Tema.lila).frame(width: 28)
+                        Text("Gestionar usuarios")
+                        Spacer()
+                        Text("\(usuarios.count)").foregroundStyle(Tema.secundario).monospacedDigit()
+                    }
+                }
             }
 
             if let mensaje {

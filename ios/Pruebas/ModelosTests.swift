@@ -62,5 +62,18 @@ final class ModelosTests: XCTestCase {
         XCTAssertEqual(l[0].texto, "Tú no te vas")
         XCTAssertEqual(l[0].palabras.map(\.texto), ["Tú ", "no ", "te ", "vas"])
         XCTAssertEqual(l[0].palabras[2].tiempo, 5.8, accuracy: 0.001)
+        let t = LectorLRC.tiemposPalabras(l[0])
+        for (p, esperado) in zip(t, [5.0, 5.4, 5.8, 6.2]) { XCTAssertEqual(p.inicio, esperado, accuracy: 0.001) }
+        XCTAssertEqual(t[0].fin, 5.4, accuracy: 0.001)
+    }
+
+    func testPalabrasEstimadasRepartenLaLineaSinPasarDeLaSiguiente() {
+        let l = LectorLRC.leer("[00:10.00]No fuma hace tiempo\n[00:11.00]Siguiente")
+        let t = LectorLRC.tiemposPalabras(l.first { !$0.interludio }!)
+        XCTAssertEqual(t.map { $0.texto }, ["No ", "fuma ", "hace ", "tiempo"])
+        XCTAssertEqual(t[0].inicio, 10, accuracy: 0.001)
+        XCTAssertTrue(t.last!.fin <= 11 - 0.15 + 0.001, "termina antes de la siguiente línea")
+        XCTAssertTrue(zip(t, t.dropFirst()).allSatisfy { $0.fin <= $1.inicio + 0.001 }, "las palabras van en orden")
+        XCTAssertTrue(LectorLRC.tiemposPalabras(LineaLetra(id: 0, tiempo: 0, texto: "")).isEmpty)
     }
 }
