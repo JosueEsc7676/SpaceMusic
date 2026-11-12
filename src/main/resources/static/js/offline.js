@@ -291,6 +291,7 @@ export function iniciarOffline({ toast }) {
   });
   // Sin conexión el reproductor salta lo que no está en el dispositivo
   player.disponible = (song) => !sinRed || disponible(song.id);
+  player.tieneCopia = (id) => disponible(id);
   // Las descargas sueltas de versiones anteriores (fuera de toda playlist/álbum/Me gusta) se liberan una vez:
   // ahora cada descarga vive dentro de su colección, como en Spotify
   try {
@@ -333,6 +334,23 @@ export function iniciarOffline({ toast }) {
     }
   });
   bus.on('player:song', () => { programada = player.current?.id ?? null; precargada = null; });
+  // La canción que suena no es la elegida (copia vieja o equivocada en el dispositivo): se borra
+  // esa copia y se vuelve a pedir al servidor
+  bus.on('audio:distinto', ({ id, reintentar }) => {
+    const w = sw();
+    if (!w) return;
+    let listo = false;
+    const oir = (e) => {
+      if (e.data?.tipo !== 'audio-revisado' || e.data.id !== id) return;
+      listo = true;
+      navigator.serviceWorker.removeEventListener('message', oir);
+      disponibles.delete(Number(id));
+      reintentar?.();
+    };
+    navigator.serviceWorker.addEventListener('message', oir);
+    w.postMessage({ tipo: 'audio-equivocado', id, url: location.origin + audioUrl(id) });
+    setTimeout(() => { if (!listo) navigator.serviceWorker.removeEventListener('message', oir); }, 5000);
+  });
   // Si la cola cambia (radio, "reproducir a continuación"…), se vuelve a precargar la siguiente
   bus.on('player:queue', () => { precargada = null; });
   player.audio.addEventListener('timeupdate', () => {

@@ -151,11 +151,11 @@ await prueba('Transición entre canciones (crossfade de 3 s)', async () => {
     P.player.seek(dur - 4.5);
     let vio = 0;
     for (let i = 0; i < 40; i++) { await new Promise((r) => setTimeout(r, 200)); if (P.mezcla.entrada > 0 && P.mezcla.entrada < 1) vio++; if (P.player.index === 1 && P.mezcla.entrada === 1 && vio) break; }
-    const r = { indice: P.player.index, entrada: P.mezcla.entrada, rampa: vio, suena: P.player.playing };
+    const r = { indice: P.player.index, entrada: P.mezcla.entrada, rampa: vio, suena: P.player.playing, t: P.player.audio.currentTime, dur, items: P.player.items.length, nombre: P.player.current?.nombre };
     P.prefs.mezcla = 0; P.player.pause();
     return r;`);
   if (r.corta !== undefined) return `canciones de prueba muy cortas (${r.corta} s): se omite`;
-  afirmar(r.indice === 1, 'No pasó a la siguiente canción');
+  afirmar(r.indice === 1, 'No pasó a la siguiente canción ' + JSON.stringify(r));
   afirmar(r.rampa > 0, 'El volumen no subió poco a poco');
   afirmar(r.entrada === 1, 'La canción nueva no quedó a volumen completo');
   return `pasó a la siguiente y el volumen subió en ${r.rampa} pasos`;
@@ -204,6 +204,25 @@ await prueba('Con la pantalla apagada pasa a la siguiente canción aunque se cor
   } finally {
     await pag('Network.setBlockedURLs', { urls: [] });
   }
+});
+
+await prueba('Si la copia guardada es de otra canción, se corrige y suena la correcta', async () => {
+  const con = todas.filter((c) => c.duracionSegundos >= 20).sort((a, b) => a.duracionSegundos - b.duracionSegundos);
+  const a = con[con.length - 1], b = todas.filter((c) => Math.abs(c.duracionSegundos - a.duracionSegundos) > 8).sort((x, y) => x.duracionSegundos - y.duracionSegundos)[0];
+  if (!a || !b) return 'no hay canciones con duraciones distintas para probar';
+  const r = await js(`${MODULOS}
+    const { audioUrl } = await import(location.origin + '/js/api.js');
+    // Se guarda en el dispositivo el audio de B como si fuera A (copia equivocada)
+    const c = await caches.open('sm-audio');
+    await c.put('/offline/audio/${a.id}', await fetch(audioUrl(${b.id})));
+    await O.actualizarDisponibles();
+    P.player.play([${JSON.stringify(a)}], 0, { type: 'prueba', label: 'Prueba' });
+    for (let i = 0; i < 40; i++) { await new Promise((r) => setTimeout(r, 250)); if (Math.abs(P.player.audio.duration - ${a.duracionSegundos}) < 3) break; }
+    const r = { dur: P.player.audio.duration, esperada: ${a.duracionSegundos}, copia: !!(await c.match('/offline/audio/${a.id}')) };
+    P.player.pause();
+    return r;`);
+  afirmar(Math.abs(r.dur - r.esperada) < 3, `Siguió sonando otra canción (duración ${r.dur?.toFixed?.(1)} s, se esperaba ${r.esperada} s)`);
+  return `detectó la copia equivocada y sonó la correcta (${r.dur.toFixed(0)} s)`;
 });
 
 await prueba('Menú "Reportar un problema"', async () => {

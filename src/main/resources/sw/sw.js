@@ -37,6 +37,14 @@ self.addEventListener('message', (e) => {
   if (d?.tipo === 'limpiar-usuario') e.waitUntil(caches.delete(API));
   if (d?.tipo === 'descargar-audio') e.waitUntil(enCola(() => descargar(d.url, d.id)).then((ok) => avisar({ tipo: 'descarga', id: d.id, ok })));
   if (d?.tipo === 'quitar-descarga') e.waitUntil(caches.open(DESCARGAS).then((c) => c.delete(`/offline/audio/${d.id}`)));
+  // La copia guardada no coincide con la canción (otra duración): se borra y, si era descarga, se vuelve a bajar
+  if (d?.tipo === 'audio-equivocado') e.waitUntil((async () => {
+    const clave = `/offline/audio/${d.id}`;
+    await (await caches.open(AUDIO)).delete(clave);
+    const eraDescarga = await (await caches.open(DESCARGAS)).delete(clave);
+    e.source?.postMessage({ tipo: 'audio-revisado', id: d.id });
+    if (eraDescarga && d.url) await enCola(() => descargar(d.url, d.id));
+  })());
   if (d?.tipo === 'estado-offline') e.waitUntil(contarAudio().then((n) => e.source?.postMessage({ tipo: 'estado-offline', canciones: n })));
   // Qué canciones se pueden escuchar sin conexión (descargadas y guardadas al escuchar)
   if (d?.tipo === 'ids-audio') e.waitUntil(idsAudio().then((ids) => e.source?.postMessage({ tipo: 'ids-audio', ids })));

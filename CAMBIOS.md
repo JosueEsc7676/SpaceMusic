@@ -1,5 +1,10 @@
 # Registro de cambios
 
+## Versión 3.3.1
+- **Suena otra canción al tocar una (sobre todo en Android):** en el navegador la lista era correcta; lo que cambia en el teléfono son las copias guardadas (`sm-audio` y descargas), que se reutilizaban para siempre sin comprobar. Ahora, si una canción con copia en el dispositivo dura muy distinto de lo esperado (más de 5 s o 5 %), se borra esa copia (`audio-equivocado` en el service worker), se vuelve a pedir al servidor en el mismo punto y, si era una descarga, se vuelve a bajar. Una vez por canción y por sesión.
+- **Sin conexión:** tocar una canción no descargada ya no reproduce la primera descargada de la lista; avisa.
+- Prueba nueva en `pruebas/navegador.mjs`: copia equivocada en el dispositivo → se corrige y suena la correcta.
+
 ## Versión 3.3
 - **IA local:** el servidor tiene Ollama con `qwen3:0.6b`. Se probó para clasificar artistas por estilo: tardó ~1 minuto en 10 artistas y respondió mal (repitió la lista de estilos). Con 2 núcleos y sin tarjeta gráfica, un modelo más grande sería aún más lento. Por eso la organización se hace con reglas, con los géneros de MusicBrainz y lo que se escucha.
 - **Estilos concretos** (`EstilosService`): cada canción recibe un estilo (bachata, reggaetón, trap latino, regional, corridos, pop latino, hip hop, trap, R&B, rock, electrónica, infantil, cristiana…): por su género si es específico, si no por los géneros del artista (MusicBrainz) y si no por sus otras canciones. "Latino" (1200 canciones) ya no es una sola categoría.

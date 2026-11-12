@@ -81,6 +81,8 @@ export const player = {
     // Sin conexión: la lista queda solo con lo descargado (en su mismo orden)
     if (!songs.every((x) => this.disponible(x))) {
       const elegida = start >= 0 ? songs[start] : null;
+      // La que tocaste no está en el dispositivo: no se pone otra en su lugar
+      if (elegida && !this.disponible(elegida)) { bus.emit('toast', { msg: 'Sin conexión: esta canción no está descargada' }); return; }
       songs = songs.filter((x) => this.disponible(x));
       if (!songs.length) { bus.emit('toast', { msg: 'Sin conexión: esta canción no está descargada' }); return; }
       start = start < 0 ? -1 : Math.max(0, songs.indexOf(elegida));
@@ -180,6 +182,8 @@ export const player = {
 
   /** ¿Se puede escuchar ahora? (sin conexión, solo lo que está en el dispositivo; lo define offline.js) */
   disponible: () => true,
+  /** ¿Hay una copia de esta canción en el dispositivo? (lo define offline.js) */
+  tieneCopia: () => false,
 
   next(auto = false) {
     if (!this.items.length) return;
@@ -419,7 +423,33 @@ audio.addEventListener('playing', () => { player.buffering = false; player._erro
 audio.addEventListener('pause', () => { bus.emit('player:state'); player._save(); });
 audio.addEventListener('waiting', () => { player.buffering = true; bus.emit('player:state'); });
 audio.addEventListener('canplay', () => { player.buffering = false; bus.emit('player:state'); });
-audio.addEventListener('loadedmetadata', () => bus.emit('player:time'));
+audio.addEventListener('loadedmetadata', () => { bus.emit('player:time'); comprobarAudio(); });
+
+// Si el audio que llegó dura muy distinto de lo esperado, es otra canción (una copia equivocada en el
+// dispositivo): se borra esa copia y se vuelve a cargar del servidor, en el mismo punto.
+const revisadas = new Set();
+function comprobarAudio() {
+  const s = player.current;
+  const esperada = s?.duracionSegundos || 0;
+  if (!s || esperada < 20 || !isFinite(audio.duration) || audio.duration <= 0) return;
+  if (!player.tieneCopia(s.id) || mezcla.enCurso) return; // solo se revisan las copias del dispositivo
+  if (Math.abs(audio.duration - esperada) <= Math.max(5, esperada * 0.05)) return;
+  if (revisadas.has(s.id)) return; // una vez por canción: si sigue distinto, es la duración guardada la que está mal
+  revisadas.add(s.id);
+  console.warn('Audio distinto del esperado', s.id, s.nombre, audio.duration, esperada);
+  const id = s.id, sonaba = !audio.paused;
+  bus.emit('audio:distinto', {
+    id,
+    reintentar: () => {
+      if (player.current?.id !== id) return;
+      if (urlEnUso) { URL.revokeObjectURL(urlEnUso); urlEnUso = null; }
+      const t = audio.currentTime;
+      audio.src = audioUrl(id) + '&r=' + Date.now();
+      if (t > 1) audio.addEventListener('loadedmetadata', () => { try { audio.currentTime = t; } catch { } }, { once: true });
+      if (sonaba) audio.play().catch(() => { });
+    },
+  });
+}
 audio.addEventListener('durationchange', () => bus.emit('player:time'));
 audio.addEventListener('progress', () => bus.emit('player:buffer'));
 

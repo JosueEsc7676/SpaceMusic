@@ -1,13 +1,21 @@
 {
-  "version": "3.3",
-  "titulo": "Novedades: música mejor organizada",
+  "version": "3.3.1",
+  "titulo": "Arreglo: suena la canción que eliges",
   "puntos": [
-    "Explorar ahora separa la música por estilos de verdad: Bachata, Reggaetón, Trap latino, Regional mexicano, Pop latino y más (antes “Latino” juntaba más de mil canciones).",
-    "Cada género se ve por secciones cortas: lo esencial, lo nuevo, clásicos, recién llegadas y lo que aún no escuchas. Si quieres todas, se cargan de 50 en 50.",
-    "Mix del día, Descubrir y los mixes de género se arman con tus estilos favoritos y van por bloques: ya no saltan de bachata a hip hop y de vuelta.",
-    "La radio y los mixes de artista eligen canciones del mismo estilo y evitan repetir artista seguido."
+    "Arreglado: al tocar una canción (por ejemplo en la página de un artista) a veces sonaba otra. Si la copia guardada en el teléfono no corresponde a la canción, ahora se borra sola y se trae la correcta del servidor.",
+    "Sin conexión, si tocas una canción que no está descargada, te lo avisa en vez de poner otra."
   ],
   "anteriores": [
+    {
+      "version": "3.3",
+      "titulo": "Novedades: música mejor organizada",
+      "puntos": [
+        "Explorar ahora separa la música por estilos de verdad: Bachata, Reggaetón, Trap latino, Regional mexicano, Pop latino y más (antes “Latino” juntaba más de mil canciones).",
+        "Cada género se ve por secciones cortas: lo esencial, lo nuevo, clásicos, recién llegadas y lo que aún no escuchas. Si quieres todas, se cargan de 50 en 50.",
+        "Mix del día, Descubrir y los mixes de género se arman con tus estilos favoritos y van por bloques: ya no saltan de bachata a hip hop y de vuelta.",
+        "La radio y los mixes de artista eligen canciones del mismo estilo y evitan repetir artista seguido."
+      ]
+    },
     {
       "version": "3.2",
       "titulo": "Novedades: arreglos del reproductor",
