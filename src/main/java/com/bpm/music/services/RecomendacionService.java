@@ -38,6 +38,10 @@ public class RecomendacionService {
     }
 
     private EstilosService estilos;
+    private com.bpm.music.organizador.SenalesExternasService senales;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setSenales(com.bpm.music.organizador.SenalesExternasService senales) { this.senales = senales; }
 
     @org.springframework.beans.factory.annotation.Autowired
     void setEstilos(EstilosService estilos) { this.estilos = estilos; }
@@ -105,6 +109,8 @@ public class RecomendacionService {
                 else if (!g.isEmpty() && g.equals(sg)) p += 1;
                 if (!"single".equals(normalizar(sem.getAlbum())) && normalizar(c.getAlbum()).equals(normalizar(sem.getAlbum()))) p += 1.5;
                 if (c.getAnio() != null && sem.getAnio() != null && Math.abs(c.getAnio() - sem.getAnio()) <= 5) p += 1.2;
+                // "Canciones relacionadas" de YouTube Music que ya están en el servidor (dato guardado: sin llamadas aquí)
+                if (senales != null) p += 7 * senales.peso(sem.getId(), c.getId());
                 s += peso * p;
             }
             s /= (1 + 0.6 * (semillas.size() - 1));
