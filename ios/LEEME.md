@@ -120,3 +120,12 @@ Con un Apple ID gratis, la app deja de abrir a los **7 días** y hay que volver 
   swiftc -typecheck -swift-version 5 -target x86_64-apple-ios17.0-macabi -sdk $SDK \
     -Fsystem $SDK/System/iOSSupport/System/Library/Frameworks $(find . -name "*.swift")
   ```
+
+## Actualizar desde el iPhone
+
+Cada compilación correcta de la rama `app-ios` publica `SpaceMusic.ipa` en la versión **ios-latest** del repositorio (Releases). La app lo comprueba al abrirse y en segundo plano, y avisa con una notificación.
+
+- **Con SideStore o AltStore** instalados en el iPhone: toca el aviso → «Instalar con SideStore/AltStore». Se instala encima, sin perder datos.
+- **Sin ellos**: «Descargar el .ipa» y ábrelo en Sideloadly desde la computadora como siempre.
+
+El iPhone no deja que una app se instale a sí misma: el .ipa hay que firmarlo con tu Apple ID, y eso lo hacen SideStore, AltStore o Sideloadly.

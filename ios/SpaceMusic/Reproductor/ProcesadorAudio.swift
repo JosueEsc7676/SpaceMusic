@@ -87,9 +87,9 @@ final class ParametrosTap: @unchecked Sendable {
             version: Int32(kMTAudioProcessingTapCallbacksVersion_0),
             clientInfo: contexto,
             init: tapIniciar, finalize: tapTerminar, prepare: tapPreparar, unprepare: nil, process: tapProcesar)
-        var tap: MTAudioProcessingTap?
-        guard MTAudioProcessingTapCreate(kCFAllocatorDefault, &llamadas, MTAudioProcessingTapCreationFlags(kMTAudioProcessingTapCreationFlag_PostEffects), &tap) == noErr,
-              let tap else {
+        var creado: Unmanaged<MTAudioProcessingTap>?
+        guard MTAudioProcessingTapCreate(kCFAllocatorDefault, &llamadas, MTAudioProcessingTapCreationFlags(kMTAudioProcessingTapCreationFlag_PostEffects), &creado) == noErr,
+              let tap = creado?.takeRetainedValue() else {
             Unmanaged<ContextoTap>.fromOpaque(contexto).release()
             return nil
         }

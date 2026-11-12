@@ -1,6 +1,11 @@
 # Registro de cambios
 
 ## App de iPhone 1.1 (SwiftUI, de nuevo la app activa)
+- Reproductor a pantalla completa con los botones Letra · AirPlay · Cola siempre visibles, sin barra de volumen y con la línea de la letra bajo el título; letra palabra a palabra y ajuste de sincronía por canción.
+- Si una canción no carga en 12 s se reintenta una vez y luego se explica el motivo (permiso, archivo, conexión, formato) en vez de girar en 0:00.
+- Notificaciones del iPhone para mensajes y avisos nuevos (también de actualización), y revisión en segundo plano con la app cerrada.
+- Actualizaciones desde el iPhone: aviso de versión nueva e instalación con SideStore o AltStore (o descarga del .ipa).
+- Guardar lo que escuchas para oírlo sin conexión, playlist con un álbum, compartir enlaces, deshacer, inicio con destacado y tendencias numeradas, color de la app, visualizador y ecualizador de 5 bandas.
 - Se vuelve a SwiftUI como app principal: el flujo **App iPhone** compila `ios/` en cada cambio; Expo queda archivado (flujo manual aparte).
 - Reproductor: cabecera compacta con letra o cola abiertas, bordes desvanecidos (ya no parecen montarse sobre el título), controles en cinco columnas que no se salen de la pantalla e indicador de espera solo si la carga dura más de 0,6 s.
 - Arranque: la siguiente canción se precarga cuando la actual ya está lista, en vez de descargarse a la vez (mejora pendiente de medir en el iPhone).
