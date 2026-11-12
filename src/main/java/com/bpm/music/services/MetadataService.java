@@ -139,9 +139,11 @@ public class MetadataService {
      * Programas como spotDL juntan varios artistas con "/" ("Fred again../LATIN MAFIA").
      * Se usa el primero, salvo nombres cortos como "AC/DC".
      */
+    private static final Pattern SEPARADOR_ARTISTAS = Pattern.compile("\\s*[/;]\\s*");
+
     static String primerArtista(String a) {
         if (a == null) return null;
-        String[] partes = a.split("\\s*[/;]\\s*");
+        String[] partes = SEPARADOR_ARTISTAS.split(a);
         if (partes.length < 2) return a;
         for (String p : partes) if (p.length() < 3) return a;
         return partes[0].trim();

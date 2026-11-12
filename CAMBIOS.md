@@ -1,5 +1,16 @@
 # Registro de cambios
 
+## Versión 3.4
+- **Recuperado el trabajo de Codex** (desplegado el 10/11/2026 y sobrescrito por 3.3/3.3.1): administración unificada (oculta la música dentro del panel), portadas consultadas por huella (sin leer el LONGBLOB), bloqueo de escrituras en playlists (`findForUpdate`). Unido con historial en la rama `codex-20261110`.
+- **A. Buscar en YouTube Music** (Administración → Descargar música): adaptador `ytmusicapi` (biblioteca no oficial) por `scripts/ytm-proveedor.py`, con 20 s de espera, una consulta a la vez, caché de 30 min, 1 reintento y pausa automática; estados por resultado; encolar por id sin duplicados (sincronizado); álbumes completos o por canción; la descarga sigue en la cola de siempre.
+- **B. Recomendaciones con YouTube Music**: vínculo persistente (`cancion_externa`) primero por la etiqueta "comment" del archivo, si no por coincidencia exacta (título base, versión, artista, duración ±4 s); relacionadas (`cancion_similitud`) solo con canciones del servidor; la radio las suma sin llamadas externas.
+- **C. Completar datos** (`cambio_metadato`): letras LRCLIB, portada y año MusicBrainz + Cover Art Archive; solo campos vacíos, nunca sobre correcciones manuales; lo dudoso queda pendiente; todo con fuente, método y reversión; miniaturas regeneradas.
+- **D. Organizador** (`trabajo_organizador`): diario y semanal en hora de El Salvador, una ejecución a la vez, pausa/cancelar/reanudar tras reinicio, espera si hay reproducción o CPU alta; análisis de sonido con ffmpeg (`caracteristica_audio`); duplicados e inconsistencias por reglas; IA local Ollama con esquema JSON y validación, **apagada** porque `qwen3:0.6b` acertó 1 de 20 (5 %) a ~14 s por canción.
+- **E. Experiencias**: rutas musicales, descubrir con control, coincidimos, dedicatorias y preparar sin internet (paquete `experiencias`).
+- **F. Rendimiento**: cabecera `Server-Timing` (aplicación y base de datos) y métricas p50/p95 por ruta; expresiones regulares precompiladas y memorizadas en `normalizar`, `familia`, `principal` y `primerArtista` (búsqueda "amor" 221 → 53 ms, Mix del día 248 → 31 ms, radio 218 → 35 ms en p50).
+- **G. Administración → Organización**: trabajos, proveedores, IA, cambios, vínculos, etiquetas, ajustes y rendimiento.
+- **Pruebas**: 51 del servidor y 10 de navegador (`pruebas/navegador.mjs`), más `pruebas/rendimiento.mjs` con resultados en `pruebas/resultados/`.
+
 ## Versión 3.3.1
 - **Suena otra canción al tocar una (sobre todo en Android):** en el navegador la lista era correcta; lo que cambia en el teléfono son las copias guardadas (`sm-audio` y descargas), que se reutilizaban para siempre sin comprobar. Ahora, si una canción con copia en el dispositivo dura muy distinto de lo esperado (más de 5 s o 5 %), se borra esa copia (`audio-equivocado` en el service worker), se vuelve a pedir al servidor en el mismo punto y, si era una descarga, se vuelve a bajar. Una vez por canción y por sesión.
 - **Sin conexión:** tocar una canción no descargada ya no reproduce la primera descargada de la lista; avisa.

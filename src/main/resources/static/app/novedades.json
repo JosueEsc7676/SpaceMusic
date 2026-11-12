@@ -1,11 +1,23 @@
 {
-  "version": "3.3.1",
-  "titulo": "Arreglo: suena la canción que eliges",
+  "version": "3.4",
+  "titulo": "Novedades: rutas musicales, dedicatorias y más",
   "puntos": [
-    "Arreglado: al tocar una canción (por ejemplo en la página de un artista) a veces sonaba otra. Si la copia guardada en el teléfono no corresponde a la canción, ahora se borra sola y se trae la correcta del servidor.",
-    "Sin conexión, si tocas una canción que no está descargada, te lo avisa en vez de poner otra."
+    "Rutas musicales: elige cuánto dura, cómo empieza y adónde quieres llegar (por ejemplo, de tranquilo a con energía) y ajústala sobre la marcha.",
+    "Descubrir con control: Familiar, Cercano o Sorpréndeme, con el porqué de cada canción. «Hoy no» y «No me gusta este estilo» son cosas distintas.",
+    "El punto donde coincidimos: invita a alguien que sigues o te sigue; si acepta, verán lo que comparten y canciones puente para los dos.",
+    "Dedicatorias: dedica una canción desde el segundo exacto, con un mensaje. Las que te dedican puedes guardarlas en «Canciones que me dedicaron».",
+    "Preparar escucha sin internet: elige tiempo, espacio y cuántas favoritas o nuevas; revisa la selección antes de descargar.",
+    "Recomendaciones más afinadas y búsqueda, mixes y radio mucho más rápidos."
   ],
   "anteriores": [
+    {
+      "version": "3.3.1",
+      "titulo": "Arreglo: suena la canción que eliges",
+      "puntos": [
+        "Arreglado: al tocar una canción (por ejemplo en la página de un artista) a veces sonaba otra. Si la copia guardada en el teléfono no corresponde a la canción, ahora se borra sola y se trae la correcta del servidor.",
+        "Sin conexión, si tocas una canción que no está descargada, te lo avisa en vez de poner otra."
+      ]
+    },
     {
       "version": "3.3",
       "titulo": "Novedades: música mejor organizada",

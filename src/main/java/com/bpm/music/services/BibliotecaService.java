@@ -461,10 +461,21 @@ public class BibliotecaService {
     // ═════════════════════════ Texto ═════════════════════════
 
     /** Minúsculas, sin acentos y sin signos: "Canción Ñandú!" → "cancion nandu". */
+    private static final java.util.regex.Pattern MARCAS = java.util.regex.Pattern.compile("\\p{M}+");
+    private static final java.util.regex.Pattern NO_ALFANUM = java.util.regex.Pattern.compile("[^\\p{L}\\p{N}]+");
+    /** Los mismos nombres de artistas, géneros y álbumes se normalizan miles de veces por petición. */
+    private static final java.util.concurrent.ConcurrentHashMap<String, String> NORMALIZADOS = new java.util.concurrent.ConcurrentHashMap<>();
+
     public static String normalizar(String s) {
         if (s == null) return "";
-        String n = Normalizer.normalize(s, Normalizer.Form.NFD).replaceAll("\\p{M}+", "");
-        n = n.toLowerCase(Locale.ROOT).replace('&', ' ').replaceAll("[^\\p{L}\\p{N}]+", " ").trim();
+        String ya = NORMALIZADOS.get(s);
+        if (ya != null) return ya;
+        String n = MARCAS.matcher(Normalizer.normalize(s, Normalizer.Form.NFD)).replaceAll("");
+        n = NO_ALFANUM.matcher(n.toLowerCase(Locale.ROOT).replace('&', ' ')).replaceAll(" ").trim();
+        if (s.length() <= 300) {
+            if (NORMALIZADOS.size() > 60_000) NORMALIZADOS.clear(); // límite de memoria
+            NORMALIZADOS.put(s, n);
+        }
         return n;
     }
 

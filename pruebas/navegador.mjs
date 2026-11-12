@@ -73,15 +73,30 @@ async function ir(ruta, ms = 2500) {
   await pag('Page.navigate', { url: BASE + ruta });
   await espera(ms);
 }
+// Las condiciones de red de CDP son por sesión: se reutiliza una sola sesión por service worker
+// (si se abre otra para "desbloquear", el bloqueo de la primera sigue activo)
+const sesionesSw = new Map();
+async function sesionSw(targetId) {
+  if (!sesionesSw.has(targetId)) {
+    const { sessionId } = await cmd('Target.attachToTarget', { targetId, flatten: true });
+    await cmd('Network.enable', {}, sessionId).catch(() => { });
+    sesionesSw.set(targetId, sessionId);
+  }
+  return sesionesSw.get(targetId);
+}
 /** Sin internet también para el service worker (es otro "proceso" del navegador). */
 async function sinInternet(si) {
   await pag('Network.emulateNetworkConditions', { offline: si, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
   const { targetInfos } = await cmd('Target.getTargets');
-  for (const t of targetInfos.filter((x) => x.type === 'service_worker')) {
-    const { sessionId } = await cmd('Target.attachToTarget', { targetId: t.targetId, flatten: true });
-    await cmd('Network.enable', {}, sessionId).catch(() => { });
-    await cmd('Network.emulateNetworkConditions', { offline: si, latency: 0, downloadThroughput: -1, uploadThroughput: -1 }, sessionId).catch(() => { });
-  }
+  for (const t of targetInfos.filter((x) => x.type === 'service_worker'))
+    await cmd('Network.emulateNetworkConditions', { offline: si, latency: 0, downloadThroughput: -1, uploadThroughput: -1 }, await sesionSw(t.targetId)).catch(() => { });
+}
+/** Bloquea direcciones en la página y en el service worker (si no, el service worker seguiría bloqueado). */
+async function bloquear(urls) {
+  await pag('Network.setBlockedURLs', { urls });
+  const { targetInfos } = await cmd('Target.getTargets');
+  for (const t of targetInfos.filter((x) => x.type === 'service_worker'))
+    await cmd('Network.setBlockedURLs', { urls }, await sesionSw(t.targetId)).catch(() => { });
 }
 /** "Pantalla apagada": la página pasa a segundo plano (document.hidden = true). */
 const PANTALLA = (apagada) => `Object.defineProperty(document, 'hidden', { configurable: true, get: () => ${apagada} });
@@ -117,6 +132,26 @@ await prueba('La app abre en un Android (simulado)', async () => {
   afirmar(r.inicio, 'No se ve el inicio');
   afirmar(r.movil, 'No se aplicó la vista de celular');
   return 'inicio visible en pantalla de celular';
+});
+
+await prueba('Medición: tiempo hasta ver el inicio y los resultados de búsqueda (celular simulado)', async () => {
+  const veces = [];
+  for (let i = 0; i < 5; i++) {
+    const antes = await js('return performance.timeOrigin;');
+    await pag('Page.navigate', { url: BASE + '/?m=' + i + '#/' });
+    // Esperar a que sea la página nueva (no la anterior)
+    for (let k = 0; k < 100; k++) { await espera(50); try { if (await js('return performance.timeOrigin;') !== antes) break; } catch { } }
+    const t = await js(`for (let i = 0; i < 400 && !document.querySelector('.home-head, .greeting'); i++) await new Promise((r) => setTimeout(r, 10));
+      return { inicio: performance.now(), dcl: performance.getEntriesByType('navigation')[0]?.domContentLoadedEventEnd };`);
+    const b = await js(`const t0 = performance.now();
+      location.hash = '#/buscar?q=' + encodeURIComponent(${JSON.stringify(todas[0].nombre.slice(0, 4))} + '${'${i}'}'.slice(0, 0));
+      // Las pestañas de resultados (Todo, Canciones…) solo existen en la búsqueda
+      for (let i = 0; i < 400 && !document.querySelector('a.chip[href*="buscar?q="]'); i++) await new Promise((r) => setTimeout(r, 10));
+      return performance.now() - t0;`);
+    veces.push({ inicio: t.inicio, dcl: t.dcl, busqueda: b });
+  }
+  const med = (k) => { const v = veces.map((x) => x[k]).sort((a, b) => a - b); return Math.round(v[Math.floor(v.length / 2)]); };
+  return `inicio visible ${med('inicio')} ms (DOM listo ${med('dcl')} ms) · búsqueda en pantalla ${med('busqueda')} ms (mediana de 5)`;
 });
 
 await prueba('Agregar una canción recomendada a una playlist (sin que empiece a sonar)', async () => {
@@ -253,6 +288,37 @@ await prueba('Menú "Reportar un problema"', async () => {
   return 'el reporte llegó al panel de administración' + (nuevo ? ` (cliente: ${nuevo.cliente})` : '');
 });
 
+await prueba('Aviso "SpaceMusic está en mantenimiento" cuando el servidor no responde', async () => {
+  await ir('/#/', 3000);
+  // El servidor "se cae" (sus direcciones no responden) pero el resto de internet sí
+  await bloquear([`*${new URL(BASE).host}/*`]);
+  try {
+    const r = await js(`
+      const { api } = await import(location.origin + '/js/api.js');
+      try { await api('/api/usuario/estadisticas'); } catch { }
+      for (let i = 0; i < 30 && !document.documentElement.classList.contains('mantenimiento'); i++) await new Promise((r) => setTimeout(r, 300));
+      const { textoSinRed } = await import(location.origin + '/js/util.js');
+      const O = await import(location.origin + '/js/offline.js');
+      const img = await new Promise((res) => { const i = new Image(); i.onload = () => res('carga'); i.onerror = () => res('error'); i.src = 'https://www.google.com/favicon.ico?_=' + Date.now(); setTimeout(() => res('tiempo'), 6000); });
+      return { clase: document.documentElement.classList.contains('mantenimiento'), texto: textoSinRed(), sinRed: O.sinConexion(), img, online: navigator.onLine };`);
+    if (!r.clase) throw new Error('No detectó el mantenimiento ' + JSON.stringify(r));
+    afirmar(r.clase, 'No detectó el mantenimiento (¿este equipo tiene internet?)');
+    afirmar(/mantenimiento/.test(r.texto), 'El aviso no dice mantenimiento');
+    // El servidor vuelve: la app debe recuperarse sola al recargar
+    await bloquear([]);
+    await ir('/?v=' + Date.now() + '#/buscar?q=a', 3500);
+    const v = await js(`const O = await import(location.origin + '/js/offline.js');
+      const H = { Authorization: 'Bearer ' + localStorage.getItem('sm_token') };
+      const r1 = await fetch('/api/buscar?q=a', { headers: H }).then((r) => r.status + ' ' + r.headers.get('X-SM-Copia')).catch((e) => 'ERR ' + e.message);
+      const r2 = await fetch('/api/usuario/estadisticas', { headers: H }).then((r) => r.status).catch((e) => 'ERR ' + e.message);
+      return { sinRed: O.sinConexion(), online: navigator.onLine, buscar: r1, otra: r2, resultados: !!document.querySelector('a.chip[href*="buscar?q="]'), banner: !!document.querySelector('.offline-banner') };`);
+    afirmar(!v.sinRed && v.resultados, 'Al volver el servidor la app siguió como sin conexión ' + JSON.stringify(v));
+    return `muestra “${r.texto}” y se recupera sola cuando el servidor vuelve`;
+  } finally {
+    await bloquear([]);
+  }
+});
+
 await prueba('La app abre sin internet y suena lo descargado', async () => {
   const s = todas[2];
   const listo = await js(`${MODULOS}
@@ -278,28 +344,6 @@ await prueba('La app abre sin internet y suena lo descargado', async () => {
   } finally {
     await sinInternet(false);
     await js(`${MODULOS} O.quitarColeccion('favoritos'); return true;`).catch(() => { });
-  }
-});
-
-await prueba('Aviso "SpaceMusic está en mantenimiento" cuando el servidor no responde', async () => {
-  await ir('/#/', 3000);
-  // El servidor "se cae" (sus direcciones no responden) pero el resto de internet sí
-  await pag('Network.setBlockedURLs', { urls: [`*${new URL(BASE).host}/*`] });
-  try {
-    const r = await js(`
-      const { api } = await import(location.origin + '/js/api.js');
-      try { await api('/api/usuario/estadisticas'); } catch { }
-      for (let i = 0; i < 30 && !document.documentElement.classList.contains('mantenimiento'); i++) await new Promise((r) => setTimeout(r, 300));
-      const { textoSinRed } = await import(location.origin + '/js/util.js');
-      const O = await import(location.origin + '/js/offline.js');
-      const img = await new Promise((res) => { const i = new Image(); i.onload = () => res('carga'); i.onerror = () => res('error'); i.src = 'https://www.google.com/favicon.ico?_=' + Date.now(); setTimeout(() => res('tiempo'), 6000); });
-      return { clase: document.documentElement.classList.contains('mantenimiento'), texto: textoSinRed(), sinRed: O.sinConexion(), img, online: navigator.onLine };`);
-    if (!r.clase) throw new Error('No detectó el mantenimiento ' + JSON.stringify(r));
-    afirmar(r.clase, 'No detectó el mantenimiento (¿este equipo tiene internet?)');
-    afirmar(/mantenimiento/.test(r.texto), 'El aviso no dice mantenimiento');
-    return `muestra “${r.texto}”`;
-  } finally {
-    await pag('Network.setBlockedURLs', { urls: [] });
   }
 });
 

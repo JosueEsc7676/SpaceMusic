@@ -140,6 +140,9 @@ class OrganizadorTest {
     void unaEjecucionALaVezPausaReanudaYCancela() throws Exception {
         trabajos.deleteAll();
         cancion("Lista cuatro", "Prueba", 200, true);
+        // Sin internet en la prueba: todas las canciones con letra y portada (otras pruebas dejan algunas sin letra)
+        for (Cancion x : canciones.findAll()) { if (x.getLetra() == null || x.getLetra().isBlank()) { x.setLetra("x"); canciones.save(x); } }
+        biblioteca.invalidar();
         TrabajoOrganizador t = organizador.iniciar("manual", "prueba");
         assertThrows(IllegalStateException.class, () -> organizador.iniciar("manual", "otra"));
         // Termina solo (sin internet, sin ffmpeg ni YouTube Music en la prueba)

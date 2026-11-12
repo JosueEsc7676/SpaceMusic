@@ -66,9 +66,13 @@ public class GeneroService {
     }
 
     /** Artista principal: "Bad Bunny, ABRA" → "Bad Bunny"; "Drake feat. X" → "Drake". */
+    private static final java.util.regex.Pattern COLABORACION = java.util.regex.Pattern.compile("(?i)\\s*(,|;|&| feat\\.? | ft\\.? | featuring | x | y | with )\\s*");
+    private static final Map<String, String> PRINCIPAL_CACHE = new ConcurrentHashMap<>();
+
     static String principal(String artista) {
-        String a = MetadataService.primerArtista(artista == null ? "" : artista);
-        return a.split("(?i)\\s*(,|;|&| feat\\.? | ft\\.? | featuring | x | y | with )\\s*")[0].trim();
+        if (artista == null) return "";
+        if (PRINCIPAL_CACHE.size() > 20_000) PRINCIPAL_CACHE.clear();
+        return PRINCIPAL_CACHE.computeIfAbsent(artista, x -> COLABORACION.split(MetadataService.primerArtista(x))[0].trim());
     }
 
     // ═══════════════════ Enriquecer la biblioteca ═══════════════════
@@ -318,23 +322,32 @@ public class GeneroService {
         return APARTE.contains(familia(genero));
     }
 
+    private static final String[][] FAMILIAS = {
+            {"urbano", "reggaeton|reggaetón|dembow|trap latino|latin trap|urbano|perreo|latin hip hop"},
+            {"regional", "corrido|regional|mexican|banda|norteno|norteño|sierreno|mariachi|ranchera|grupero"},
+            {"tropical", "salsa|cumbia|bachata|merengue|tropical|vallenato"},
+            {"cristiana", "christian|cristian|worship|alabanza|gospel|adoracion"},
+            {"infantil", "children|infantil|kids|nursery|ninos|lullab|cancion de cuna"},
+            {"hiphop", "hip hop|rap|trap|drill|grime"},
+            {"rnb", "r b|rnb|soul|funk"},
+            {"electronica", "electr|house|techno|edm|garage|dance|trance|dubstep|ambient|drum and bass"},
+            {"romantica", "bolero|balada|ballad|romantic|romantica"},
+            {"rock", "rock|metal|punk|indie|alternative|grunge"},
+            {"pop", "pop|latino|latin"},
+            {"clasica", "jazz|blues|classical|clasica"}};
+    private static final java.util.regex.Pattern[] PATRONES_FAMILIA = java.util.Arrays.stream(FAMILIAS)
+            .map(f -> java.util.regex.Pattern.compile(f[1])).toArray(java.util.regex.Pattern[]::new);
+    private static final Map<String, String> FAMILIA_CACHE = new ConcurrentHashMap<>();
+
     /** Familia amplia de un género (para comparar canciones aunque el género exacto no coincida). */
     public static String familia(String genero) {
-        String g = BibliotecaService.normalizar(genero);
-        if (g.isEmpty() || g.equals("desconocido")) return "";
-        if (g.matches(".*(reggaeton|reggaetón|dembow|trap latino|latin trap|urbano|perreo|latin hip hop).*")) return "urbano";
-        if (g.matches(".*(corrido|regional|mexican|banda|norteno|norteño|sierreno|mariachi|ranchera|grupero).*")) return "regional";
-        if (g.matches(".*(salsa|cumbia|bachata|merengue|tropical|vallenato).*")) return "tropical";
-        if (g.matches(".*(christian|cristian|worship|alabanza|gospel|adoracion).*")) return "cristiana";
-        if (g.matches(".*(children|infantil|kids|nursery|ninos|lullab|cancion de cuna).*")) return "infantil";
-        if (g.matches(".*(hip hop|rap|trap|drill|grime).*")) return "hiphop";
-        if (g.matches(".*(r b|rnb|soul|funk).*")) return "rnb";
-        if (g.matches(".*(electr|house|techno|edm|garage|dance|trance|dubstep|ambient|drum and bass).*")) return "electronica";
-        if (g.matches(".*(bolero|balada|ballad|romantic|romantica).*")) return "romantica";
-        if (g.matches(".*(rock|metal|punk|indie|alternative|grunge).*")) return "rock";
-        if (g.matches(".*(pop|latino|latin).*")) return "pop";
-        if (g.matches(".*(jazz|blues|classical|clasica).*")) return "clasica";
-        return g;
+        if (genero == null) return "";
+        return FAMILIA_CACHE.computeIfAbsent(genero, x -> {
+            String g = BibliotecaService.normalizar(x);
+            if (g.isEmpty() || g.equals("desconocido")) return "";
+            for (int k = 0; k < FAMILIAS.length; k++) if (PATRONES_FAMILIA[k].matcher(g).find()) return FAMILIAS[k][0];
+            return g;
+        });
     }
 
     /** Parecido entre dos artistas por sus géneros (0 a 1). */
