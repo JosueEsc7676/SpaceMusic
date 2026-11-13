@@ -1,6 +1,7 @@
 # Registro de cambios
 
 ## iPhone: API 3.5 y actualizaciones descargables
+- Publicado en el servidor como iPhone 1.21: /app/ios.html y /app/SpaceMusic-21.ipa. Rutas específicas de iPhone añadidas al servidor 3.5 conservando intacto el resto del JAR; respaldo, arranque sano y descarga pública verificados.
 - Salas para escuchar juntos (eventos en vivo, cola compartida, invitaciones y reacciones), dedicatorias programadas y cancelación, calidad automática/alta/ligera, comparación y descubrimiento en el resumen.
 - Despertador con subida gradual (con la app cerrada se toca la notificación para iniciar música); temporizador con bajada durante los últimos 30 segundos; letra ampliada y compartir versos como imagen.
 - Actualización descargada dentro de la app, progreso, cancelación, errores visibles y guardado en Archivos; validación de firma ZIP y SHA-256, manifiesto del servidor con respaldo en GitHub.
