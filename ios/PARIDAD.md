@@ -65,4 +65,9 @@ Inventario de las 148 rutas `/api` de los controladores Java (`@GetMapping`, `@P
 
 ## Servidor en producción distinto del repositorio (12/11/2026)
 
-El servidor responde con la versión **3.3** (`/app/novedades.json`), pero el código de `src/` en git es la **2.7**. La web en vivo trae funciones que no están en git ni en iOS: playlists colaborativas (`/api/playlists/{id}/colaboradores`), reportar un problema, «Tu año en SpaceMusic», transiciones entre canciones, volumen parejo, géneros por secciones de 50 en 50 (`/api/generos/{clave}`), elegir gustos al crear la cuenta, conteos de comunidad en administración y modo sin conexión por playlists/álbumes. Para portarlas a iOS hace falta subir a git el código actual del servidor. La ruta y el permiso del audio (`/api/canciones/{id}/audio?t=`) no cambiaron.
+El servidor responde con la versión **3.4.1**, pero el código de `src/` en git es la **2.7**. Por eso las funciones nuevas se portaron leyendo la web en vivo (sus archivos `js/`), no el repositorio. Ya están en iOS (compiladas, sin probar en el iPhone):
+
+- rutas musicales, descubrir, coincidimos, dedicatorias, preparar sin conexión, resumen de escucha, gustos, reportar y playlists colaborativas; géneros por secciones (`/api/generos/{clave}`, `/todas`);
+- administración: `/api/admin/soporte/*` (11 secciones), `/api/admin/descargas/*` (incluida la búsqueda en YouTube Music), `/api/admin/comunidad/reportes` y `/conteos`, y organización (organizador, IA local, cambios, vínculos, etiquetas, proveedores, ajustes, rendimiento).
+
+Lo que no hace la app: restaurar una copia de seguridad (la web tampoco; se hace en el servidor) y notificaciones push instantáneas con la app cerrada (piden APNs y cambios en el servidor; la app revisa en segundo plano cuando iOS se lo permite). La ruta y el permiso del audio (`/api/canciones/{id}/audio?t=`) no cambiaron.

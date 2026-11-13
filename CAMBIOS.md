@@ -1,6 +1,9 @@
 # Registro de cambios
 
 ## App de iPhone 1.1 (SwiftUI, de nuevo la app activa)
+- Funciones de la web 3.x: Rutas musicales, Descubrir, Coincidimos (sesiones en pareja), Dedicatorias, Preparar para escuchar sin conexión, «Tu resumen», elegir gustos, reportar un problema y playlists colaborativas; géneros por secciones y «Todas» de 50 en 50.
+- Administración completa como la web: Soporte técnico (resumen, monitor con gráficas, diagnóstico, incidencias, revisión de biblioteca, base de datos, sesiones, alertas y umbrales, auditoría, mantenimiento con copias de seguridad y cachés, informes y CSV), Descargar música (cola, YouTube Music, Spotify), Reportes de la comunidad con contador y Organización (organizador, IA, cambios, vínculos, etiquetas, proveedores, ajustes, rendimiento).
+- Letra sincronizada: las líneas ya no quedan pegadas al borde izquierdo al avanzar la canción.
 - Reproductor a pantalla completa con los botones Letra · AirPlay · Cola siempre visibles, sin barra de volumen y con la línea de la letra bajo el título; letra palabra a palabra y ajuste de sincronía por canción.
 - Si una canción no carga en 12 s se reintenta una vez y luego se explica el motivo (permiso, archivo, conexión, formato) en vez de girar en 0:00.
 - Notificaciones del iPhone para mensajes y avisos nuevos (también de actualización), y revisión en segundo plano con la app cerrada.

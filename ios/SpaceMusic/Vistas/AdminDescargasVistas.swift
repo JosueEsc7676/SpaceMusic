@@ -308,21 +308,7 @@ struct BuscarYouTubeVista: View {
             if let error { Section { Text(error).foregroundStyle(Tema.peligro) } }
             if buscando { ProgressView().frame(maxWidth: .infinity) }
             ForEach(resultados) { r in
-                if r.videoId != nil { filaCancion(r) } else {
-                    Button { Task { await abrirGrupo(r) } } label: {
-                        HStack(spacing: 12) {
-                            ImagenExterna(url: r.portada, redonda: r.tipo == "artista").frame(width: 48, height: 48)
-                            VStack(alignment: .leading) {
-                                Text(r.titulo).lineLimit(1)
-                                Text(r.tipo == "album" ? "Álbum" + (r.artistas.isEmpty ? "" : " · " + r.artistas.joined(separator: ", ")) + (r.anio.map { " · \($0)" } ?? "") : "Artista")
-                                    .font(.caption).foregroundStyle(Tema.secundario).lineLimit(1)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(Tema.secundario)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
+                if r.videoId != nil { filaCancion(r) } else { filaGrupo(r) }
             }
             if hayMas { Button("Cargar más") { limite = min(50, limite + 15); Task { await buscar() } } }
         }
@@ -341,6 +327,29 @@ struct BuscarYouTubeVista: View {
         .sheet(isPresented: Binding(get: { grupo != nil }, set: { if !$0 { grupo = nil } })) {
             if let g = grupo { GrupoYTHoja(titulo: g.titulo, lista: g.lista) { ids in await agregar(ids) } }
         }
+    }
+
+    private func subtituloGrupo(_ r: ResultadoYT) -> String {
+        guard r.tipo == "album" else { return "Artista" }
+        var partes = ["Álbum"]
+        if !r.artistas.isEmpty { partes.append(r.artistas.joined(separator: ", ")) }
+        if let a = r.anio { partes.append(a) }
+        return partes.joined(separator: " · ")
+    }
+
+    private func filaGrupo(_ r: ResultadoYT) -> some View {
+        Button { Task { await abrirGrupo(r) } } label: {
+            HStack(spacing: 12) {
+                ImagenExterna(url: r.portada, redonda: r.tipo == "artista").frame(width: 48, height: 48)
+                VStack(alignment: .leading) {
+                    Text(r.titulo).lineLimit(1)
+                    Text(subtituloGrupo(r)).font(.caption).foregroundStyle(Tema.secundario).lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Tema.secundario)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func filaCancion(_ r: ResultadoYT) -> some View {
