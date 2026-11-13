@@ -21,7 +21,7 @@ struct ActualizacionVista: View {
                     }
                     .disabled(act.revisando)
                 }
-                if let v = act.disponible {
+                if let v = act.publicada {
                     if let n = v.notas, !n.isEmpty {
                         Section("Qué cambia") { Text(n).font(.subheadline) }
                     }
@@ -46,11 +46,14 @@ struct ActualizacionVista: View {
                 }
                 if let error = act.ultimoError { Section { Text(error).foregroundStyle(Tema.peligro) } }
                 if let aviso { Section { Text(aviso).foregroundStyle(Tema.secundario) } }
+                Section {
+                    NavigationLink("Ver novedades de SpaceMusic") { NovedadesVista() }
+                }
             }
             .navigationTitle("Actualización")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Listo") { cerrar() } } }
-            .task { if act.disponible == nil { await act.revisar(avisar: false) } }
+            .task { await act.revisar(avisar: false) }
         }
     }
 

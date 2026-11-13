@@ -645,9 +645,11 @@ struct ResumenAvisos: Decodable {
     }
     struct UltimaNotificacion: Decodable {
         var id: Int; var texto: String; var ruta: String?
+        var tipo: String?
         init(from decoder: Decoder) throws {
             let c = try decoder.campos()
             id = c.entero("id") ?? 0; texto = c.texto("texto") ?? ""; ruta = c.texto("ruta")
+            tipo = c.texto("tipo")
         }
     }
     var mensajes: Int

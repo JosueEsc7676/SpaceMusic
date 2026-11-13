@@ -365,6 +365,10 @@ struct NotificacionesVista: View {
     }
 
     private func abrir(_ n: Notificacion) {
+        if n.tipo == "ACTUALIZACION" {
+            Navegacion.compartida.abrir(ruta: "#/actualizacion")
+            return
+        }
         if let r = n.ruta, !r.isEmpty { Navegacion.compartida.abrir(ruta: r) }
         else if let u = n.de?.username { Navegacion.compartida.ir(.perfil(u)) }
     }

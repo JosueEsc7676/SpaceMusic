@@ -89,6 +89,8 @@ struct Principal: View {
                     }
                     .padding(.horizontal, 16).padding(.vertical, 10)
                     .background(Capsule().fill(Color(white: 0.18)))
+                    .contentShape(Capsule())
+                    .onTapGesture { avisos.ejecutarAccion() }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 if reproductor.actual != nil, eventos.chatAbierto == nil {

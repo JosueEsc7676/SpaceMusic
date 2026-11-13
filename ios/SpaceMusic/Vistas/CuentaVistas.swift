@@ -131,6 +131,7 @@ struct EstadisticasVista: View {
 // MARK: - Novedades
 
 struct NovedadesVista: View {
+    @State private var verApp = false
     var body: some View {
         Cargador(cargar: { () async throws -> Novedad in try await API.get("/app/novedades.json") }) { n, recargar in
             List {
@@ -140,6 +141,8 @@ struct NovedadesVista: View {
             .refreshable { await recargar() }
         }
         .navigationTitle("Novedades")
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("App iPhone") { verApp = true } } }
+        .sheet(isPresented: $verApp) { ActualizacionVista() }
     }
 
     private func bloque(_ n: Novedad, actual: Bool) -> some View {

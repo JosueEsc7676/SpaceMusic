@@ -50,6 +50,20 @@ def publicar(destino, staging):
         origen = staging / nombre
         if origen.is_symlink() or not origen.is_file():
             raise ValueError("Falta un archivo regular: " + nombre)
+    # Enlace por número: el manifiesto nunca apunta a un IPA que cambia durante la descarga.
+    versionado = destino / ("SpaceMusic-" + str(int(version["code"])) + ".ipa")
+    if versionado.is_symlink():
+        raise ValueError("No se sobrescriben enlaces simbólicos")
+    if versionado.exists():
+        with versionado.open("rb") as f:
+            existente = hashlib.sha256()
+            for bloque in iter(lambda: f.read(1024 * 1024), b""): existente.update(bloque)
+        if existente.hexdigest() != version["sha256"]:
+            raise ValueError("Ese número ya fue publicado con otro archivo")
+    else:
+        shutil.copy2(staging / "SpaceMusic.ipa", staging / "versionado.ipa")
+        os.replace(staging / "versionado.ipa", versionado)
+        versionado.chmod(0o644)
     # El manifiesto se publica al final: nunca anuncia un IPA que todavía no está disponible.
     for nombre in nombres:
         actual = destino / nombre

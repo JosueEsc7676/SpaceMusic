@@ -71,6 +71,11 @@ final class Navegacion {
 
     /// Abre una ruta de la web, por ejemplo "#/u/ana" o "#/playlist/3".
     func abrir(ruta: String) {
+        if let u = URL(string: ruta), ["/app/SpaceMusic.ipa", "/app/ios.html"].contains(u.path),
+           u.host == nil || u.host == URL(string: Sesion.compartida.servidor)?.host {
+            abrir(ruta: "#/actualizacion")
+            return
+        }
         let limpia = ruta.replacingOccurrences(of: "#", with: "")
         let partes = limpia.split(separator: "?").first.map { $0.split(separator: "/").map(String.init) } ?? []
         let valor = partes.count > 1 ? (partes[1].removingPercentEncoding ?? partes[1]) : nil

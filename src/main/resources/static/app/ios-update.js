@@ -9,6 +9,7 @@
     if (ipa.protocol !== 'https:' || ipa.username || ipa.password) throw new Error('dirección inválida');
     estado.textContent = `Versión ${version.nombre} · compilación ${version.code}`;
     document.getElementById('notas').textContent = version.notas || '';
+    document.querySelector('a.principal').href = ipa.href;
     document.getElementById('huella').textContent = version.sha256 ? `SHA-256: ${version.sha256}` : '';
     for (const nombre of ['sidestore', 'altstore']) {
       const enlace = document.getElementById(nombre);

@@ -38,6 +38,7 @@ final class Actualizaciones {
     static let fuente = URL(string: "https://github.com/JosueEsc7676/SpaceMusic/releases/download/ios-latest/version-ios.json")!
 
     private(set) var disponible: Version?
+    private(set) var publicada: Version?
     private(set) var revisando = false
     private(set) var ultimoError: String?
     private(set) var descargando = false
@@ -66,6 +67,7 @@ final class Actualizaciones {
         do {
             let v = try await leerVersion()
             ultimoError = nil
+            publicada = v.code >= compilacionActual ? v : nil
             guard v.code > compilacionActual, enlaceIPA(v.ipa) != nil else { disponible = nil; return }
             disponible = v
             let clave = "actualizacionAvisada"
@@ -108,7 +110,7 @@ final class Actualizaciones {
 
     /// Abre SideStore o AltStore con el enlace del .ipa. Devuelve false si esa app no está instalada.
     func instalar(con instalador: Instalador) async -> Bool {
-        guard let v = disponible, let ipa = URL(string: v.ipa),
+        guard let v = disponible ?? publicada, let ipa = enlaceIPA(v.ipa),
               let url = URL(string: "\(instalador.rawValue)://install?url=\(ipa.absoluteString.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")")
         else { return false }
         return await UIApplication.shared.open(url)
@@ -116,7 +118,7 @@ final class Actualizaciones {
 
     /// Descarga dentro de la app y permite guardarla en Archivos o enviarla al instalador.
     func descargar() {
-        guard !descargando, let v = disponible, let ipa = enlaceIPA(v.ipa) else { return }
+        guard !descargando, let v = disponible ?? publicada, let ipa = enlaceIPA(v.ipa) else { return }
         descargando = true; progreso = 0; ultimoError = nil; archivo = nil
         tareaDescarga = Task {
             defer { descargando = false; tareaDescarga = nil }

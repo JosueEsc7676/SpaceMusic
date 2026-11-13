@@ -95,8 +95,11 @@ final class Eventos {
         if let n = r.ultimaNotificacion, n.id > vistos["n", default: 0] {
             vistos["n"] = n.id
             if !primeraVez {
-                avisar(titulo: "SpaceMusic", texto: n.texto, ruta: n.ruta ?? "#/", siempre: true)
-                if appActiva { Avisos.compartido.mostrar(n.texto) }
+                let ruta = n.tipo == "ACTUALIZACION" ? "#/actualizacion" : n.ruta ?? "#/"
+                avisar(titulo: "SpaceMusic", texto: n.texto, ruta: ruta, siempre: true)
+                if appActiva {
+                    Avisos.compartido.mostrar(n.texto, accion: ("Ver", { Navegacion.compartida.abrir(ruta: ruta) }))
+                }
             }
         }
         if primeraVez { vistos["m"] = vistos["m"] ?? 0; vistos["n"] = vistos["n"] ?? 0 }
