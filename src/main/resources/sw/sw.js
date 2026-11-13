@@ -1,12 +1,13 @@
 // Service worker de SpaceMusic. El servidor reemplaza __VERSION__ y __SHELL__ al arrancar.
 //
 // Cachés:
-//   - CACHE (versión):  archivos de la interfaz. Se renuevan completos con cada versión.
+//   - CACHE (versión):  archivos de la interfaz. Cada versión nueva copia de la anterior lo que no cambió
+//                       (misma huella) y descarga solo lo nuevo.
 //   - sm-api:           respuestas de la API (red primero; sin conexión se usa la última copia).
 //   - sm-portadas:      portadas (la URL lleva la huella de la imagen: nunca cambian).
 //   - sm-audio:         canciones guardadas en el dispositivo para escuchar sin conexión.
 const CACHE = '__VERSION__';
-const SHELL = [__SHELL__];
+const SHELL = [__SHELL__]; // [ruta, huella del contenido]
 const API = 'sm-api';
 const PORTADAS = 'sm-portadas';
 const AUDIO = 'sm-audio';
@@ -17,9 +18,28 @@ const ESPERA_RED_MS = 4000;  // pasado este tiempo sin respuesta, se usa la copi
 const PERMANENTES = [API, PORTADAS, AUDIO, DESCARGAS];
 
 self.addEventListener('install', (e) => {
-  // Archivo por archivo: si uno falla (p. ej. se renombró), el resto igual queda guardado y la app abre sin internet
-  e.waitUntil(caches.open(CACHE).then((c) => Promise.all(SHELL.map((u) => c.add(new Request(u, { cache: 'reload' })).catch(() => { })))));
+  e.waitUntil(instalar());
 });
+
+// Copia lo que no cambió desde la versión anterior (misma huella) y descarga solo lo nuevo
+async function instalar() {
+  const c = await caches.open(CACHE);
+  const anteriores = [];
+  for (const k of await caches.keys()) if (k !== CACHE && k.startsWith('sm-') && !PERMANENTES.includes(k)) anteriores.push(await caches.open(k));
+  await Promise.all(SHELL.map(async ([u, h]) => {
+    try {
+      for (const vieja of anteriores) {
+        const r = await vieja.match(u, { ignoreVary: true });
+        if (r && r.headers.get('X-SM-Huella') === h) { await c.put(u, r); return; }
+      }
+      const r = await fetch(new Request(u, { cache: 'reload' }));
+      if (!r.ok) return;
+      const cab = new Headers(r.headers);
+      cab.set('X-SM-Huella', h);
+      await c.put(u, new Response(await r.blob(), { status: r.status, statusText: r.statusText, headers: cab }));
+    } catch { /* si uno falla, el resto igual queda guardado y la app abre sin internet */ }
+  }));
+}
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys()

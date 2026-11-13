@@ -45,6 +45,8 @@ class ExperienciasTest {
     @Autowired DescubrirService descubrir;
     @Autowired RutasService rutas;
     @Autowired PrepararOfflineService preparar;
+    @Autowired JuntosService juntos;
+    @Autowired DedicatoriaRepository dedicatoriasRepo;
 
     Usuario ana, beto, carla;
     List<Cancion> lista = new ArrayList<>();
@@ -203,5 +205,75 @@ class ExperienciasTest {
         assertTrue(l.stream().noneMatch(p -> p.get("username").equals("ana_exp")));
         assertTrue(dedicatorias.personas(ana.getId(), "zzz").isEmpty());
         assertEquals(1, dedicatorias.personas(ana.getId(), "@carla").stream().filter(p -> p.get("username").equals("carla_exp")).count());
+    }
+
+    @Test
+    void dedicatoriaProgramadaNoSeVeHastaSuHora() {
+        Usuario emi = u("emi_exp"), rafa = u("rafa_exp");
+        sigue(rafa, emi);
+        Long cancion = lista.get(1).getId();
+        var cuando = java.time.LocalDateTime.now().plusHours(2);
+        Dedicatoria d = dedicatorias.enviar(emi.getId(), "rafa_exp", cancion, 0, "feliz cumpleaños", true, List.of(), null, cuando);
+        assertFalse(d.esEntregada());
+        // Beto todavía no la ve ni en su lista ni por enlace; Ana sí, con la fecha de entrega
+        assertThrows(NoSuchElementException.class, () -> dedicatorias.ver(d.getId(), rafa.getId()));
+        assertTrue(((List<?>) dedicatorias.listas(rafa.getId()).get("recibidas")).stream().noneMatch(x -> ((Map<?, ?>) x).get("id").equals(d.getId())));
+        assertNotNull(dedicatorias.ver(d.getId(), emi.getId()).get("programadaPara"));
+        // Llega la hora: se entrega
+        d.setProgramadaPara(java.time.LocalDateTime.now().minusMinutes(1));
+        dedicatoriasRepo.save(d);
+        dedicatorias.entregarProgramadas();
+        assertEquals(true, dedicatorias.ver(d.getId(), rafa.getId()).get("recibida"));
+        // Más de un año: no se permite; en el pasado: se envía al momento
+        assertThrows(IllegalArgumentException.class, () -> dedicatorias.enviar(emi.getId(), "rafa_exp", cancion, 0, null, true, List.of(), null, java.time.LocalDateTime.now().plusYears(2)));
+        assertTrue(dedicatorias.enviar(emi.getId(), "rafa_exp", cancion, 0, null, true, List.of(), null, java.time.LocalDateTime.now().minusDays(1)).esEntregada());
+    }
+
+    @Test
+    void cancelarProgramadaSoloQuienLaEnvio() {
+        Usuario emi = u("emi_exp"), rafa = u("rafa_exp");
+        sigue(rafa, emi);
+        Dedicatoria d = dedicatorias.enviar(emi.getId(), "rafa_exp", lista.get(2).getId(), 0, null, true, List.of(), null, java.time.LocalDateTime.now().plusDays(1));
+        assertThrows(NoSuchElementException.class, () -> dedicatorias.cancelarProgramada(d.getId(), rafa.getId()));
+        dedicatorias.cancelarProgramada(d.getId(), emi.getId());
+        assertTrue(dedicatoriasRepo.findById(d.getId()).isEmpty());
+    }
+
+    @Test
+    void escucharJuntosSalaConInvitacionControlYCola() {
+        Long c1 = lista.get(3).getId(), c2 = lista.get(4).getId();
+        // Solo a quien te sigue
+        assertThrows(IllegalArgumentException.class, () -> juntos.invitar(carla.getId(), "beto_exp"));
+        sigue(beto, carla);
+        long sala = ((Number) juntos.invitar(carla.getId(), "beto_exp").get("id")).longValue();
+        // Ana no está invitada: no ve la sala
+        assertThrows(NoSuchElementException.class, () -> juntos.ver(sala, ana.getId()));
+        // Beto invitado, todavía fuera: no puede sumar a la cola
+        assertEquals(false, juntos.ver(sala, beto.getId()).get("dentro"));
+        assertThrows(IllegalArgumentException.class, () -> juntos.sumarACola(sala, beto.getId(), c2));
+        juntos.unirse(sala, beto.getId());
+        // Solo el anfitrión controla la música
+        assertThrows(IllegalArgumentException.class, () -> juntos.estado(sala, beto.getId(), c1, 10, true));
+        juntos.estado(sala, carla.getId(), c1, 42, true);
+        var v = juntos.ver(sala, beto.getId());
+        assertEquals(c1, ((CancionDTO) v.get("cancion")).getId());
+        assertTrue(((Number) v.get("segundo")).doubleValue() >= 42);
+        // Cola: cualquiera de la sala suma; al empezar a sonar sale de la cola
+        juntos.sumarACola(sala, beto.getId(), c2);
+        assertEquals(1, ((List<?>) juntos.ver(sala, carla.getId()).get("cola")).size());
+        juntos.estado(sala, carla.getId(), c2, 0, true);
+        assertEquals(0, ((List<?>) juntos.ver(sala, carla.getId()).get("cola")).size());
+        assertThrows(IllegalArgumentException.class, () -> juntos.reaccionar(sala, beto.getId(), "no-es-emoji"));
+        juntos.reaccionar(sala, beto.getId(), "🔥");
+        // El anfitrión cierra: la sala deja de existir
+        juntos.salir(sala, carla.getId());
+        assertThrows(NoSuchElementException.class, () -> juntos.ver(sala, beto.getId()));
+    }
+
+    @Test
+    void audioLigeroSoloParaArchivosPesados() {
+        // 3 min a 320 kbps (~7 MB): necesita versión ligera; a 128 kbps (~2,9 MB): no
+        assertTrue(com.bpm.music.services.AudioLigeroService.necesita(7_200_000, 180));
+        assertFalse(com.bpm.music.services.AudioLigeroService.necesita(2_900_000, 180));
     }
 }

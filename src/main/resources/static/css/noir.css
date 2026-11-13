@@ -851,6 +851,8 @@ html.sin-red .card.no-disp, html.sin-red .mix.no-disp { opacity: .35; pointer-ev
 .rc-k { color: var(--text-2); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
 .rc-v { font-size: 34px; line-height: 1.1; }
 .resumen-card.grande .rc-v { font-size: 56px; }
+.resumen-descubrimiento { color: inherit; text-decoration: none; background: linear-gradient(160deg, rgba(var(--hero, 40,40,52), .55), var(--bg-elev-2) 70%); }
+.resumen-descubrimiento img, .resumen-descubrimiento .cover-fallback { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
 .rc-s { color: var(--text-2); font-size: 14px; }
 .resumen-h { margin: 28px 0 12px; font-size: 22px; }
 .resumen-artistas { display: grid; gap: 8px; }
@@ -1100,3 +1102,43 @@ body.admin-mode .sop-lado, body.admin-mode .sop-contenido { min-width: 0; }
   .ded-det-letra { font-size: 19px; }
   .ded-det-acc .btn { flex: 1 1 auto; justify-content: center; }
 }
+
+/* Dedicatorias programadas */
+.ded-cuando { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 4px; }
+.ded-cuando-op { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border, rgba(255,255,255,.14)); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.ded-cuando-op.sel { background: var(--text, #fff); color: var(--bg, #000); border-color: transparent; font-weight: 600; }
+.ded-cuando input[type="datetime-local"] { flex: 1 1 200px; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border, rgba(255,255,255,.14)); background: var(--bg-elev-2); color: inherit; font: inherit; color-scheme: dark; }
+.ded-programada { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px; margin: 14px 0; border-radius: 14px; background: rgba(255,255,255,.07); }
+.ded-programada > span { flex: 1 1 220px; }
+
+/* Escuchar juntos */
+.juntos { position: relative; }
+.juntos-fondo { position: absolute; inset: -24px -24px auto; height: 360px; background-size: cover; background-position: center; filter: blur(60px) saturate(1.3); opacity: .45; z-index: -1; pointer-events: none; }
+.juntos-cab h1 { margin: 10px 0 4px; font-size: clamp(28px, 5vw, 44px); }
+.juntos-vivo { animation: juntos-latido 1.6s ease-in-out infinite; }
+@keyframes juntos-latido { 50% { opacity: .55; } }
+.juntos-ahora { display: flex; gap: 18px; align-items: center; margin: 22px 0; }
+.juntos-ahora h2 { margin: 4px 0; font-size: 24px; }
+.juntos-portada, .juntos-ahora > img, .juntos-ahora > .cover-fallback { width: 132px; height: 132px; border-radius: 14px; object-fit: cover; flex: none; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+.juntos-vacia { display: flex; gap: 12px; align-items: center; padding: 18px; border-radius: 14px; background: rgba(255,255,255,.06); width: 100%; }
+.juntos-reacciones { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.juntos-reacciones button { font-size: 24px; width: 48px; height: 48px; border-radius: 50%; border: 0; background: rgba(255,255,255,.08); cursor: pointer; transition: transform .12s; }
+.juntos-reacciones button:active { transform: scale(1.25); }
+.juntos-acc { gap: 10px; margin-bottom: 8px; }
+.juntos-h { margin: 22px 0 10px; font-size: 16px; }
+.juntos-personas { display: flex; flex-wrap: wrap; gap: 10px; }
+.juntos-persona { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: rgba(255,255,255,.06); max-width: 100%; }
+.juntos-persona .p-avatar { width: 32px; height: 32px; }
+.juntos-cola, .juntos-resultados, .juntos-lista { display: flex; flex-direction: column; gap: 6px; }
+.juntos-res, .juntos-item { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 12px; background: rgba(255,255,255,.04); border: 0; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; width: 100%; }
+.juntos-res > span, .juntos-item > span { flex: 1; min-width: 0; }
+.juntos-res img, .juntos-res .cover-fallback { width: 44px; height: 44px; border-radius: 8px; flex: none; }
+.juntos-item img, .juntos-item .cover-fallback, .juntos-item-ico { width: 64px; height: 64px; border-radius: 10px; flex: none; display: grid; place-items: center; background: rgba(255,255,255,.06); }
+.juntos-res.hecho { opacity: .5; }
+.juntos-flota { position: fixed; bottom: 90px; z-index: 9999; font-size: 38px; pointer-events: none; animation: juntos-sube 2.5s ease-out forwards; }
+@keyframes juntos-sube { from { transform: translateY(0) scale(.6); opacity: 0; } 15% { opacity: 1; transform: translateY(-40px) scale(1.1); } to { transform: translateY(-60vh) scale(1); opacity: 0; } }
+@media (max-width: 600px) { .juntos-portada, .juntos-ahora > img, .juntos-ahora > .cover-fallback { width: 96px; height: 96px; } }
+
+/* Selectores dentro de los ajustes (calidad del audio) */
+.setting-row select { flex: none; max-width: 46%; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border, rgba(255,255,255,.14));
+  background: var(--bg-elev-2, #1c1c22); color: var(--text, #fff); font: inherit; font-size: 14px; color-scheme: dark; }

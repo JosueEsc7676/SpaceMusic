@@ -71,6 +71,18 @@ public class DedicatoriasService {
     @Transactional
     public Dedicatoria enviar(Long uid, String username, Long cancionId, Integer segundo, String mensaje,
                               boolean completa, List<String> lineas, Integer segundoFin) {
+        return enviar(uid, username, cancionId, segundo, mensaje, completa, lineas, segundoFin, null);
+    }
+
+    /** Igual, pero con fecha de entrega (por ejemplo un cumpleaños): hasta entonces la otra persona no la ve. */
+    @Transactional
+    public Dedicatoria enviar(Long uid, String username, Long cancionId, Integer segundo, String mensaje,
+                              boolean completa, List<String> lineas, Integer segundoFin, LocalDateTime programadaPara) {
+        if (programadaPara != null) {
+            if (programadaPara.isBefore(LocalDateTime.now().plusMinutes(1))) programadaPara = null; // ya es hora: se envía ahora
+            else if (programadaPara.isAfter(LocalDateTime.now().plusYears(1))) throw new IllegalArgumentException("Puedes programarla hasta con un año de anticipación");
+            else if (dedicatorias.countByDeIdAndEntregadaFalse(uid) >= 30) throw new IllegalArgumentException("Ya tienes muchas dedicatorias programadas");
+        }
         Usuario para = usuarios.findByUsernameIgnoreCase(username == null ? "" : username.trim().replaceFirst("^@", ""))
                 .filter(Usuario::isActivo).orElseThrow(() -> new IllegalArgumentException("No encontramos a esa persona"));
         if (para.getId().equals(uid)) throw new IllegalArgumentException("Dedícala a otra persona");
@@ -106,23 +118,56 @@ public class DedicatoriasService {
         d.setCompleta(completa);
         d.setLetra(fragmento);
         d.setSegundoFin(fin);
+        if (programadaPara != null) {
+            d.setProgramadaPara(programadaPara);
+            d.setEntregada(false);
+            return dedicatorias.save(d); // el aviso sale cuando llegue la hora (entregarProgramadas)
+        }
         d = dedicatorias.save(d);
+        avisar(d, c);
+        return d;
+    }
+
+    private void avisar(Dedicatoria d, CancionDTO c) {
+        Long uid = d.getDeId();
+        boolean completa = Boolean.TRUE.equals(d.getCompleta());
+        String fragmento = d.getLetra();
+        int seg = d.getSegundo();
         String quien = usuarios.findById(uid).map(Usuario::getNombreVisible).orElse("Alguien");
         String como = completa ? " completa" : fragmento != null ? " con un fragmento de la letra" : seg > 0 ? " desde el " + (seg / 60) + ":" + String.format("%02d", seg % 60) : "";
-        notificaciones.crear(para.getId(), "DEDICATORIA", uid, quien + " te dedicó «" + c.getNombre() + "»" + como, "#/dedicatorias/" + d.getId());
-        return d;
+        notificaciones.crear(d.getParaId(), "DEDICATORIA", uid, quien + " te dedicó «" + c.getNombre() + "»" + como, "#/dedicatorias/" + d.getId());
+    }
+
+    /** Cada minuto: entrega las dedicatorias programadas cuya hora llegó. */
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60_000, initialDelay = 30_000)
+    @Transactional
+    public void entregarProgramadas() {
+        for (Dedicatoria d : dedicatorias.findTop200ByEntregadaFalseAndProgramadaParaLessThanEqual(LocalDateTime.now())) {
+            d.setEntregada(true);
+            d.setFecha(LocalDateTime.now());
+            dedicatorias.save(d);
+            biblioteca.porId(d.getCancionId()).ifPresent(c -> avisar(d, c));
+        }
+    }
+
+    @Transactional
+    public void cancelarProgramada(Long id, Long uid) {
+        Dedicatoria d = dedicatorias.findById(id).filter(x -> x.getDeId().equals(uid) && !x.esEntregada())
+                .orElseThrow(() -> new NoSuchElementException("Dedicatoria programada no encontrada"));
+        dedicatorias.delete(d);
     }
 
     private Dedicatoria recibida(Long id, Long uid) {
         Dedicatoria d = dedicatorias.findById(id).orElseThrow(() -> new NoSuchElementException("Dedicatoria no encontrada"));
-        if (!d.getParaId().equals(uid)) throw new NoSuchElementException("Dedicatoria no encontrada");
+        if (!d.getParaId().equals(uid) || !d.esEntregada()) throw new NoSuchElementException("Dedicatoria no encontrada");
         return d;
     }
 
     public Map<String, Object> ver(Long id, Long uid) {
         Dedicatoria d = dedicatorias.findById(id).orElseThrow(() -> new NoSuchElementException("Dedicatoria no encontrada"));
-        if (!d.getParaId().equals(uid) && !d.getDeId().equals(uid)) throw new NoSuchElementException("Dedicatoria no encontrada");
-        if (d.getParaId().equals(uid) && !d.isVista()) { d.setVista(true); dedicatorias.save(d); }
+        boolean esDestino = d.getParaId().equals(uid) && d.esEntregada(); // la programada no se ve antes de tiempo
+        if (!esDestino && !d.getDeId().equals(uid)) throw new NoSuchElementException("Dedicatoria no encontrada");
+        if (esDestino && !d.isVista()) { d.setVista(true); dedicatorias.save(d); }
         return fila(d, uid);
     }
 
@@ -187,7 +232,7 @@ public class DedicatoriasService {
 
     public Map<String, Object> listas(Long uid) {
         Map<String, Object> r = new LinkedHashMap<>();
-        r.put("recibidas", dedicatorias.findTop100ByParaIdAndOcultaFalseOrderByFechaDesc(uid).stream().map(d -> fila(d, uid)).toList());
+        r.put("recibidas", dedicatorias.findTop100ByParaIdAndOcultaFalseOrderByFechaDesc(uid).stream().filter(Dedicatoria::esEntregada).map(d -> fila(d, uid)).toList());
         r.put("enviadas", dedicatorias.findTop100ByDeIdOrderByFechaDesc(uid).stream().limit(50).map(d -> fila(d, uid)).toList());
         r.put("bloqueadas", bloqueos.findByUsuarioId(uid).stream().map(b -> usuarios.findById(b.getBloqueadoId()).map(Usuario::getUsername).orElse("")).filter(s -> !s.isEmpty()).toList());
         return r;
@@ -207,6 +252,9 @@ public class DedicatoriasService {
         m.put("vista", d.isVista());
         m.put("guardada", d.isGuardada());
         m.put("recibida", d.getParaId().equals(uid));
+        // En milisegundos (instante exacto): el teléfono lo muestra en su propia hora
+        if (!d.esEntregada() && d.getProgramadaPara() != null)
+            m.put("programadaPara", d.getProgramadaPara().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
         Long otro = d.getParaId().equals(uid) ? d.getDeId() : d.getParaId();
         m.put("persona", usuarios.findById(otro).map(u -> Map.of("username", u.getUsername(), "nombre", u.getNombreVisible(), "fotoPerfil", Objects.toString(u.getFotoPerfil(), ""))).orElse(Map.of()));
         return m;

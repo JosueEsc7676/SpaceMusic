@@ -1,6 +1,6 @@
 // Modo sin conexión: guarda en el dispositivo lo que escuchas, sin descargas manuales.
 // El service worker (sw.js) sirve luego esas canciones, portadas y datos cuando no hay red.
-import { api, audioUrl, deUsuario } from './api.js';
+import { api, audioUrl, deUsuario, ajustesCalidad } from './api.js';
 import { bus, cover, servidor } from './util.js';
 import { icon } from './icons.js';
 import { player } from './player.js';
@@ -35,7 +35,7 @@ export function descargar(songs, { suelta = false } = {}) {
   for (const s of songs) {
     const ya = m[s.id];
     if (!ya) {
-      if (w) w.postMessage({ tipo: 'descargar-audio', id: s.id, url: location.origin + audioUrl(s.id) });
+      if (w) w.postMessage({ tipo: 'descargar-audio', id: s.id, url: location.origin + audioUrl(s.id, ajustesCalidad.descargas) });
       progreso.set(Number(s.id), 0);
       nuevas.push(s);
     }
@@ -336,7 +336,7 @@ export function iniciarOffline({ toast }) {
     const sinLista = Object.values(leerCol()).flatMap((c) => c.canciones || []).filter((x) => !leer()[x.id]);
     if (sinLista.length) descargar(sinLista, { suelta: false }); // se habían perdido (versiones anteriores)
     const faltan = Object.keys(leer()).map(Number).filter((id) => !disponibles.has(id) && !progreso.has(id));
-    if (w) for (const id of faltan) { progreso.set(id, 0); w.postMessage({ tipo: 'descargar-audio', id, url: location.origin + audioUrl(id) }); }
+    if (w) for (const id of faltan) { progreso.set(id, 0); w.postMessage({ tipo: 'descargar-audio', id, url: location.origin + audioUrl(id, ajustesCalidad.descargas) }); }
     if (faltan.length) refrescarMarcas();
   }).catch(() => { });
   bus.on('descargas', () => { if (sinRed) actualizarDisponibles(); });

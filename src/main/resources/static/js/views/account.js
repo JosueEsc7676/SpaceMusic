@@ -1,5 +1,5 @@
 // Perfil, ajustes y estadísticas personales
-import { api, session, logout } from '../api.js';
+import { api, session, logout, ajustesCalidad } from '../api.js';
 import { esc, fmtNum, fmtDate, cover, coverImg, plural, store , textoSinRed, detalleSinRed } from '../util.js';
 import { icon } from '../icons.js';
 import { prefs, fx, EQ_BANDS, EQ_PRESETS, nivelador, mezcla } from '../player.js';
@@ -97,6 +97,10 @@ export async function profileView(el, _p, _q, isStale) {
           <label class="switch"><input type="checkbox" data-normalizar ${prefs.normalizar ? 'checked' : ''}><span></span></label></div>` : ''}
         ${mezcla.disponible ? `<div class="setting-row"><div><div class="t">Transición entre canciones</div><div class="s" data-mezcla-txt>${prefs.mezcla ? `${prefs.mezcla} s: una canción se funde con la siguiente` : 'Desactivada'}</div></div>
           <input type="range" min="0" max="12" step="1" value="${Number(prefs.mezcla) || 0}" data-mezcla aria-label="Segundos de transición" style="width:130px"></div>` : ''}
+        <div class="setting-row"><div><div class="t">Calidad al escuchar</div><div class="s">Automática: ligera con datos móviles (gasta unas 3 veces menos), alta con WiFi</div></div>
+          <select data-calidad="escucha" aria-label="Calidad al escuchar"><option value="auto">Automática</option><option value="alta">Siempre alta</option><option value="ligera">Siempre ligera</option></select></div>
+        <div class="setting-row"><div><div class="t">Calidad de las descargas</div><div class="s">Ligera ocupa unas 3 veces menos espacio en el teléfono</div></div>
+          <select data-calidad="descargas" aria-label="Calidad de las descargas"><option value="alta">Alta</option><option value="ligera">Ligera</option></select></div>
         <div class="setting-row"><div><div class="t">Tus gustos</div><div class="s">Géneros y artistas para tu inicio y tus mixes</div></div>
           <button class="btn sm" data-gustos>${icon('heart', 'sm')} Elegir</button></div>
         <div class="setting-row"><div><div class="t">Tu resumen</div><div class="s">Lo que más escuchaste este mes y este año</div></div>
@@ -181,6 +185,10 @@ export async function profileView(el, _p, _q, isStale) {
     },
   }).then((r) => r && profileView(el, {}, {}, () => false));
   $('[data-gustos]')?.addEventListener('click', () => elegirGustos().catch(errorToast));
+  el.querySelectorAll('[data-calidad]').forEach((sel) => {
+    sel.value = ajustesCalidad[sel.dataset.calidad];
+    sel.addEventListener('change', () => { ajustesCalidad[sel.dataset.calidad] = sel.value; toast('Preferencia guardada'); });
+  });
   $('[data-normalizar]')?.addEventListener('change', (e) => { nivelador.activar(e.target.checked); toast(e.target.checked ? 'Volumen parejo activado' : 'Volumen parejo desactivado'); });
   const rango = $('[data-mezcla]');
   rango?.addEventListener('input', () => {

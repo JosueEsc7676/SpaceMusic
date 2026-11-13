@@ -167,6 +167,7 @@ public class MainActivity extends Activity {
         // Si la app se abrió desde una notificación, ir a esa pantalla cuando cargue
         final Intent inicio = getIntent();
         web.postDelayed(() -> abrirRuta(inicio), 4000);
+        revisarAlarma(inicio);
     }
 
     /** Al tocar una notificación con la app abierta. */
@@ -174,6 +175,29 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         abrirRuta(intent);
+        revisarAlarma(intent);
+    }
+
+    /** Despertador: encender la pantalla (también sobre la pantalla de bloqueo) y avisar a la web para que suene. */
+    private boolean alarmaPendiente = false;
+
+    private void revisarAlarma(Intent intent) {
+        if (intent == null || !intent.getBooleanExtra(Despertador.EXTRA, false)) return;
+        intent.removeExtra(Despertador.EXTRA);
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove("alarma").apply();
+        if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(true); setTurnScreenOn(true); }
+        else getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED | android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        alarmaPendiente = true;
+        if (paginaLista) sonarAlarma();
+    }
+
+    private void sonarAlarma() {
+        if (!alarmaPendiente || web == null) return;
+        alarmaPendiente = false;
+        web.evaluateJavascript("window.smAlarma && window.smAlarma()", null);
+        // La pantalla puede volver a apagarse sola después de un rato
+        web.postDelayed(() -> getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON), 10 * 60_000L);
     }
 
     private void abrirRuta(Intent intent) {
@@ -427,6 +451,18 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void lista() {
             paginaLista = true;
+            runOnUiThread(MainActivity.this::sonarAlarma);
+        }
+
+        /** Despertador: el teléfono abre la app a esa hora (milisegundos). */
+        @JavascriptInterface
+        public void programarAlarma(long cuando, String texto) {
+            if (cuando > System.currentTimeMillis()) Despertador.programar(MainActivity.this, cuando);
+        }
+
+        @JavascriptInterface
+        public void cancelarAlarma() {
+            Despertador.cancelar(MainActivity.this);
         }
 
         /** Pantalla sin conexión: volver a intentar abrir el servidor. */

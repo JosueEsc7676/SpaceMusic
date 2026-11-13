@@ -17,13 +17,10 @@ import { albumView, artistView, playlistView, likedView, genreView, mixView, his
 import { profileView, statsView, applyAccent, avatarHtml, openEqualizer } from './views/account.js';
 import { pintarCuerpo, ocultarSplash } from './splash.js';
 import { iniciarOffline, sinConexion } from './offline.js';
-import { perfilPublicoView } from './views/people.js';
-import { mensajesView } from './views/mensajes.js';
-import { novedadesView } from './views/novedades.js';
 import { iniciarAvisos } from './avisos.js';
 import { resumenView, revisarBienvenida } from './comunidad.js';
-import { rutasView, descubrirView, coincidimosView, dedicatoriasView, prepararView } from './experiencias.js';
 import { iniciarNativo, modoLigero } from './nativo.js';
+import { iniciarAlarma, abrirDespertador, alarmaGuardada } from './alarma.js';
 
 // Sesión vencida sin conexión: se entra igual para escuchar lo descargado (la sesión no caduca sin internet).
 // Al volver la conexión, el servidor decide: renueva el token o pide iniciar sesión otra vez.
@@ -144,6 +141,18 @@ setGuardiaSinRed((path) => {
   return m ? m[1] : null;
 });
 
+// Pantallas que no se usan al abrir: se cargan la primera vez que se visitan (el inicio arranca antes)
+const diferida = (cargar, nombre) => async (...args) => (await cargar())[nombre](...args);
+const perfilPublicoView = diferida(() => import('./views/people.js'), 'perfilPublicoView');
+const mensajesView = diferida(() => import('./views/mensajes.js'), 'mensajesView');
+const novedadesView = diferida(() => import('./views/novedades.js'), 'novedadesView');
+const experiencias = () => import('./experiencias.js');
+const rutasView = diferida(experiencias, 'rutasView');
+const descubrirView = diferida(experiencias, 'descubrirView');
+const coincidimosView = diferida(experiencias, 'coincidimosView');
+const dedicatoriasView = diferida(experiencias, 'dedicatoriasView');
+const prepararView = diferida(experiencias, 'prepararView');
+const juntosView = diferida(() => import('./juntos.js'), 'juntosView');
 route('/', homeView);
 route('/buscar', searchView);
 route('/biblioteca', libraryView);
@@ -169,6 +178,8 @@ route('/coincidimos/:id', coincidimosView);
 route('/dedicatorias', dedicatoriasView);
 route('/dedicatorias/:id', dedicatoriasView);
 route('/preparar', prepararView);
+route('/juntos', juntosView);
+route('/juntos/:id', juntosView);
 route('/admin', async (...args) => (await import('./views/admin.js')).adminView(...args));
 // Compatibilidad con marcadores y notificaciones anteriores.
 route('/soporte', (_el, _p, query) => go('/admin?tab=soporte' + (query.sec ? '&sec=' + encodeURIComponent(query.sec) : ''), { replace: true }));
@@ -210,6 +221,7 @@ $('[data-user-menu]').addEventListener('click', (e) => {
     { label: 'Rutas musicales', icon: 'compass', fn: () => go('/rutas') },
     { label: 'Descubrir', icon: 'sparkles', fn: () => go('/descubrir') },
     { label: 'El punto donde coincidimos', icon: 'users', fn: () => go('/coincidimos') },
+    { label: 'Escuchar juntos (en vivo)', icon: 'users', fn: () => go('/juntos') },
     { label: 'Dedicatorias', icon: 'heart', fn: () => go('/dedicatorias') },
     { label: 'Preparar sin internet', icon: 'download', fn: () => go('/preparar') },
     { label: 'Ecualizador', icon: 'sliders', fn: () => openEqualizer() },
@@ -530,6 +542,8 @@ function sleepMenu(anchor) {
     { title: sleep.active ? 'Temporizador activo' : 'Detener la música en…' },
     opt(5, '5 minutos'), opt(15, '15 minutos'), opt(30, '30 minutos'), opt(45, '45 minutos'), opt(60, '1 hora'), opt(90, '1 hora y media'),
     opt('end', 'Al terminar la canción'),
+    { sep: true },
+    { label: alarmaGuardada() ? 'Despertador activo: cambiar' : 'Despertador…', icon: 'sun', fn: () => abrirDespertador() },
     sleep.active ? { sep: true } : null,
     sleep.active ? { label: 'Desactivar temporizador', icon: 'close', danger: true, fn: () => { sleep.stop(); toast('Temporizador desactivado'); } } : null,
   ]);
@@ -629,6 +643,12 @@ async function boot() {
   setTimeout(() => { if (!document.body.classList.contains('admin-mode')) revisarBienvenida(); }, 1200);
   // App de Android: la página ya arrancó (si no llega este aviso sin internet, la app muestra
   // las canciones guardadas en el teléfono en vez de una pantalla negra)
+  iniciarAlarma();
+  // Escuchar juntos: si estabas en una sala al cerrar la app, se retoma (el módulo solo se carga si hace falta)
+  setTimeout(() => {
+    if (sinConexion()) return;
+    api('/api/juntos').then((l) => { if (l?.some((x) => x.dentro)) import('./juntos.js').then((m) => m.retomarSala()); }).catch(() => { });
+  }, 2500);
   try { window.SpaceMusicApp?.lista?.(); } catch { }
 
   if (session.isAdmin) {

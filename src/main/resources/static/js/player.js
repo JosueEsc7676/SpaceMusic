@@ -195,7 +195,8 @@ export const player = {
     if (auto && this.index < this.items.length - 1 && navigator.onLine !== false) return this._load(this.index + 1, true);
     if (this.index < this.items.length - 1 && auto) { audio.pause(); bus.emit('player:state'); bus.emit('toast', { msg: 'Sin conexión: no hay más canciones descargadas en esta lista' }); return; }
     if (this.repeat === 'all') return this._load(0, true);
-    if (prefs.autoRadio && this.current) return this._extendWithRadio(true);
+    // Escuchando juntos como invitado: la siguiente la decide el anfitrión (nada de radio propia)
+    if (prefs.autoRadio && this.current && this.context?.type !== 'juntos-oyente') return this._extendWithRadio(true);
     if (auto) { audio.pause(); audio.currentTime = 0; bus.emit('player:state'); }
   },
 
@@ -346,7 +347,7 @@ export const player = {
     bus.emit('player:queue');
     this._save();
     // Si quedan pocas canciones y la radio está activa, prepararla
-    if (prefs.autoRadio && this.repeat === 'off' && this.items.length - this.index <= 2 && this.context?.type !== 'cola') {
+    if (prefs.autoRadio && this.repeat === 'off' && this.items.length - this.index <= 2 && this.context?.type !== 'cola' && this.context?.type !== 'juntos-oyente') {
       setTimeout(() => this._extendWithRadio(false), 1500); // pronto, para que la siguiente ya se pueda precargar
     }
   },
@@ -463,7 +464,7 @@ audio.addEventListener('timeupdate', () => {
   }
   // Si la cola se acaba, pedir la radio con tiempo (no justo al terminar)
   const cur = player.current;
-  if (prefs.autoRadio && cur && player.repeat === 'off' && player.items.length - player.index <= 2
+  if (prefs.autoRadio && cur && player.repeat === 'off' && player.items.length - player.index <= 2 && player.context?.type !== 'juntos-oyente'
       && audio.duration && audio.currentTime > audio.duration * 0.2 && player._radioPara !== cur._uid) {
     player._radioPara = cur._uid;
     player._extendWithRadio(false);
@@ -619,7 +620,8 @@ export const sleep = {
   },
   _check() {
     const left = this.until - Date.now();
-    if (left <= 8000 && left > 0) { this.factor = Math.max(0, left / 8000); player._applyVolume(); }
+    // Los últimos 30 s el volumen baja poco a poco (curva suave: casi no se nota al quedarse dormido)
+    if (left <= 30000 && left > 0) { this.factor = Math.pow(Math.max(0, left / 30000), 1.5); player._applyVolume(); }
     if (left <= 0) {
       player.pause();
       this.stop();

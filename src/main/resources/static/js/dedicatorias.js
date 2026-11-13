@@ -8,6 +8,9 @@ import { setHero, setTitle } from './router.js';
 import { toast, errorToast, emptyState, trackList, modal, promptDialog } from './ui.js';
 import { player } from './player.js';
 
+const fechaLarga = (ms) => new Date(ms).toLocaleString('es', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' });
+const fechaCorta = (ms) => new Date(ms).toLocaleString('es', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+
 const avatar = (p, cls = '') => p?.fotoPerfil
   ? `<img class="ded-av ${cls}" src="${esc(p.fotoPerfil)}" alt="" loading="lazy">`
   : `<span class="ded-av ded-av-ini ${cls}">${esc((p?.nombre || p?.username || '?').slice(0, 1).toUpperCase())}</span>`;
@@ -72,7 +75,7 @@ function partirTexto(g, texto, ancho) {
 }
 
 /** Imagen 1080×1350 con la portada, la canción, el artista y la letra dedicada (o "canción completa"). */
-export async function tarjetaDedicatoria({ cancion, lineas = [], completa = false, de, para, mensaje }) {
+export async function tarjetaDedicatoria({ cancion, lineas = [], completa = false, de, para, mensaje, encabezado }) {
   const W = 1080, H = 1350;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
@@ -107,7 +110,7 @@ export async function tarjetaDedicatoria({ cancion, lineas = [], completa = fals
   }
   g.fillStyle = 'rgba(255,255,255,.7)';
   g.font = `600 30px ${fuente}`;
-  g.fillText(para ? `Para @${para}` : 'Una canción para ti', x0 + lado + 40, y0 + 60);
+  g.fillText(encabezado || (para ? `Para @${para}` : 'Una canción para ti'), x0 + lado + 40, y0 + 60);
   g.fillStyle = '#fff';
   g.font = `800 56px ${fuente}`;
   const titulo = partirTexto(g, cancion.nombre, W - (x0 + lado + 40) - 70).slice(0, 2);
@@ -144,7 +147,7 @@ export async function tarjetaDedicatoria({ cancion, lineas = [], completa = fals
   return new Promise((res) => c.toBlob(res, 'image/png'));
 }
 
-async function compartirImagen(blob, nombre) {
+export async function compartirImagen(blob, nombre) {
   const archivo = new File([blob], nombre, { type: 'image/png' });
   if (navigator.canShare?.({ files: [archivo] })) {
     try { await navigator.share({ files: [archivo] }); return; } catch (e) { if (e.name === 'AbortError') return; }
@@ -196,6 +199,11 @@ export async function dedicarCancion(song) {
       </section>
       <section data-paso="3" hidden>
         <textarea class="ded-msg" data-msg maxlength="280" placeholder="Por qué esta canción, por qué este momento (opcional)"></textarea>
+        <div class="ded-cuando" role="radiogroup" aria-label="Cuándo llega">
+          <button type="button" class="ded-cuando-op sel" data-cuando="ahora" aria-pressed="true">${icon('send', 'sm')} Ahora</button>
+          <button type="button" class="ded-cuando-op" data-cuando="programar" aria-pressed="false">${icon('clock', 'sm')} Programar</button>
+          <input type="datetime-local" data-fecha hidden aria-label="Fecha y hora en que llega">
+        </div>
         <div class="ded-previa" data-previa><p class="muted">Preparando la tarjeta…</p></div>
       </section>
       <p class="muted ded-nota">Se envía solo cuando pulsas Enviar.</p>
@@ -269,6 +277,19 @@ export async function dedicarCancion(song) {
         }, 250);
       };
       $('[data-msg]').addEventListener('input', generarPrevia);
+      // Programar: llega (y se avisa) en la fecha elegida; antes, la otra persona no la ve
+      const fecha = $('[data-fecha]');
+      const dosDig = (n) => String(n).padStart(2, '0');
+      const local = (d) => `${d.getFullYear()}-${dosDig(d.getMonth() + 1)}-${dosDig(d.getDate())}T${dosDig(d.getHours())}:${dosDig(d.getMinutes())}`;
+      const manana = new Date(Date.now() + 86400000); manana.setHours(9, 0, 0, 0);
+      fecha.value = local(manana);
+      fecha.min = local(new Date(Date.now() + 5 * 60000));
+      fecha.max = local(new Date(Date.now() + 365 * 86400000));
+      m.querySelectorAll('[data-cuando]').forEach((b) => b.onclick = () => {
+        m.querySelectorAll('[data-cuando]').forEach((x) => { x.classList.toggle('sel', x === b); x.setAttribute('aria-pressed', String(x === b)); });
+        fecha.hidden = b.dataset.cuando !== 'programar';
+        m._programar = b.dataset.cuando === 'programar';
+      });
       m._ir(1);
     },
     onAction: async (v, m) => {
@@ -276,14 +297,20 @@ export async function dedicarCancion(song) {
       if (v === 'atras') { m._ir(Math.max(1, paso - 1)); return false; }
       if (paso < 3) { m._ir(paso + 1); return false; }
       const ls = elegidas();
+      let programadaPara = null;
+      if (m._programar) {
+        programadaPara = new Date(m.querySelector('[data-fecha]').value).getTime();
+        if (!(programadaPara > Date.now() + 60000)) { toast('Elige una fecha y hora futura', { error: true }); return false; }
+      }
       const cuerpo = {
+        programadaPara,
         username: para, cancionId: song.id, mensaje: m.querySelector('[data-msg]').value, completa,
         lineas: completa ? [] : ls.map((l) => l.texto),
         segundo: completa ? 0 : ls[0]?.t != null ? Math.floor(ls[0].t) : enCurso,
         segundoFin: !completa && ls.length && ls[ls.length - 1].fin != null ? Math.ceil(ls[ls.length - 1].fin) : null,
       };
-      await api('/api/dedicatorias', { method: 'POST', body: cuerpo });
-      toast(`Dedicatoria enviada a @${para}`);
+      const r = await api('/api/dedicatorias', { method: 'POST', body: cuerpo });
+      toast(r?.programada ? `Programada: @${para} la recibirá el ${fechaLarga(programadaPara)}` : `Dedicatoria enviada a @${para}`);
     },
   });
   if (previa) URL.revokeObjectURL(previa);
@@ -302,7 +329,7 @@ export async function dedicatoriasView(el, params) {
       <span class="ded-item-txt"><b class="ellipsis">${esc(d.cancion?.nombre || 'Canción eliminada')}</b>
         <span class="muted ellipsis">${d.recibida ? 'De' : 'Para'} ${esc(d.persona.nombre || '')} · ${esc(timeAgo(d.fecha))}</span>
         ${d.letra ? `<span class="ded-item-letra ellipsis">“${esc(d.letra.split('\n')[0])}”</span>` : d.completa ? '<span class="ded-item-letra">La canción completa</span>' : d.mensaje ? `<span class="ded-item-letra ellipsis">“${esc(d.mensaje)}”</span>` : ''}</span>
-      ${d.recibida && !d.vista ? '<span class="sop-chip warn">Nueva</span>' : d.respuesta ? `<span class="sop-chip ok">${d.recibida ? 'Respondiste' : 'Respondió'}</span>` : ''}</a>`;
+      ${d.programadaPara ? `<span class="sop-chip gray">${icon('clock', 'sm')} ${esc(fechaCorta(d.programadaPara))}</span>` : d.recibida && !d.vista ? '<span class="sop-chip warn">Nueva</span>' : d.respuesta ? `<span class="sop-chip ok">${d.recibida ? 'Respondiste' : 'Respondió'}</span>` : ''}</a>`;
   el.innerHTML = `<div class="exp-cab"><span class="exp-ico">${icon('heart')}</span><div><h1>Dedicatorias</h1>
       <p class="muted">Canciones para un momento. Dedica desde el menú de cualquier canción (⋯ → Dedicar esta canción).</p></div></div>
     ${guardadas.length ? `<section class="panel"><div class="row" style="justify-content:space-between;align-items:center"><h3 style="margin:0">Canciones que me dedicaron</h3>
@@ -331,6 +358,8 @@ async function detalle(el, params) {
   el.innerHTML = `<article class="ded-det">
     <div class="ded-det-fondo" style="background-image:url('${esc(cover(c.portadaUrl, 640))}')"></div>
     <header class="ded-det-cab">${avatar(d.persona, 'grande')}<div><span class="muted">${esc(timeAgo(d.fecha))}</span><h1>${quien}</h1></div></header>
+    ${d.programadaPara ? `<div class="ded-programada">${icon('clock', 'sm')}<span>Programada: ${esc(d.persona.nombre)} la recibirá el <b>${esc(fechaLarga(d.programadaPara))}</b>. Hasta entonces no la ve.</span>
+      <button class="btn sm" data-cancelar>Cancelar envío</button></div>` : ''}
     <div class="ded-det-cancion">${coverImg(c.portadaUrl, 640, c.nombre, 'ded-det-portada')}
       <div><h2>${esc(c.nombre)}</h2><p class="muted">${esc(c.artista)}</p>
         ${d.completa ? `<span class="sop-chip ok">${d.recibida ? 'Te dedicaron esta canción completa' : 'La canción completa'}</span>`
@@ -345,6 +374,7 @@ async function detalle(el, params) {
     </div>
     <div class="ded-det-img" data-img></div>
     ${d.respuesta ? `<div class="ded-det-msg resp">${avatar(d.recibida ? session.user : d.persona)}<p><b>${d.recibida ? 'Tu respuesta' : 'Respondió'}:</b> ${esc(d.respuesta)}</p></div>`
+      : d.programadaPara ? ''
       : d.recibida ? `<div class="ded-det-responder"><textarea data-resp maxlength="280" placeholder="Responder a ${esc(d.persona.nombre)}…" aria-label="Respuesta"></textarea>
           <button class="btn primary sm" data-responder>${icon('send', 'sm')} Responder</button></div>` : '<p class="muted">Todavía no responde.</p>'}
   </article>`;
@@ -360,6 +390,9 @@ async function detalle(el, params) {
     .then((b) => { blob = b; const box = el.querySelector('[data-img]'); if (box) box.innerHTML = `<img src="${URL.createObjectURL(b)}" alt="Tarjeta de la dedicatoria" class="ded-tarjeta">`; })
     .catch(() => { });
   el.querySelector('[data-tarjeta]').onclick = () => { if (blob) compartirImagen(blob, `dedicatoria-${d.id}.png`); };
+  el.querySelector('[data-cancelar]')?.addEventListener('click', async () => {
+    try { await api(`/api/dedicatorias/${d.id}/programada`, { method: 'DELETE' }); toast('Envío cancelado'); location.hash = '#/dedicatorias'; } catch (e) { errorToast(e); }
+  });
   el.querySelector('[data-guardar]')?.addEventListener('click', async () => { await api(`/api/dedicatorias/${d.id}/guardar`, { method: 'POST', body: { guardar: !d.guardada } }).catch(errorToast); detalle(el, params); });
   el.querySelector('[data-responder]')?.addEventListener('click', async () => {
     try { await api(`/api/dedicatorias/${d.id}/respuesta`, { method: 'POST', body: { texto: el.querySelector('[data-resp]').value } }); toast('Respuesta enviada'); detalle(el, params); } catch (e) { errorToast(e); }

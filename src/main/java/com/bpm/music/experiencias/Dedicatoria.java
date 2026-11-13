@@ -35,4 +35,10 @@ public class Dedicatoria {
     private Integer segundoFin;
     /** Las líneas de letra elegidas, tal cual están en la canción (una por renglón). */
     @Column(columnDefinition = "TEXT") private String letra;
+    /** Dedicatoria programada: se entrega (aparece y se avisa) en esta fecha y hora. */
+    private LocalDateTime programadaPara;
+    /** false mientras espera su fecha; null o true = ya entregada (las anteriores a esta función). */
+    private Boolean entregada;
+
+    public boolean esEntregada() { return !Boolean.FALSE.equals(entregada); }
 }

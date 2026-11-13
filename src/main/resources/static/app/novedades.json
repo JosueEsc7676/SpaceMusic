@@ -1,11 +1,25 @@
 {
-  "version": "3.4.2",
-  "titulo": "Arreglo urgente: «sin conexión» con internet en Android",
+  "version": "3.5",
+  "titulo": "Novedades: escuchar juntos, despertador y más",
   "puntos": [
-    "Arreglado: la app de Android podía quedarse en «Sin conexión» aunque hubiera internet. Ahora reintenta sola y comprueba con el servidor antes de cambiar a modo sin conexión.",
-    "App de Android 1.8: reconoce los certificados nuevos de Let's Encrypt (teléfonos con Android antiguo), reintenta al abrir y, si no logra conectar, lo vuelve a intentar cada 15 segundos y muestra el motivo."
+    "Escuchar juntos, en vivo: abre una sala, invita a quien te sigue y escuchen la misma canción en el mismo segundo. Todos suman canciones a la cola y reaccionan con emojis. Menú de tu perfil → Escuchar juntos.",
+    "Dedicatorias programadas: elige «Programar» y la dedicatoria llega el día y la hora que quieras (por ejemplo, un cumpleaños). Puedes cancelarla antes.",
+    "Despertador: en el temporizador, elige hora y playlist; la música empieza bajito y sube poco a poco. En la app de Android 1.9 suena aunque la app esté cerrada.",
+    "El temporizador para dormir ahora baja el volumen durante los últimos 30 segundos.",
+    "Letra en pantalla completa en el celular y «Compartir versos como imagen» desde el menú de la letra.",
+    "Tu resumen compara con el período anterior, muestra tu descubrimiento (el artista nuevo que más escuchaste) y te avisa cada mes cuando está listo.",
+    "Calidad del audio: automática (ligera con datos móviles, gasta unas 3 veces menos) y descargas que ocupan menos. En Perfil → Reproducción.",
+    "La app abre más rápido y las actualizaciones descargan solo lo que cambió."
   ],
   "anteriores": [
+    {
+      "version": "3.4.2",
+      "titulo": "Arreglo urgente: «sin conexión» con internet en Android",
+      "puntos": [
+        "Arreglado: la app de Android podía quedarse en «Sin conexión» aunque hubiera internet. Ahora reintenta sola y comprueba con el servidor antes de cambiar a modo sin conexión.",
+        "App de Android 1.8: reconoce los certificados nuevos de Let's Encrypt (teléfonos con Android antiguo), reintenta al abrir y, si no logra conectar, lo vuelve a intentar cada 15 segundos y muestra el motivo."
+      ]
+    },
     {
       "version": "3.4.1",
       "titulo": "Novedades: dedicatorias con letra",

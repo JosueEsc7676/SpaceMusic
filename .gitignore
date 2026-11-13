@@ -58,3 +58,6 @@ android-movil/*.apk
 android-movil/*.idsig
 respaldos/
 data-perf/
+
+# Instaladores copiados al disco por el servidor (AppsController)
+/app/

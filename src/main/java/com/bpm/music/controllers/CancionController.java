@@ -114,8 +114,9 @@ public class CancionController {
      * Spring sirve solo el trozo pedido, así se puede adelantar la canción.
      */
     @GetMapping("/{id}/audio")
-    public ResponseEntity<Resource> audio(@PathVariable Long id) {
-        File f = canciones.archivo(id);
+    public ResponseEntity<Resource> audio(@PathVariable Long id, @RequestParam(required = false) String calidad) {
+        // calidad=ligera: versión AAC 128 kbps para datos móviles (si todavía no está lista, el original)
+        File f = "ligera".equals(calidad) && ligero != null ? ligero.archivo(id) : canciones.archivo(id);
         if (f == null || !f.canRead()) return ResponseEntity.notFound().build();
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(mime(f.getName())))
@@ -124,6 +125,11 @@ public class CancionController {
                 .lastModified(f.lastModified())
                 .body(new FileSystemResource(f));
     }
+
+    private com.bpm.music.services.AudioLigeroService ligero;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setLigero(com.bpm.music.services.AudioLigeroService ligero) { this.ligero = ligero; }
 
     @GetMapping("/{id}/descargar")
     public ResponseEntity<Resource> descargar(@PathVariable Long id) {

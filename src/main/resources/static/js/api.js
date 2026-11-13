@@ -95,7 +95,25 @@ export async function api(path, { method = 'GET', body, form, signal, timeout } 
 }
 
 /** URL de audio con el token (la etiqueta <audio> no envía cabeceras). */
-export const audioUrl = (id) => `/api/canciones/${id}/audio?t=${encodeURIComponent(session.token || '')}`;
+/**
+ * Calidad del audio: 'auto' (ligera con datos móviles o «ahorro de datos», alta con WiFi), 'alta' u 'ligera'.
+ * La ligera es AAC 128 kbps preparada en el servidor (si aún no está lista, llega la original).
+ */
+const leerAjuste = (k, def) => { try { return localStorage.getItem(k) || def; } catch { return def; } };
+export const ajustesCalidad = {
+  get escucha() { return leerAjuste('sm_calidad', 'auto'); },
+  set escucha(v) { try { localStorage.setItem('sm_calidad', v); } catch { } },
+  get descargas() { return leerAjuste('sm_calidad_descargas', 'alta'); },
+  set descargas(v) { try { localStorage.setItem('sm_calidad_descargas', v); } catch { } },
+};
+export function calidadAudio() {
+  const c = ajustesCalidad.escucha;
+  if (c !== 'auto') return c;
+  const n = navigator.connection;
+  return n && (n.saveData || n.type === 'cellular' || /2g|3g/.test(n.effectiveType || '')) ? 'ligera' : 'alta';
+}
+export const audioUrl = (id, calidad = calidadAudio()) =>
+  `/api/canciones/${id}/audio?t=${encodeURIComponent(session.token || '')}${calidad === 'ligera' ? '&calidad=ligera' : ''}`;
 export const downloadUrl = (id) => `/api/canciones/${id}/descargar?t=${encodeURIComponent(session.token || '')}`;
 
 /** Subida con progreso (fetch no informa el progreso de envío). */

@@ -182,6 +182,19 @@ export const np = {
     this.lyrFocus = store.get('sm_lyr_focus', false);
     el.classList.toggle('lyr-focus', this.lyrFocus);
     tabBox.addEventListener('click', (e) => {
+      // Eligiendo versos para compartir: tocar una línea la marca (no salta a ese momento)
+      if (this.eligiendo) {
+        const l = e.target.closest('.lyrics .line');
+        if (!l) return;
+        const todas = [...tabBox.querySelectorAll('.lyrics .line')];
+        const i = todas.indexOf(l);
+        if (this.versos.has(i)) this.versos.delete(i);
+        else if (this.versos.size >= 8) { toast('Hasta 8 versos'); return; }
+        else this.versos.add(i);
+        l.classList.toggle('elegida', this.versos.has(i));
+        this.pintarBarraVersos();
+        return;
+      }
       const line = e.target.closest('.line[data-t]');
       if (line && this.synced) {
         cancelAnimationFrame(tabBox._anim);
@@ -249,7 +262,8 @@ export const np = {
       { sep: true },
       conSync ? { label: `Ajustar sincronía (${fmtOffCorto(getOffset(s.id))})`, icon: 'clock', fn: () => this.menuSync(anchor) } : null,
       session.canEdit ? { label: 'Editar letra', icon: 'edit', fn: () => editLyrics(s) } : null,
-      !isMobile() ? { label: this.lyrFocus ? 'Letra normal' : 'Letra grande', icon: 'expand', fn: () => this.toggleFocus() } : null,
+      { label: this.lyrFocus ? 'Letra normal' : isMobile() ? 'Letra en pantalla completa' : 'Letra grande', icon: 'expand', fn: () => { if (this.tab !== 'letra') this.setTab('letra'); this.toggleFocus(); } },
+      this.tab === 'letra' && this.el.querySelector('.lyrics .line') ? { label: 'Compartir versos como imagen', icon: 'send', fn: () => this.elegirVersos(true) } : null,
       { sep: true },
       { label: 'Más opciones de la canción', icon: 'more', fn: () => songMenu(anchor, s) },
     ].filter(Boolean));
@@ -271,6 +285,43 @@ export const np = {
       { sep: true },
       { label: 'Restablecer', icon: 'refresh', fn: () => cambiar(0) },
     ]);
+  },
+
+  /** Modo para elegir versos de la letra y compartirlos como imagen (portada, canción, artista y versos). */
+  elegirVersos(si) {
+    this.eligiendo = si;
+    this.versos = new Set();
+    const box = this.el.querySelector('[data-np-tab]');
+    box.classList.toggle('eligiendo', si);
+    box.querySelectorAll('.line.elegida').forEach((l) => l.classList.remove('elegida'));
+    this.el.querySelector('.versos-barra')?.remove();
+    if (!si) return;
+    const barra = document.createElement('div');
+    barra.className = 'versos-barra';
+    barra.innerHTML = `<span data-n>Toca los versos que quieres compartir</span>
+      <button class="btn sm" data-cancelar>Cancelar</button><button class="btn sm primary" data-ok disabled>${icon('send', 'sm')} Compartir</button>`;
+    this.el.querySelector('.np-panel').appendChild(barra);
+    barra.querySelector('[data-cancelar]').onclick = () => this.elegirVersos(false);
+    barra.querySelector('[data-ok]').onclick = async () => {
+      const s = player.current;
+      const todas = [...box.querySelectorAll('.lyrics .line')];
+      const lineas = [...this.versos].sort((a, b) => a - b).map((i) => todas[i]?.textContent.trim()).filter(Boolean);
+      if (!s || !lineas.length) return;
+      try {
+        const { tarjetaDedicatoria, compartirImagen } = await import('./dedicatorias.js');
+        const blob = await tarjetaDedicatoria({ cancion: s, lineas, de: session.user?.username, encabezado: 'Escuchando en SpaceMusic' });
+        await compartirImagen(blob, `${s.nombre.replace(/[^\p{L}\p{N}\s-]/gu, '').trim() || 'versos'}.png`);
+        this.elegirVersos(false);
+      } catch (e) { errorToast(e); }
+    };
+  },
+
+  pintarBarraVersos() {
+    const b = this.el.querySelector('.versos-barra');
+    if (!b) return;
+    const n = this.versos.size;
+    b.querySelector('[data-n]').textContent = n ? `${n} ${n === 1 ? 'verso elegido' : 'versos elegidos'}` : 'Toca los versos que quieres compartir';
+    b.querySelector('[data-ok]').disabled = !n;
   },
 
   toggleFocus() {
@@ -321,6 +372,7 @@ export const np = {
     this.syncState();
     const s = player.current;
     if (!s) return;
+    if (this.eligiendo) this.elegirVersos(false); // cambió la canción o la pestaña
     const panel = this.el.querySelector('.np-panel');
     if (this.tab !== 'letra') {
       panel.classList.remove('is-lyrics');

@@ -306,7 +306,41 @@ public class ComunidadService {
         Long antes = jdbc.queryForObject("SELECT COUNT(*) FROM usuario_reproduccion WHERE usuario_id = ? AND fecha >= ? AND fecha < ?",
                 Long.class, uid, Timestamp.valueOf(antDesde.atStartOfDay()), Timestamp.valueOf(desde.atStartOfDay()));
         r.put("reproduccionesAnterior", antes == null ? 0 : antes);
+        if (antes != null && antes >= 5) r.put("cambioPorcentaje", Math.round(100.0 * (filas.size() - antes) / antes));
+
+        // Descubrimiento del período: el artista que más escuchó y que nunca había escuchado antes
+        Set<String> conocidos = new HashSet<>();
+        jdbc.query("SELECT DISTINCT cancion_id FROM usuario_reproduccion WHERE usuario_id = ? AND fecha < ?",
+                (rs, i) -> rs.getLong(1), uid, Timestamp.valueOf(desde.atStartOfDay()))
+                .forEach(id -> biblioteca.porId(id).ifPresent(c -> conocidos.add(BibliotecaService.normalizar(c.getArtista()))));
+        porArtista.entrySet().stream()
+                .filter(e -> !conocidos.contains(e.getKey()) && e.getValue()[0] >= 3)
+                .max(Comparator.comparingLong(e -> e.getValue()[1]))
+                .ifPresent(e -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("nombre", nombreArtista.get(e.getKey()));
+                    m.put("veces", e.getValue()[0]);
+                    m.put("minutos", e.getValue()[1] / 60);
+                    m.put("portadaUrl", portadaArtista.get(e.getKey()));
+                    r.put("descubrimiento", m);
+                });
         return r;
+    }
+
+    /** El día 1 de cada mes (10:00, hora de El Salvador): aviso «Ya está tu resumen de …» a quien escuchó lo suficiente. */
+    @org.springframework.scheduling.annotation.Scheduled(cron = "0 0 10 1 * *", zone = "America/El_Salvador")
+    public void avisarResumenDelMes() {
+        LocalDate desde = LocalDate.now(ZoneId.of("America/El_Salvador")).withDayOfMonth(1).minusMonths(1);
+        LocalDate hasta = desde.plusMonths(1);
+        String mes = desde.getMonth().getDisplayName(TextStyle.FULL, ES);
+        List<Long> quienes = jdbc.queryForList("SELECT usuario_id FROM usuario_reproduccion WHERE fecha >= ? AND fecha < ? GROUP BY usuario_id HAVING COUNT(*) >= 5",
+                Long.class, Timestamp.valueOf(desde.atStartOfDay()), Timestamp.valueOf(hasta.atStartOfDay()));
+        for (Long uid : quienes) {
+            try {
+                notificaciones.crear(uid, "RESUMEN", null, "Ya está tu resumen de " + mes + ": tus artistas, canciones y tu descubrimiento del mes",
+                        "#/resumen?anio=" + desde.getYear() + "&mes=" + desde.getMonthValue());
+            } catch (RuntimeException ignored) { /* un usuario con problema no frena a los demás */ }
+        }
     }
 
     private static int racha(Set<LocalDate> dias) {

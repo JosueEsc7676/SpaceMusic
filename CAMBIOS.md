@@ -1,5 +1,20 @@
 # Registro de cambios
 
+## Versión 3.5
+**Optimización**
+- **Service worker por huella de contenido** (`ServiceWorkerController`, `sw/sw.js`): la versión ya no cambia en cada reinicio del servidor; cada archivo lleva su huella y al instalar se copia de la versión anterior lo que no cambió (solo se descarga lo nuevo).
+- **Pantallas bajo demanda** (`main.js`): perfil público, mensajes, novedades, experiencias, dedicatorias y escuchar juntos se cargan al visitarlas. Inicio visible en celular simulado: 1,7 s (antes 2,2–3,7 s).
+- **Audio ligero** (`AudioLigeroService`): AAC 128 kbps con ffmpeg (nice 19, una a la vez, ~4 cada 3 min) en `music.light-path` (`./ligero`); `?calidad=ligera` entrega la ligera si está lista, si no la original; las de ≤160 kbps no se convierten. Ajustes «Calidad al escuchar» (automática según `navigator.connection`) y «Calidad de las descargas».
+- **Instaladores desde el disco** (`AppsController`): `/app/*.apk|json` se copian del jar a `music.apps-path` (`./app`) al arrancar y se entregan desde ahí (se usa la más reciente); una APK nueva se publica copiándola, sin reiniciar. Evita «ZipFile closed».
+- **MySQL** (`deploy/optimizar-mysql.sh`, con `sudo`): `innodb_buffer_pool_size=1G` y escucha solo en 127.0.0.1; `--revertir` para deshacer.
+
+**Ideas nuevas**
+- **Escuchar juntos** (`JuntosService`, `js/juntos.js`, `/api/juntos/**`): salas en memoria (máx. 8 personas, se cierran tras 30 min sin actividad), solo se invita a quien te sigue; el anfitrión controla y los invitados se sincronizan (eventos en vivo `juntos`, corrección cada 20 s si se desvían más de 2 s); cola compartida y reacciones.
+- **Resumen**: `cambioPorcentaje` respecto al período anterior, `descubrimiento` (artista nunca escuchado antes con más minutos) y aviso el día 1 de cada mes (10:00 El Salvador).
+- **Dedicatorias programadas**: `programadaPara`/`entregada`; el destinatario no la ve antes; entrega cada minuto; hasta 1 año y 30 pendientes; `DELETE /api/dedicatorias/{id}/programada`.
+- **Despertador** (`js/alarma.js`) y app Android 1.9 (`Despertador.java`: `setAlarmClock`, enciende la pantalla, se reprograma tras reiniciar). Temporizador para dormir: baja el volumen los últimos 30 s.
+- **Letra**: pantalla completa también en el celular y «Compartir versos como imagen» (hasta 8 versos).
+
 ## Versión 3.4.2 (urgente)
 - **Android: «sin conexión» con internet.** Un solo fallo al abrir dejaba la app en la pantalla sin conexión (y tras reinstalar no hay copia guardada). Ahora:
   - Web (`offline.js`): un fallo de petición con el teléfono en línea se confirma preguntando a `/api/auth/estado` (2 intentos) antes de pasar a modo sin conexión; estando sin conexión se vuelve a probar cada 15 s.

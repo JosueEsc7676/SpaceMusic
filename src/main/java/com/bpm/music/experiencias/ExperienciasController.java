@@ -16,9 +16,11 @@ public class ExperienciasController {
     private final CoincidimosService coincidimos;
     private final DedicatoriasService dedicatorias;
     private final PrepararOfflineService preparar;
+    private final JuntosService juntos;
 
     public ExperienciasController(RutasService rutas, DescubrirService descubrir, CoincidimosService coincidimos,
-                                  DedicatoriasService dedicatorias, PrepararOfflineService preparar) {
+                                  DedicatoriasService dedicatorias, PrepararOfflineService preparar, JuntosService juntos) {
+        this.juntos = juntos;
         this.rutas = rutas;
         this.descubrir = descubrir;
         this.coincidimos = coincidimos;
@@ -126,9 +128,19 @@ public class ExperienciasController {
     public Map<String, Object> dedicar(@RequestBody Map<String, Object> b) {
         List<String> lineas = b.get("lineas") instanceof List<?> l ? l.stream().map(x -> Objects.toString(x, "")).limit(40).toList() : null;
         Integer fin = b.get("segundoFin") == null ? null : entero(b.get("segundoFin"), 0);
+        // programadaPara: instante en milisegundos (lo manda el teléfono con su propia hora)
+        java.time.LocalDateTime cuando = null;
+        if (b.get("programadaPara") instanceof Number n && n.longValue() > 0)
+            cuando = java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(n.longValue()), java.time.ZoneId.systemDefault());
         Dedicatoria d = dedicatorias.enviar(CurrentUser.id(), Objects.toString(b.get("username"), null), id(b.get("cancionId")),
-                entero(b.get("segundo"), 0), Objects.toString(b.get("mensaje"), null), Boolean.TRUE.equals(b.get("completa")), lineas, fin);
-        return Map.of("id", d.getId());
+                entero(b.get("segundo"), 0), Objects.toString(b.get("mensaje"), null), Boolean.TRUE.equals(b.get("completa")), lineas, fin, cuando);
+        return Map.of("id", d.getId(), "programada", !d.esEntregada());
+    }
+
+    @DeleteMapping("/dedicatorias/{id}/programada")
+    public ResponseEntity<Void> cancelarProgramada(@PathVariable Long id) {
+        dedicatorias.cancelarProgramada(id, CurrentUser.id());
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/dedicatorias/personas")
@@ -155,6 +167,53 @@ public class ExperienciasController {
     @PostMapping("/dedicatorias/bloqueos")
     public ResponseEntity<Void> bloquear(@RequestBody Map<String, Object> b) {
         dedicatorias.bloquear(CurrentUser.id(), Objects.toString(b.get("username"), null), !Boolean.FALSE.equals(b.get("bloquear")));
+        return ResponseEntity.noContent().build();
+    }
+
+    // ── Escuchar juntos (en vivo) ──
+
+    @GetMapping("/juntos")
+    public List<Map<String, Object>> salas() { return juntos.mias(CurrentUser.id()); }
+
+    @PostMapping("/juntos")
+    public Map<String, Object> abrirSala(@RequestBody(required = false) Map<String, Object> b) {
+        String u = b == null ? null : Objects.toString(b.get("username"), null);
+        return u == null || u.isBlank() ? juntos.abrir(CurrentUser.id()) : juntos.invitar(CurrentUser.id(), u);
+    }
+
+    @GetMapping("/juntos/{id}")
+    public Map<String, Object> sala(@PathVariable Long id) { return juntos.ver(id, CurrentUser.id()); }
+
+    @PostMapping("/juntos/{id}/unirse")
+    public Map<String, Object> unirse(@PathVariable Long id) { return juntos.unirse(id, CurrentUser.id()); }
+
+    @PostMapping("/juntos/{id}/salir")
+    public ResponseEntity<Void> salirSala(@PathVariable Long id) { juntos.salir(id, CurrentUser.id()); return ResponseEntity.noContent().build(); }
+
+    @PostMapping("/juntos/{id}/estado")
+    public ResponseEntity<Void> estadoSala(@PathVariable Long id, @RequestBody Map<String, Object> b) {
+        double seg = b.get("segundo") instanceof Number n ? n.doubleValue() : 0;
+        juntos.estado(id, CurrentUser.id(), id(b.get("cancionId")), seg, Boolean.TRUE.equals(b.get("sonando")));
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/juntos/{id}/cola")
+    public ResponseEntity<Void> colaSala(@PathVariable Long id, @RequestBody Map<String, Object> b) {
+        Long c = id(b.get("cancionId"));
+        if (c == null) throw new IllegalArgumentException("Elige una canción");
+        juntos.sumarACola(id, CurrentUser.id(), c);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/juntos/{id}/cola/{cancionId}")
+    public ResponseEntity<Void> quitarColaSala(@PathVariable Long id, @PathVariable Long cancionId) {
+        juntos.quitarDeCola(id, CurrentUser.id(), cancionId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/juntos/{id}/reaccion")
+    public ResponseEntity<Void> reaccionSala(@PathVariable Long id, @RequestBody Map<String, Object> b) {
+        juntos.reaccionar(id, CurrentUser.id(), Objects.toString(b.get("emoji"), ""));
         return ResponseEntity.noContent().build();
     }
 

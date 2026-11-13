@@ -148,6 +148,13 @@ export async function resumenView(el, _p, query, isStale) {
         <div class="resumen-card"><span class="rc-k">Artistas</span><b class="rc-v">${fmtNum(r.artistasDistintos)}</b><span class="rc-s">${esc(r.estilo)}</span></div>
         <div class="resumen-card"><span class="rc-k">Mejor racha</span><b class="rc-v">${plural(r.racha, 'día', 'días')}</b><span class="rc-s">seguidos escuchando</span></div>
         <div class="resumen-card"><span class="rc-k">Tu momento</span><b class="rc-v" style="font-size:22px">${esc(r.momento)}</b><span class="rc-s">sobre todo los ${esc(r.diaFavorito)}${r.mesMasActivo ? ` · tu mes: ${esc(r.mesMasActivo)}` : ''}</span></div>
+        ${r.cambioPorcentaje != null ? `<div class="resumen-card"><span class="rc-k">Comparado con ${mes ? 'el mes anterior' : 'el año anterior'}</span>
+          <b class="rc-v" style="color:${r.cambioPorcentaje >= 0 ? 'var(--accent)' : 'inherit'}">${r.cambioPorcentaje > 0 ? '+' : ''}${r.cambioPorcentaje}%</b>
+          <span class="rc-s">${r.cambioPorcentaje >= 0 ? 'escuchaste más' : 'escuchaste menos'} (${fmtNum(r.reproduccionesAnterior)} → ${fmtNum(r.reproducciones)})</span></div>` : ''}
+        ${r.descubrimiento ? `<a class="resumen-card resumen-descubrimiento" href="#/artista/${encodeURIComponent(r.descubrimiento.nombre)}">
+          <span class="rc-k">Tu descubrimiento</span>${coverImg(r.descubrimiento.portadaUrl, 56)}
+          <b class="rc-v" style="font-size:22px">${esc(r.descubrimiento.nombre)}</b>
+          <span class="rc-s">nuevo para ti · ${plural(r.descubrimiento.minutos, 'minuto', 'minutos')}</span></a>` : ''}
       </div>
       ${r.topArtistas?.length ? `<h2 class="resumen-h">Tus artistas</h2><div class="resumen-artistas">${r.topArtistas.map((a, i) => `
         <a class="resumen-art" href="#/artista/${encodeURIComponent(a.nombre)}"><span class="ra-n">${i + 1}</span>${coverImg(a.portadaUrl, 72)}

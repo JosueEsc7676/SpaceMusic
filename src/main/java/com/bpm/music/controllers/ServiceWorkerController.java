@@ -11,24 +11,32 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.stream.Collectors;
 
 /**
  * Service worker de la app (plantilla en resources/sw/sw.js). Guarda la interfaz,
- * los datos, las portadas y las canciones escuchadas para usar la app sin conexión. La versión cambia en cada
- * arranque del servidor: cuando hay una versión nueva, el navegador descarga
- * el conjunto completo de una vez (nunca mezcla archivos viejos y nuevos).
+ * los datos, las portadas y las canciones escuchadas para usar la app sin conexión. La versión es la huella
+ * del contenido: solo cambia cuando cambia algún archivo (no en cada reinicio del servidor). Cada archivo lleva
+ * su propia huella y, al instalar una versión nueva, el teléfono copia de la versión anterior lo que no cambió
+ * y descarga solo lo nuevo (el conjunto se activa completo: nunca mezcla archivos viejos y nuevos).
  */
 @RestController
 public class ServiceWorkerController {
 
-    private final String version = "sm-" + Long.toString(System.currentTimeMillis(), 36);
+    private final String version;
     private final String script;
 
+    private static String huella(byte[] datos) {
+        try {
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(datos);
+            return java.util.HexFormat.of().formatHex(h, 0, 6);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     public ServiceWorkerController() throws IOException {
-        List<String> archivos = new ArrayList<>();
+        java.util.Map<String, String> archivos = new java.util.TreeMap<>();
         var resolver = new PathMatchingResourcePatternResolver();
         for (Resource r : resolver.getResources("classpath:/static/**/*.*")) {
             String url = r.getURL().toString();
@@ -41,12 +49,13 @@ public class ServiceWorkerController {
             if (java.util.Set.of("/js/views/admin.js", "/js/views/soporte.js",
                     "/js/views/reportes-admin.js", "/js/views/descargas-admin.js", "/js/views/descargas-buscar.js",
                     "/js/views/organizacion-admin.js").contains(ruta)) continue;
-            archivos.add(ruta);
+            try (var in = r.getInputStream()) { archivos.put(ruta, huella(in.readAllBytes())); }
         }
-        archivos.add("/");
-        String lista = archivos.stream().distinct().sorted().map(a -> "'" + a + "'").collect(Collectors.joining(","));
+        if (archivos.containsKey("/index.html")) archivos.put("/", archivos.get("/index.html"));
         // La plantilla está en resources/sw/sw.js (fuera de /static para que no se publique tal cual)
         String plantilla = new String(new ClassPathResource("sw/sw.js").getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        String lista = archivos.entrySet().stream().map(e -> "['" + e.getKey() + "','" + e.getValue() + "']").collect(Collectors.joining(","));
+        this.version = "sm-" + huella((plantilla + lista).getBytes(StandardCharsets.UTF_8));
         this.script = plantilla.replace("__VERSION__", version).replace("__SHELL__", lista);
     }
 
