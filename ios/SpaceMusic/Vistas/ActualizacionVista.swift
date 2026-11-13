@@ -28,13 +28,23 @@ struct ActualizacionVista: View {
                     Section {
                         Button { Task { await abrir(.sidestore) } } label: { Label("Instalar con SideStore", systemImage: "arrow.down.app") }
                         Button { Task { await abrir(.altstore) } } label: { Label("Instalar con AltStore", systemImage: "arrow.down.app") }
-                        Button { act.descargar() } label: { Label("Descargar el .ipa (para Sideloadly)", systemImage: "square.and.arrow.down") }
+                        Button { act.descargar() } label: { Label("Descargar actualización", systemImage: "square.and.arrow.down") }
+                            .disabled(act.descargando)
+                        if act.descargando {
+                            ProgressView(value: act.progreso) { Text("Descargando… \(Int(act.progreso * 100)) %") }
+                            Button("Cancelar descarga", role: .cancel) { act.cancelarDescarga() }
+                        }
+                        if let archivo = act.archivo {
+                            ShareLink(item: archivo) { Label("Guardar en Archivos o compartir IPA", systemImage: "square.and.arrow.up") }
+                            Text("Descarga terminada. Guarda el archivo y ábrelo con tu instalador.").font(.caption)
+                        }
                     } header: {
                         Text("Instalar")
                     } footer: {
                         Text("El iPhone no permite que una app se instale sola: el .ipa se firma con tu Apple ID. Con SideStore o AltStore en el teléfono basta un toque y no pierdes tus datos. Sin ellos, descarga el .ipa y ábrelo en Sideloadly desde la computadora como siempre.")
                     }
                 }
+                if let error = act.ultimoError { Section { Text(error).foregroundStyle(Tema.peligro) } }
                 if let aviso { Section { Text(aviso).foregroundStyle(Tema.secundario) } }
             }
             .navigationTitle("Actualización")

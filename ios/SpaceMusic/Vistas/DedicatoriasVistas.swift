@@ -89,7 +89,9 @@ struct FilaDedicatoria: View {
                     }
                 }
                 Spacer(minLength: 4)
-                if d.recibida && !d.vista {
+                if let ms = d.programadaPara {
+                    Text(Date(timeIntervalSince1970: ms / 1000), style: .date).font(.caption).foregroundStyle(Tema.celeste)
+                } else if d.recibida && !d.vista {
                     Text("Nueva").font(.caption2.weight(.bold)).foregroundStyle(.black)
                         .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Tema.celeste))
                 } else if d.respuesta != nil {
@@ -132,6 +134,15 @@ struct DedicatoriaVista: View {
                                 Text("\(Formato.duracion(d.segundo)) – \(Formato.duracion(fin))").font(.caption).foregroundStyle(Tema.secundario)
                             } else if d.segundo > 0 {
                                 Text("Desde el \(Formato.duracion(d.segundo))").font(.caption).foregroundStyle(Tema.secundario)
+                            }
+                        }
+                    }
+                    if let ms = d.programadaPara {
+                        Text("Programada para " + Date(timeIntervalSince1970: ms / 1000).formatted()).font(.subheadline)
+                        Button("Cancelar envío", role: .destructive) {
+                            Task {
+                                do { try await API.hacer("DELETE", "/api/dedicatorias/\(d.id)/programada"); Navegacion.compartida.ir(.dedicatorias) }
+                                catch { Avisos.compartido.error(error) }
                             }
                         }
                     }
@@ -243,6 +254,8 @@ struct DedicarHoja: View {
     @State private var previa: UIImage?
     @State private var cargando = true
     @State private var enviando = false
+    @State private var programar = false
+    @State private var fechaEnvio = Date().addingTimeInterval(86400)
 
     private var elegidas: [BloquesLetra.Linea] {
         guard let desde, !completa else { return [] }
@@ -358,6 +371,10 @@ struct DedicarHoja: View {
 
     private var pasoMensaje: some View {
         Form {
+            Section("Cuándo llega") {
+                Toggle("Programar envío", isOn: $programar)
+                if programar { DatePicker("Fecha y hora", selection: $fechaEnvio, in: Date().addingTimeInterval(60)...Date().addingTimeInterval(365 * 86400)) }
+            }
             Section("Mensaje (opcional)") {
                 TextField("Por qué esta canción, por qué este momento", text: $mensaje, axis: .vertical)
                     .lineLimit(2...6)
@@ -404,10 +421,14 @@ struct DedicarHoja: View {
             "lineas": completa ? [String]() : ls.map(\.texto),
             "segundo": completa ? 0 : (ls.first?.t.map { Int($0) } ?? enCurso),
         ]
+        if programar {
+            guard fechaEnvio.timeIntervalSinceNow > 60 else { Avisos.compartido.mostrar("Elige una fecha futura"); return }
+            cuerpo["programadaPara"] = Int64(fechaEnvio.timeIntervalSince1970 * 1000)
+        }
         if !completa, let fin = ls.last?.fin { cuerpo["segundoFin"] = Int(fin.rounded(.up)) }
         do {
             try await API.hacer("POST", "/api/dedicatorias", cuerpo)
-            Avisos.compartido.mostrar("Dedicatoria enviada a @\(para)")
+            Avisos.compartido.mostrar(programar ? "Dedicatoria programada" : "Dedicatoria enviada a @\(para)")
             cerrar()
         } catch { Avisos.compartido.error(error) }
     }

@@ -28,6 +28,8 @@ enum Destino: Hashable {
     case albumes
     case artistas
     // Funciones de la web 3.x
+    case juntos
+    case salaJuntos(Int)
     case rutas
     case descubrir
     case coincidimos
@@ -82,7 +84,13 @@ final class Navegacion {
             pestana = .mensajes
             rutas[.mensajes] = NavigationPath()
             if let v = valor { ir(.chat(v)) }
-        case "actualizacion": reproductorAbierto = false; verActualizacion = true
+        case "actualizacion":
+            reproductorAbierto = false
+            // Deja terminar el cierre del reproductor/hojas antes de presentar la descarga.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(450))
+                verActualizacion = true
+            }
         case "novedades": ir(.novedades)
         case "perfil": pestana = .perfil
         case "estadisticas": ir(.estadisticas)
@@ -96,6 +104,9 @@ final class Navegacion {
         case "buscar": pestana = .buscar
         case "inicio": pestana = .inicio
         case "subir": if Sesion.compartida.puedeEditar { ir(.subir) }
+        case "despertador":
+            Task { await Despertador.compartido.sonar() }
+        case "juntos": if let v = valor, let id = Int(v) { ir(.salaJuntos(id)) } else { ir(.juntos) }
         case "rutas": ir(.rutas)
         case "descubrir": ir(.descubrir)
         case "coincidimos": if let v = valor, let id = Int(v) { ir(.sesionCoincidimos(id)) } else { ir(.coincidimos) }
@@ -147,6 +158,8 @@ struct VistaDestino: View {
             case .usuarioAdmin(let id): UsuarioAdminVista(id: id)
             case .albumes: TodosAlbumesVista()
             case .artistas: TodosArtistasVista()
+            case .juntos: JuntosVista()
+            case .salaJuntos(let id): JuntosVista(id: id)
             case .rutas: RutasVista()
             case .descubrir: DescubrirVista()
             case .coincidimos: CoincidimosVista()

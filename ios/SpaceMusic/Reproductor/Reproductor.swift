@@ -87,6 +87,7 @@ final class Reproductor {
         let aleatorio: Bool
         let repetir: Int
     }
+    @ObservationIgnored private var subidaVolumen: Task<Void, Never>?
     var finTemporizador: Date?
     var dormirAlTerminar = false
     @ObservationIgnored private var temporizador: Task<Void, Never>?
@@ -97,13 +98,35 @@ final class Reproductor {
     func programarSueno(minutos: Int?) {
         temporizador?.cancel()
         finTemporizador = nil
+        jugador.volume = 1
         dormirAlTerminar = false
         guard let minutos else { return }
         finTemporizador = Date().addingTimeInterval(Double(minutos) * 60)
         temporizador = Task {
-            try? await Task.sleep(for: .seconds(Double(minutos) * 60))
+            let duracion = Double(minutos * 60)
+            let inicio = Date()
+            while !Task.isCancelled {
+                let restante = duracion - Date().timeIntervalSince(inicio)
+                if restante <= 0 { break }
+                jugador.volume = Float(min(1, restante / 30))
+                try? await Task.sleep(for: .milliseconds(250))
+            }
             guard !Task.isCancelled else { return }
-            pausar(); finTemporizador = nil
+            pausar(); finTemporizador = nil; jugador.volume = 1
+        }
+    }
+
+    func subirVolumenDurante(_ segundos: Int) {
+        subidaVolumen?.cancel()
+        jugador.volume = 0.05
+        subidaVolumen = Task {
+            let inicio = Date()
+            while !Task.isCancelled {
+                let fraccion = min(1, Date().timeIntervalSince(inicio) / Double(max(1, segundos)))
+                jugador.volume = Float(0.05 + 0.95 * fraccion)
+                if fraccion >= 1 { return }
+                try? await Task.sleep(for: .milliseconds(250))
+            }
         }
     }
 
@@ -176,6 +199,7 @@ final class Reproductor {
     }
 
     func pausar() {
+        subidaVolumen?.cancel()
         intencionSonar = false
         jugador.pause()
         guardarEstado()
@@ -226,6 +250,8 @@ final class Reproductor {
         indice -= 1
         cargarActual(reproducir: true)
     }
+
+    var listaParaBuscar: Bool { jugador.currentItem?.status == .readyToPlay }
 
     func buscar(_ segundos: Double) {
         guard segundos.isFinite else { return }
@@ -439,6 +465,7 @@ final class Reproductor {
 
     /// Deja lista la siguiente canción dentro del reproductor.
     private func prepararSiguiente() {
+        guard contexto != "juntos-oyente" else { return }
         let restante = duracion > 0 ? duracion - tiempo : .infinity
         if jugador.currentItem != nil, itemActual != nil, !actualCompleta, restante >= 40, cola.count - indice > 1 {
             // Aún se está bajando la actual: se deja pendiente para no repartir la conexión entre dos canciones.

@@ -130,6 +130,7 @@ struct Dedicatoria: Decodable, Identifiable {
     var recibida: Bool
     var persona: PersonaBreve?
     var fecha: String?
+    var programadaPara: Double?
     var letra: String?
     var completa: Bool
     var mensaje: String?
@@ -147,6 +148,7 @@ struct Dedicatoria: Decodable, Identifiable {
         recibida = c.bool("recibida") ?? false
         persona = c.v("persona")
         fecha = c.texto("fecha")
+        programadaPara = c.numero("programadaPara")
         letra = c.texto("letra")
         completa = c.bool("completa") ?? false
         mensaje = c.texto("mensaje")
@@ -254,6 +256,8 @@ struct ResumenEscucha: Decodable {
     var topGeneros: [GeneroTop]
     var serie: [Punto]
     var primeraCancion: Cancion?
+    var cambioPorcentaje: Double?
+    var descubrimiento: ArtistaTop?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.campos()
@@ -276,6 +280,8 @@ struct ResumenEscucha: Decodable {
         topGeneros = c.lista("topGeneros")
         serie = c.lista("serie")
         primeraCancion = c.v("primeraCancion")
+        cambioPorcentaje = c.numero("cambioPorcentaje")
+        descubrimiento = c.v("descubrimiento")
     }
 }
 

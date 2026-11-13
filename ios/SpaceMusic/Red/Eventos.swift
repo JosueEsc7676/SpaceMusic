@@ -57,6 +57,8 @@ final class Eventos {
     }
 
     func limpiar() {
+        EscuchaJuntos.compartida.detener()
+        Despertador.compartido.cancelar()
         desconectar()
         mensajesSinLeer = 0
         notificacionesSinLeer = 0
@@ -154,6 +156,8 @@ final class Eventos {
             if let json = try? JSONSerialization.jsonObject(with: d) as? [String: Any], let por = json["por"] as? String {
                 ultimoVisto = (por, Date())
             }
+        case "juntos", "juntos-fin", "juntos-reaccion":
+            EscuchaJuntos.compartida.evento(evento, datos: d)
         case "notificacion":
             Task { await actualizarResumen() }
         default:

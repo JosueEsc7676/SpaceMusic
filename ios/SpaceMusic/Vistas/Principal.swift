@@ -40,10 +40,12 @@ struct Principal: View {
         .task {
             Descargas.compartido.cargar()
             Reproductor.compartido.restaurar()
+            Despertador.compartido.vigilar()
             if !conexion.disponible { nav.pestana = .biblioteca; nav.ir(.descargas) }
             await Biblioteca.compartida.renovarSesionSiHaceFalta()
             guard !Task.isCancelled, Sesion.compartida.conectado else { return }
             Eventos.compartido.conectar()
+            await EscuchaJuntos.compartida.retomar()
             Eventos.pedirPermiso()
             await Biblioteca.compartida.cargar()
             if await GustosHoja.debePreguntar() {

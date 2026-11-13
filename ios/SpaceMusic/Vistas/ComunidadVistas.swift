@@ -218,6 +218,14 @@ struct ResumenVista: View {
             dato("Mejor racha", r.racha == 1 ? "1 día" : "\(r.racha) días", "seguidos escuchando")
             dato("Tu momento", r.momento, "sobre todo los \(r.diaFavorito)" + (r.mesMasActivo.map { " · tu mes: \($0)" } ?? ""))
         }
+        if let cambio = r.cambioPorcentaje {
+            dato("Comparado con el período anterior", String(format: "%+.0f %%", cambio), nil)
+        }
+        if let a = r.descubrimiento {
+            NavigationLink(value: Destino.artista(a.nombre)) {
+                Label("Tu descubrimiento: " + a.nombre, systemImage: "sparkles")
+            }
+        }
         if !r.topArtistas.isEmpty {
             Text("Tus artistas").titulo()
             ForEach(Array(r.topArtistas.enumerated()), id: \.offset) { i, a in

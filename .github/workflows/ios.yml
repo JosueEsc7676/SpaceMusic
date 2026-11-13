@@ -108,10 +108,11 @@ jobs:
         run: |
           export NOTAS=$(printf '%s' "$MENSAJE" | head -1 | cut -c1-200)
           python3 - <<'PY'
-          import json, os
+          import json, os, hashlib
           n = int(os.environ["NUMERO"])
+          sha = hashlib.sha256(open("SpaceMusic.ipa", "rb").read()).hexdigest()
           json.dump({"code": n, "nombre": f"1.{n}", "ipa": f"https://github.com/{os.environ['REPO']}/releases/download/ios-latest/SpaceMusic.ipa",
-                     "notas": os.environ.get("NOTAS", ""), "commit": os.environ.get("GITHUB_SHA", "")[:7]},
+                     "sha256": sha, "notas": os.environ.get("NOTAS", ""), "commit": os.environ.get("GITHUB_SHA", "")[:7]},
                     open("version-ios.json", "w"), ensure_ascii=False)
           PY
           gh release view ios-latest --repo "$REPO" >/dev/null 2>&1 ||             gh release create ios-latest --repo "$REPO" --prerelease --title "SpaceMusic para iPhone (última)"               --notes "Se actualiza sola con cada compilación correcta de la rama app-ios. Instala SpaceMusic.ipa con SideStore, AltStore o Sideloadly."

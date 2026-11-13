@@ -20,6 +20,7 @@ struct SpaceMusicApp: App {
             Eventos.compartido.appActiva = nueva == .active
             if nueva == .background { SegundoPlano.programar() }
             if nueva == .active {
+                Despertador.compartido.vigilar()
                 Task { await Actualizaciones.compartida.revisar(avisar: false) }
                 Eventos.compartido.conectar()
                 Task { await Eventos.compartido.actualizarResumen() }

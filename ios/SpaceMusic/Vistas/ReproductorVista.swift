@@ -18,6 +18,8 @@ struct ReproductorVista: View {
     @State private var colores = ColoresPortada.neutros
     @State private var desplazamiento: CGFloat = 0
     @State private var altoControles: CGFloat = 340
+    @State private var compartirVersos = false
+    @State private var letraAmpliada = false
 
     var body: some View {
         GeometryReader { espacio in
@@ -50,6 +52,8 @@ struct ReproductorVista: View {
         .onPreferenceChange(AltoControlesReproductor.self) { if $0 > 0 { altoControles = $0 } }
         .task(id: r.actual?.portadaUrl) { await calcularColores() }
         .accessibilityAction(.escape) { cerrar() }
+        .sheet(isPresented: $compartirVersos) { if let c = r.actual { CompartirVersosVista(cancion: c) } }
+        .fullScreenCover(isPresented: $letraAmpliada) { if let c = r.actual { LetraAmpliadaVista(cancion: c) } }
         .hojasGlobales()
     }
 
@@ -263,6 +267,8 @@ struct ReproductorVista: View {
             } label: {
                 Label(textoTemporizador, systemImage: "moon.zzz")
             }
+            Button { letraAmpliada = true } label: { Label("Letra a pantalla completa", systemImage: "arrow.up.left.and.arrow.down.right") }
+            Button { compartirVersos = true } label: { Label("Compartir versos como imagen", systemImage: "square.and.arrow.up") }
             if letras.sincronizada {
                 Menu {
                     Button("Letra antes (−0,5 s)") { letras.ajustarDesfase(-0.5) }

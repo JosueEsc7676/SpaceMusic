@@ -87,8 +87,21 @@ struct AjustesReproduccion: View {
     @State private var descargas = Descargas.compartido
     @AppStorage("acento") private var acento = Tema.acentoPorDefecto
     @State private var guardar = Descargas.compartido.guardarAlEscuchar
+    @AppStorage("calidadAudio") private var calidad = "auto"
+    @AppStorage("calidadDescargas") private var calidadDescargas = "alta"
 
     var body: some View {
+        Picker("Calidad del audio", selection: $calidad) {
+            Text("Automática").tag("auto")
+            Text("Alta").tag("alta")
+            Text("Ligera (menos datos)").tag("ligera")
+        }
+        Text("Automática usa audio ligero con datos móviles y alta calidad con Wi-Fi. Se aplica a la siguiente canción.")
+            .font(.caption).foregroundStyle(Tema.secundario)
+        Picker("Calidad de las nuevas descargas", selection: $calidadDescargas) {
+            Text("Alta").tag("alta")
+            Text("Ligera (menos espacio)").tag("ligera")
+        }
         Toggle(isOn: $guardar) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Guardar lo que escuchas")
