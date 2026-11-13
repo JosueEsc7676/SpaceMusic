@@ -80,7 +80,7 @@ final class SinConexion {
     }
 
     /** La página de la pantalla sin conexión con la lista de canciones. */
-    static String pagina(Context c, List<Cancion> lista, boolean faltaPermiso) {
+    static String pagina(Context c, List<Cancion> lista, boolean faltaPermiso, boolean hayRed, String error) {
         String plantilla;
         try (InputStream in = c.getResources().openRawResource(R.raw.sin_conexion)) {
             ByteArrayOutputStream b = new ByteArrayOutputStream();
@@ -109,7 +109,12 @@ final class SinConexion {
             }
         }
         return plantilla.replace("<!--CANTIDAD-->", lista.size() == 1 ? "1 canción" : lista.size() + " canciones")
-                .replace("<!--LISTA-->", h.toString());
+                .replace("<!--LISTA-->", h.toString())
+                .replace("<!--AVISO-->", hayRed
+                        ? "El teléfono tiene internet pero no se pudo abrir el servidor. Se vuelve a intentar sola cada 15 segundos."
+                        : "Sin conexión a internet. Aquí están las canciones descargadas en tu teléfono.")
+                .replace("<!--DETALLE-->", error == null || error.trim().isEmpty() ? "" : "Detalle: " + esc(error))
+                .replace("/*AUTO*/false", hayRed ? "true" : "false");
     }
 
     private static String duracion(long ms) {

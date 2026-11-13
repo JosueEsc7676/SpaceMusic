@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Certificados de confianza: los del sistema más las raíces de Let's Encrypt (ISRG Root X1, X2 y Root YE).
+     Los teléfonos con Android antiguo no traen las raíces nuevas y la app no podía abrir el servidor
+     ("sin conexión" con internet). Solo se agregan raíces públicas de Let's Encrypt; nunca se aceptan
+     certificados no válidos ni las del usuario. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/raices_letsencrypt" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

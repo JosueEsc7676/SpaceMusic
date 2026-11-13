@@ -46,7 +46,7 @@
 </head>
 <body>
 <header><h1>SpaceMusic</h1><small><!--CANTIDAD--></small></header>
-<div class="aviso">Sin conexión con el servidor. Aquí están las canciones descargadas en tu teléfono.</div>
+<div class="aviso"><!--AVISO--><small style="display:block;opacity:.6;margin-top:4px"><!--DETALLE--></small></div>
 <div class="acciones">
   <button class="btn" onclick="SpaceMusicApp.reintentar()">Reintentar conexión</button>
   <button class="btn sec" id="aleatorio">Aleatorio</button>
@@ -125,6 +125,8 @@
     else if (accion === 'prev') tocar(pos - 1);
     else if (accion === 'seek') audio.currentTime = Number(valor) || 0;
   };
+  // El teléfono tiene internet: se vuelve a intentar abrir el servidor cada 15 s (sin cortar la música que suena)
+  if (/*AUTO*/false) setInterval(function () { if (audio.paused) SpaceMusicApp.reintentar(); }, 15000);
 })();
 </script>
 </body>

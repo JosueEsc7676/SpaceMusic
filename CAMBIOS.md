@@ -1,5 +1,10 @@
 # Registro de cambios
 
+## Versión 3.4.2 (urgente)
+- **Android: «sin conexión» con internet.** Un solo fallo al abrir dejaba la app en la pantalla sin conexión (y tras reinstalar no hay copia guardada). Ahora:
+  - Web (`offline.js`): un fallo de petición con el teléfono en línea se confirma preguntando a `/api/auth/estado` (2 intentos) antes de pasar a modo sin conexión; estando sin conexión se vuelve a probar cada 15 s.
+  - App 1.8 (código 9): 3 reintentos con espera al abrir; `network_security_config` con las raíces de Let's Encrypt (ISRG Root X1, X2 y Root YE: el certificado del servidor ahora es YE2 → Root YE → X2 → X1); la pantalla sin conexión muestra el motivo y reintenta sola cada 15 s si hay internet (sin cortar la música). Nunca se aceptan certificados no válidos.
+
 ## Versión 3.4.1
 - **Arreglo visual:** la portada en la ventana "Dedicar" no tenía tamaño y ocupaba toda la pantalla (web y APK, que carga las mismas páginas). Regla general para portadas en filas de ventanas.
 - **Dedicatorias con letra** (`js/dedicatorias.js`): 3 pasos (para quién → qué parte → mensaje). Lista de seguidores con buscador (`GET /api/dedicatorias/personas`, mutuos primero); bloques de la letra (LRC o texto, sin marcas de tiempo por palabra) con inicio y fin, o "Toda la canción"; tarjeta 1080×1350 con portada, título, artista y letra, para compartir o descargar.

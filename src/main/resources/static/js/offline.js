@@ -186,10 +186,36 @@ function ponerRed(hay) {
 // Con la pantalla apagada o la app en segundo plano, iPhone corta las peticiones de la página
 // (no las del audio). Un fallo así no significa "sin conexión": si se tomara como tal, al terminar
 // la canción no se pasaría a la siguiente y el reproductor se cerraría.
-bus.on('red', (hay) => {
+// Una petición que falla no basta para decir "sin conexión" si el teléfono dice que hay red
+// (en Android pasa al abrir la app: la red todavía se está levantando o el servidor tardó):
+// se pregunta directamente al servidor, dos veces, antes de cambiar a modo sin conexión.
+let confirmando = null;
+function servidorResponde() {
+  if (confirmando) return confirmando;
+  confirmando = (async () => {
+    for (let i = 0; i < 2; i++) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 6000);
+      try {
+        const r = await fetch('/api/auth/estado', { cache: 'no-store', signal: ctrl.signal });
+        if (r.status < 500) return true;
+      } catch { /* se vuelve a probar */ } finally { clearTimeout(t); }
+      if (i === 0) await new Promise((res) => setTimeout(res, 1500));
+    }
+    return false;
+  })().finally(() => { confirmando = null; });
+  return confirmando;
+}
+bus.on('red', async (hay) => {
   if (!hay && document.hidden && navigator.onLine !== false) return;
+  if (!hay && !sinRed && navigator.onLine !== false && await servidorResponde()) return;
   ponerRed(hay && navigator.onLine !== false);
 });
+// Sin conexión pero el teléfono dice que hay red: cada 15 s se prueba si el servidor ya responde
+// (el evento "online" no llega si la red nunca se cayó)
+setInterval(() => {
+  if (sinRed && navigator.onLine !== false && !document.hidden) servidorResponde().then((ok) => { if (ok) ponerRed(true); });
+}, 15000);
 window.addEventListener('offline', () => ponerRed(false));
 window.addEventListener('online', () => ponerRed(true));
 document.documentElement.classList.toggle('sin-red', sinRed);

@@ -1,14 +1,22 @@
 {
-  "version": "3.4.1",
-  "titulo": "Novedades: dedicatorias con letra",
+  "version": "3.4.2",
+  "titulo": "Arreglo urgente: «sin conexión» con internet en Android",
   "puntos": [
-    "Al dedicar, elige a quién desde una lista con buscador: primero las personas que se siguen mutuamente.",
-    "Elige qué parte dedicar: toca un bloque de la letra para el inicio y otro para el fin, o dedica la canción completa.",
-    "Se genera una tarjeta con la portada, el nombre, el artista y la letra dedicada, que puedes compartir.",
-    "Quien la recibe ve la letra elegida (o «Te dedicaron esta canción completa») y puede escuchar justo ese fragmento.",
-    "Arreglado: la portada se veía gigante en la ventana de dedicar (web y app de Android)."
+    "Arreglado: la app de Android podía quedarse en «Sin conexión» aunque hubiera internet. Ahora reintenta sola y comprueba con el servidor antes de cambiar a modo sin conexión.",
+    "App de Android 1.8: reconoce los certificados nuevos de Let's Encrypt (teléfonos con Android antiguo), reintenta al abrir y, si no logra conectar, lo vuelve a intentar cada 15 segundos y muestra el motivo."
   ],
   "anteriores": [
+    {
+      "version": "3.4.1",
+      "titulo": "Novedades: dedicatorias con letra",
+      "puntos": [
+        "Al dedicar, elige a quién desde una lista con buscador: primero las personas que se siguen mutuamente.",
+        "Elige qué parte dedicar: toca un bloque de la letra para el inicio y otro para el fin, o dedica la canción completa.",
+        "Se genera una tarjeta con la portada, el nombre, el artista y la letra dedicada, que puedes compartir.",
+        "Quien la recibe ve la letra elegida (o «Te dedicaron esta canción completa») y puede escuchar justo ese fragmento.",
+        "Arreglado: la portada se veía gigante en la ventana de dedicar (web y app de Android)."
+      ]
+    },
     {
       "version": "3.4",
       "titulo": "Novedades: rutas musicales, dedicatorias y más",

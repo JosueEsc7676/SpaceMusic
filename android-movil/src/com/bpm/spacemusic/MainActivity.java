@@ -55,6 +55,9 @@ public class MainActivity extends Activity {
     private boolean enSinConexion = false;
     /** La web avisó que ya arrancó (SpaceMusicApp.lista()). */
     private volatile boolean paginaLista = false;
+    /** Reintentos de abrir el servidor en este arranque y el último error (se muestra en la pantalla sin conexión). */
+    private int intentosRed = 0;
+    private String ultimoError = "";
     private ConnectivityManager.NetworkCallback vigilaRed;
     private ValueCallback<Uri[]> archivoPendiente;
 
@@ -119,8 +122,23 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void onReceivedSslError(WebView view, android.webkit.SslErrorHandler handler, android.net.http.SslError error) {
+                // Nunca se acepta un certificado no válido; solo se anota para mostrarlo en la pantalla sin conexión
+                ultimoError = "Certificado no aceptado por el teléfono (tipo " + error.getPrimaryError() + ")";
+                handler.cancel();
+            }
+
+            @Override
             public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
                 if (!req.isForMainFrame() || errorMostrado || enSinConexion) return;
+                ultimoError = (err.getDescription() == null ? "" : err.getDescription().toString()) + " (" + err.getErrorCode() + ")";
+                // Con internet, un fallo al abrir suele ser pasajero (la red se está levantando, el servidor tardó):
+                // se reintenta hasta 3 veces antes de abrir la copia guardada o la pantalla sin conexión
+                if (!probandoCopia && intentosRed < 3 && hayInternet()) {
+                    intentosRed++;
+                    view.postDelayed(() -> { if (web != null && !enSinConexion) web.loadUrl(servidor() + "/"); }, 1500L * intentosRed);
+                    return;
+                }
                 if (!probandoCopia) {
                     // Sin conexión con el servidor: abrir la copia de SpaceMusic guardada en el teléfono
                     // (ahí funcionan el modo sin conexión y las canciones descargadas en la app)
@@ -186,6 +204,7 @@ public class MainActivity extends Activity {
     private void cargar() {
         errorMostrado = false;
         enSinConexion = false;
+        intentosRed = 0;
         // Sin internet se abre directamente la copia guardada (no hay que esperar a que falle)
         probandoCopia = !hayInternet();
         web.getSettings().setCacheMode(probandoCopia ? WebSettings.LOAD_CACHE_ELSE_NETWORK : WebSettings.LOAD_DEFAULT);
@@ -248,7 +267,8 @@ public class MainActivity extends Activity {
     void mostrarSinConexion() {
         enSinConexion = true;
         boolean permiso = permisoMusica();
-        String html = SinConexion.pagina(this, permiso ? SinConexion.canciones(this) : new java.util.ArrayList<SinConexion.Cancion>(), !permiso);
+        String html = SinConexion.pagina(this, permiso ? SinConexion.canciones(this) : new java.util.ArrayList<SinConexion.Cancion>(), !permiso,
+                hayInternet(), ultimoError);
         web.loadDataWithBaseURL(SinConexion.BASE, html, "text/html", "UTF-8", null);
         if (!permiso) pedirPermisoMusica();
     }
