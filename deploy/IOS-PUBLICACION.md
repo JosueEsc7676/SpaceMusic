@@ -1,5 +1,19 @@
 # Publicación de iPhone: 13/11/2026
 
+## Actualización 1.23: SyncPlay y navegación
+
+- App compilada desde `597d344`, compilación **23**.
+- [GitHub Actions correcto](https://github.com/JosueEsc7676/SpaceMusic/actions/runs/43524578230): 15 pruebas XCTest, pruebas del publicador y Xcode Release.
+- [IPA publicado](https://spacemusic.tail8ccfdf.ts.net/app/SpaceMusic-23.ipa).
+- SHA-256: `d1a32eaf63ff7e29246cae311782eb4f5f8ec7e0ace78f18663526f13d48b455`.
+- Registro de descargas plegable, desplazamiento propio y claves de Spotify accesibles desde la barra superior; detalle de usuarios mediante navegación directa; menú de canciones agrupado.
+- Dispositivos antes del corazón en el mini reproductor; selector de salida nativo y SyncPlay; accesos sociales en Mensajes, creación e invitación por chat y tarjeta para abrir la sala.
+- Letra ampliada con cabecera, fondo de portada, controles propios y desplazamiento sin rebote.
+- Publicado con `publicar-ios.py` sin cambiar ni reiniciar el backend 3.5. Página HTTP 200, IPA parcial HTTP 206, manifiesto 23 y descarga completa con SHA-256 idéntico al de GitHub. `/api/auth/estado` sigue respondiendo correctamente.
+- Pendiente en iPhone: navegación táctil, salidas Bluetooth/AirPlay, dos cuentas en SyncPlay y seguimiento visual de letras. Las pruebas de enlaces no sustituyen estas comprobaciones.
+
+## Publicación anterior 1.21
+
 - App: **1.21**, compilación **21**, commit **676dbab**.
 - GitHub Actions: <https://github.com/JosueEsc7676/SpaceMusic/actions/runs/43443743135> (pruebas Swift, pruebas del publicador y Xcode correctos).
 - Instalación: <https://spacemusic.tail8ccfdf.ts.net/app/ios.html>.
