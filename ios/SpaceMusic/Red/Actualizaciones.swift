@@ -87,6 +87,7 @@ final class Actualizaciones {
         // El servidor distribuye la copia publicada; GitHub queda de respaldo si no responde.
         let fuentes = [API.url("/app/version-ios.json"), Self.fuente].compactMap { $0 }
         var error: Error = URLError(.badServerResponse)
+        var mejor: Version?
         for fuente in fuentes {
             do {
                 var r = URLRequest(url: fuente, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 12)
@@ -95,10 +96,11 @@ final class Actualizaciones {
                 guard (respuesta as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
                 let v = try JSONDecoder().decode(Version.self, from: datos)
                 guard v.code > 0, enlaceIPA(v.ipa) != nil else { throw URLError(.cannotParseResponse) }
-                return v
+                if mejor == nil || v.code > mejor!.code { mejor = v }
             } catch is CancellationError { throw CancellationError() }
             catch let e { error = e }
         }
+        if let mejor { return mejor }
         throw error
     }
 

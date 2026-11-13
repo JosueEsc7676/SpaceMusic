@@ -86,6 +86,9 @@ final class Navegacion {
             if let v = valor { ir(.chat(v)) }
         case "actualizacion":
             reproductorAbierto = false
+            let hojas = Hojas.compartidas
+            hojas.agregarAPlaylist = nil; hojas.enviarCancion = nil; hojas.editarCancion = nil
+            hojas.dedicar = nil; hojas.reportar = nil; hojas.gustos = false
             // Deja terminar el cierre del reproductor/hojas antes de presentar la descarga.
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(450))

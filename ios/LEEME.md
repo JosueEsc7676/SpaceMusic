@@ -129,3 +129,12 @@ Cada compilación correcta de la rama `app-ios` publica `SpaceMusic.ipa` en la v
 - **Sin ellos**: «Descargar el .ipa» y ábrelo en Sideloadly desde la computadora como siempre.
 
 El iPhone no deja que una app se instale a sí misma: el .ipa hay que firmarlo con tu Apple ID, y eso lo hacen SideStore, AltStore o Sideloadly.
+
+
+## Actualización de API 3.5 (13/11/2026)
+
+Tú → Tu música incluye Escuchar juntos y Despertador. Las dedicatorias permiten programar fecha y hora y cancelar el envío pendiente. Reproducción ofrece calidad Automática/Alta/Ligera; Automática elige ligera en datos móviles. El resumen muestra la comparación con el período anterior y tu descubrimiento.
+
+El menú del reproductor permite ampliar la letra o compartir versos como imagen. El temporizador baja el volumen durante los últimos 30 segundos. Con la app cerrada el despertador es una notificación que se toca para iniciar música; iOS no garantiza ejecutar el reproductor a una hora exacta con la app suspendida.
+
+Actualizaciones: toca Descargar actualización y espera el progreso; al terminar usa Guardar en Archivos o compartir IPA. El archivo se comprueba antes de ofrecerlo. También puedes abrir `/app/ios.html` en el servidor para descargarlo. Instalar sigue necesitando SideStore, AltStore o Sideloadly y tu Apple ID.

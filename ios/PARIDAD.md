@@ -71,3 +71,21 @@ El servidor responde con la versión **3.4.1**, pero el código de `src/` en git
 - administración: `/api/admin/soporte/*` (11 secciones), `/api/admin/descargas/*` (incluida la búsqueda en YouTube Music), `/api/admin/comunidad/reportes` y `/conteos`, y organización (organizador, IA local, cambios, vínculos, etiquetas, proveedores, ajustes, rendimiento).
 
 Lo que no hace la app: restaurar una copia de seguridad (la web tampoco; se hace en el servidor) y notificaciones push instantáneas con la app cerrada (piden APNs y cambios en el servidor; la app revisa en segundo plano cuando iOS se lo permite). La ruta y el permiso del audio (`/api/canciones/{id}/audio?t=`) no cambiaron.
+
+
+## Auditoría del servidor 3.5 (13/11/2026)
+
+Referencia: módulos públicos `juntos.js`, `alarma.js`, `dedicatorias.js`, `api.js`, `comunidad.js` y `main.js` de producción; no se sustituyó el backend 3.5 por el código 2.7 del repositorio.
+
+| Función | Contrato comprobado | Estado del cliente | Verificación |
+|---|---|---|---|
+| Escuchar juntos | GET/POST /api/juntos; GET /{id}; POST /estado, /unirse, /salir, /reaccion, /cola; DELETE /cola/{cid}; eventos juntos, juntos-fin, juntos-reaccion | Implementado con el reproductor único, recuperación de sala y corrección de posición | Pendiente de probar con dos cuentas en dispositivos |
+| Dedicatorias programadas | POST /api/dedicatorias con programadaPara en milisegundos; DELETE /{id}/programada | Implementado | XCTest de contrato; falta envío real |
+| Calidad de audio | /api/canciones/{id}/audio?calidad=ligera | Implementado, automática con NWPathMonitor; descargas ligeras usan la ruta de audio | Falta comparar consumo/calidad en dispositivo |
+| Despertador | Preferencia local, favoritos o playlist | Limitado: reproducción si la app está activa; notificación para abrirla si está cerrada | Falta dispositivo |
+| Temporizador | Preferencia local | Bajada gradual durante últimos 30 s | Falta dispositivo |
+| Compartir versos / ampliar letra | Letra existente, tarjeta generada localmente | Implementado | Falta dispositivo |
+| Resumen | cambioPorcentaje y descubrimiento en /api/resumen | Implementado | XCTest con respuesta 3.5 y con campos ausentes |
+| Actualizaciones | /app/version-ios.json y GitHub ios-latest | Descarga con progreso, cancelación, validación ZIP y SHA-256 y guardado/compartir | Publicación valida número del IPA, identificador, ZIP y SHA; faltan instalación y toque de notificación en iPhone |
+
+Compilar y contrastar rutas no verifica todos los permisos, estados ni acciones del servidor. No se marca paridad funcional exhaustiva ni prueba en dispositivo.

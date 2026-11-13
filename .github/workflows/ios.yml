@@ -36,6 +36,10 @@ jobs:
       - name: Versión de Xcode
         run: xcodebuild -version
 
+      - name: Probar publicación de actualizaciones
+        working-directory: .
+        run: python3 -m unittest discover -s deploy -p test_publicar_ios.py
+
       - name: Probar modelos y letras
         run: |
           set -o pipefail

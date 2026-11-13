@@ -1,5 +1,12 @@
 # Registro de cambios
 
+## iPhone: API 3.5 y actualizaciones descargables
+- Salas para escuchar juntos (eventos en vivo, cola compartida, invitaciones y reacciones), dedicatorias programadas y cancelación, calidad automática/alta/ligera, comparación y descubrimiento en el resumen.
+- Despertador con subida gradual (con la app cerrada se toca la notificación para iniciar música); temporizador con bajada durante los últimos 30 segundos; letra ampliada y compartir versos como imagen.
+- Actualización descargada dentro de la app, progreso, cancelación, errores visibles y guardado en Archivos; validación de firma ZIP y SHA-256, manifiesto del servidor con respaldo en GitHub.
+- Página /app/ios.html y publicación del IPA sin reemplazar la API de producción. Pruebas del contrato 3.5 y de la publicación.
+
+
 ## App de iPhone 1.1 (SwiftUI, de nuevo la app activa)
 - Funciones de la web 3.x: Rutas musicales, Descubrir, Coincidimos (sesiones en pareja), Dedicatorias, Preparar para escuchar sin conexión, «Tu resumen», elegir gustos, reportar un problema y playlists colaborativas; géneros por secciones y «Todas» de 50 en 50.
 - Administración completa como la web: Soporte técnico (resumen, monitor con gráficas, diagnóstico, incidencias, revisión de biblioteca, base de datos, sesiones, alertas y umbrales, auditoría, mantenimiento con copias de seguridad y cachés, informes y CSV), Descargar música (cola, YouTube Music, Spotify), Reportes de la comunidad con contador y Organización (organizador, IA, cambios, vínculos, etiquetas, proveedores, ajustes, rendimiento).
