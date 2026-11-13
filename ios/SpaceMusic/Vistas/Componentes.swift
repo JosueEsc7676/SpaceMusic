@@ -98,49 +98,40 @@ struct OpcionesCancion: View {
     @State private var hojas = Hojas.compartidas
 
     var body: some View {
-        Button {
-            biblioteca.alternarFavorito(cancion)
-        } label: {
-            biblioteca.esFavorita(cancion.id)
-                ? Label("Quitar de favoritos", systemImage: "heart.slash")
-                : Label("Agregar a favoritos", systemImage: "heart")
+        Button { biblioteca.alternarFavorito(cancion) } label: {
+            Label(biblioteca.esFavorita(cancion.id) ? "Quitar de Me gusta" : "Me gusta", systemImage: biblioteca.esFavorita(cancion.id) ? "heart.fill" : "heart")
         }
-        Button {
-            Reproductor.compartido.agregarSiguiente(cancion)
-            Avisos.compartido.mostrar("Sonará a continuación")
-        } label: { Label("Reproducir a continuación", systemImage: "text.line.first.and.arrowtriangle.forward") }
-        Button {
-            Reproductor.compartido.agregarAlFinal([cancion])
-            Avisos.compartido.mostrar("Agregada a la cola")
-        } label: { Label("Agregar a la cola", systemImage: "text.append") }
         Button { hojas.agregarAPlaylist = [cancion] } label: { Label("Agregar a playlist", systemImage: "text.badge.plus") }
-        Button { Reproductor.compartido.reproducirSuelta(cancion, contexto: "radio") } label: {
-            Label("Iniciar radio", systemImage: "dot.radiowaves.left.and.right")
-        }
-        Button { hojas.enviarCancion = cancion } label: { Label("Enviar a un amigo", systemImage: "paperplane") }
-        Button { hojas.dedicar = cancion } label: { Label("Dedicar esta canción", systemImage: "heart.text.square") }
-        Divider()
-        Button { Navegacion.compartida.ir(.artista(cancion.artista)) } label: { Label("Ir al artista", systemImage: "music.mic") }
-        if !["single", "sencillo", ""].contains(cancion.album.lowercased()) {
-            Button { Navegacion.compartida.ir(.album(cancion.album)) } label: { Label("Ir al álbum", systemImage: "square.stack") }
-        }
-        Divider()
-        if descargas.descargada(cancion.id) {
-            Button(role: .destructive) { descargas.borrar(cancion) } label: { Label("Quitar descarga", systemImage: "trash") }
-        } else {
-            Button { descargas.descargar([cancion]) } label: { Label("Descargar", systemImage: "arrow.down.circle") }
-        }
-        Button { hojas.reportar = cancion } label: { Label("Reportar un problema", systemImage: "flag") }
-        if Sesion.compartida.puedeEditar {
-            Button { hojas.editarCancion = cancion } label: {
-                Label("Editar canción, portada y letra", systemImage: "square.and.pencil")
+        Menu {
+            Button { Reproductor.compartido.agregarSiguiente(cancion); Avisos.compartido.mostrar("Sonará a continuación") } label: {
+                Label("Reproducir a continuación", systemImage: "text.line.first.and.arrowtriangle.forward")
             }
-        }
-        if let url = API.url("/#/album/\(API.segmento(cancion.album))") {
-            ShareLink(item: url, subject: Text(cancion.nombre), message: Text("\(cancion.nombre) · \(cancion.artista)")) {
-                Label("Compartir", systemImage: "square.and.arrow.up")
+            Button { Reproductor.compartido.agregarAlFinal([cancion]); Avisos.compartido.mostrar("Agregada a la cola") } label: { Label("Agregar a la cola", systemImage: "text.append") }
+            Button { Reproductor.compartido.reproducirSuelta(cancion, contexto: "radio") } label: { Label("Iniciar radio", systemImage: "dot.radiowaves.left.and.right") }
+        } label: { Label("Cola y radio", systemImage: "music.note.list") }
+        Menu {
+            Button { hojas.enviarCancion = cancion } label: { Label("Enviar a un amigo", systemImage: "paperplane") }
+            Button { hojas.dedicar = cancion } label: { Label("Dedicar esta canción", systemImage: "heart.text.square") }
+            if let url = API.url("/#/album/\(API.segmento(cancion.album))") {
+                ShareLink(item: url, subject: Text(cancion.nombre), message: Text("\(cancion.nombre) · \(cancion.artista)")) { Label("Compartir enlace", systemImage: "square.and.arrow.up") }
             }
-        }
+        } label: { Label("Compartir", systemImage: "square.and.arrow.up") }
+        Menu {
+            if descargas.descargada(cancion.id) {
+                Button(role: .destructive) { descargas.borrar(cancion) } label: { Label("Quitar descarga", systemImage: "trash") }
+            } else {
+                Button { descargas.descargar([cancion]) } label: { Label("Descargar", systemImage: "arrow.down.circle") }
+            }
+            Button { Navegacion.compartida.ir(.artista(cancion.artista)) } label: { Label("Ver artista", systemImage: "music.mic") }
+            if !["single", "sencillo", ""].contains(cancion.album.lowercased()) {
+                Button { Navegacion.compartida.ir(.album(cancion.album)) } label: { Label("Ver álbum", systemImage: "square.stack") }
+            }
+            Divider()
+            Button { hojas.reportar = cancion } label: { Label("Reportar un problema", systemImage: "flag") }
+            if Sesion.compartida.puedeEditar {
+                Button { hojas.editarCancion = cancion } label: { Label("Editar canción, portada y letra", systemImage: "square.and.pencil") }
+            }
+        } label: { Label("Más acciones", systemImage: "slider.horizontal.3") }
     }
 }
 

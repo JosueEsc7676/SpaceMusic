@@ -10,6 +10,7 @@ struct MensajesVista: View {
 
     var body: some View {
         List {
+            Section { AccesosSocialesMensajes().listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 12, trailing: 12)).listRowSeparator(.hidden) }
             if let conversaciones {
                 if conversaciones.isEmpty {
                     EstadoVista(icono: "bubble.left.and.bubble.right", titulo: "Sin mensajes",
@@ -116,6 +117,7 @@ struct ChatVista: View {
     @State private var error: String?
     @State private var enviando = false
     @State private var cargandoMas = false
+    @State private var creandoSyncPlay = false
     @State private var eventos = Eventos.compartido
     @FocusState private var escribiendo: Bool
 
@@ -135,6 +137,16 @@ struct ChatVista: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button { Task { await iniciarSyncPlay() } } label: { Label("Iniciar SyncPlay", systemImage: "person.2.wave.2") }
+                        .disabled(creandoSyncPlay || chat?.puedeEscribir == false)
+                    NavigationLink { JuntosVista() } label: { Label("Mis salas SyncPlay", systemImage: "headphones") }
+                } label: {
+                    if creandoSyncPlay { ProgressView() } else { Image(systemName: "headphones") }
+                }
+                .accessibilityLabel("SyncPlay con este amigo")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(value: Destino.perfil(username)) {
                     Avatar(ruta: chat?.usuario?.fotoPerfil, nombre: chat?.usuario?.nombre ?? username, tamano: 30)
@@ -192,14 +204,18 @@ struct ChatVista: View {
                 .font(.footnote).foregroundStyle(Tema.secundario).padding()
         } else {
             HStack(alignment: .bottom, spacing: 8) {
-                if let c = Reproductor.compartido.actual {
-                    Button { Task { await enviar(cancion: c) } } label: {
-                        Image(systemName: "music.note").font(.body.weight(.semibold))
-                            .frame(width: 38, height: 38).background(Circle().fill(Tema.tarjeta))
+                Menu {
+                    if let c = Reproductor.compartido.actual {
+                        Button { Task { await enviar(cancion: c) } } label: { Label("Enviar la canción que suena", systemImage: "music.note") }
+                        Button { Hojas.compartidas.dedicar = c } label: { Label("Dedicar esta canción", systemImage: "heart.text.square") }
                     }
-                    .accessibilityLabel("Compartir la canción que suena")
-                    .disabled(enviando)
+                    Button { Task { await iniciarCoincidimos() } } label: { Label("Iniciar Coincidimos", systemImage: "person.2") }
+                    NavigationLink(value: Destino.dedicatorias) { Label("Mis dedicatorias", systemImage: "heart.text.square") }
+                } label: {
+                    Image(systemName: "plus").font(.body.weight(.semibold)).frame(width: 38, height: 38).background(Circle().fill(Tema.tarjeta))
                 }
+                .accessibilityLabel("Compartir música y conectar")
+                .disabled(enviando)
                 TextField("Mensaje", text: $texto, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($escribiendo)
@@ -248,6 +264,26 @@ struct ChatVista: View {
         }
     }
 
+    private func iniciarSyncPlay() async {
+        guard !creandoSyncPlay else { return }
+        creandoSyncPlay = true
+        defer { creandoSyncPlay = false }
+        do {
+            let (_, mensaje) = try await EscuchaJuntos.compartida.invitarPorMensaje(username)
+            if !mensajes.contains(where: { $0.id == mensaje.id }) { mensajes.append(mensaje) }
+            Avisos.compartido.mostrar("Invitación SyncPlay enviada")
+        } catch { Avisos.compartido.error(error) }
+    }
+
+    private func iniciarCoincidimos() async {
+        guard !enviando else { return }
+        enviando = true; defer { enviando = false }
+        do {
+            let r: RespuestaId = try await API.enviar("POST", "/api/coincidimos", ["username": username])
+            Navegacion.compartida.ir(.sesionCoincidimos(r.id))
+        } catch { Avisos.compartido.error(error) }
+    }
+
     private func enviar(cancion: Cancion?) async {
         let t = texto.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !enviando, !t.isEmpty || cancion != nil else { return }
@@ -289,7 +325,20 @@ struct Burbuja: View {
                     .buttonStyle(.plain)
                     .contextMenu { OpcionesCancion(cancion: c) }
                 }
-                if !(mensaje.cancion != nil && mensaje.texto == "🎵") {
+                if let sala = InvitacionSyncPlay.sala(en: mensaje.texto, servidor: Sesion.compartida.servidor) {
+                    Button { Navegacion.compartida.ir(.salaJuntos(sala)) } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("SyncPlay", systemImage: "headphones").font(.headline)
+                            Text(mensaje.mio ? "Invitaste a escuchar juntos" : "Te invitaron a escuchar juntos").font(.subheadline)
+                            Label("Abrir sala y unirme", systemImage: "arrow.up.right").font(.subheadline.weight(.bold))
+                        }
+                        .foregroundStyle(Tema.texto)
+                        .padding(16)
+                        .background(RoundedRectangle(cornerRadius: 18).fill(Tema.celeste.opacity(0.18)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Abre la invitación. La sala comprueba si puedes unirte.")
+                } else if !(mensaje.cancion != nil && mensaje.texto == "🎵") {
                     Text(mensaje.texto)
                         .padding(.horizontal, 14).padding(.vertical, 9)
                         .background(
@@ -402,5 +451,26 @@ struct NotificacionesVista: View {
         case "AVISO": return "megaphone.fill"
         default: return "bell.fill"
         }
+    }
+}
+
+
+/// Entradas sociales a mano en la cabecera de Mensajes, sin ocupar la barra de escritura.
+private struct AccesosSocialesMensajes: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            NavigationLink { JuntosVista() } label: { acceso("SyncPlay", "headphones", Tema.celeste) }
+            NavigationLink(value: Destino.coincidimos) { acceso("Coincidimos", "person.2", Tema.lila) }
+            NavigationLink(value: Destino.dedicatorias) { acceso("Dedicatorias", "heart.text.square", Tema.rosa) }
+        }
+        .buttonStyle(.plain)
+    }
+    private func acceso(_ titulo: String, _ icono: String, _ color: Color) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icono).font(.title3).foregroundStyle(color)
+            Text(titulo).font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, minHeight: 76)
+        .background(RoundedRectangle(cornerRadius: 16).fill(color.opacity(0.10)))
     }
 }

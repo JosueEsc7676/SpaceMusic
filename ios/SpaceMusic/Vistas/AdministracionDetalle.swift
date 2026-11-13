@@ -127,7 +127,7 @@ struct UsuarioAdminVista: View {
         }
         .disabled(ocupada)
         .navigationTitle("Detalle de usuario")
-        .task { await cargar() }.refreshable { await cargar() }
+        .task(id: id) { await cargar() }.refreshable { await cargar() }
         .confirmationDialog(accion == "recuperar" ? "¿Enviar correo de recuperación?" : "¿Cerrar todas sus sesiones?", isPresented: Binding(get: { accion != nil }, set: { if !$0 { accion = nil } }), titleVisibility: .visible) {
             Button("Confirmar") { if let ruta = accion { Task { await ejecutar(ruta) } } }
         }

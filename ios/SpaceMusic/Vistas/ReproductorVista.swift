@@ -19,6 +19,7 @@ struct ReproductorVista: View {
     @State private var desplazamiento: CGFloat = 0
     @State private var altoControles: CGFloat = 340
     @State private var compartirVersos = false
+    @State private var dispositivos = false
     @State private var letraAmpliada = false
 
     var body: some View {
@@ -52,6 +53,7 @@ struct ReproductorVista: View {
         .onPreferenceChange(AltoControlesReproductor.self) { if $0 > 0 { altoControles = $0 } }
         .task(id: r.actual?.portadaUrl) { await calcularColores() }
         .accessibilityAction(.escape) { cerrar() }
+        .sheet(isPresented: $dispositivos) { DispositivosVista() }
         .sheet(isPresented: $compartirVersos) { if let c = r.actual { CompartirVersosVista(cancion: c) } }
         .fullScreenCover(isPresented: $letraAmpliada) { if let c = r.actual { LetraAmpliadaVista(cancion: c) } }
         .hojasGlobales()
@@ -267,6 +269,7 @@ struct ReproductorVista: View {
             } label: {
                 Label(textoTemporizador, systemImage: "moon.zzz")
             }
+            Menu {
             Button { letraAmpliada = true } label: { Label("Letra a pantalla completa", systemImage: "arrow.up.left.and.arrow.down.right") }
             Button { compartirVersos = true } label: { Label("Compartir versos como imagen", systemImage: "square.and.arrow.up") }
             if letras.sincronizada {
@@ -280,9 +283,8 @@ struct ReproductorVista: View {
                     Label("Ajustar sincronía (\(textoDesfase))", systemImage: "clock.arrow.2.circlepath")
                 }
             }
-            if !c.album.isEmpty {
-                Section(textoContexto) { Text(c.album) }
-            }
+            } label: { Label("Letra", systemImage: "quote.bubble") }
+
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 15, weight: .bold))
@@ -349,8 +351,10 @@ struct ReproductorVista: View {
 
             HStack(spacing: 0) {
                 botonPanel(.letra, icono: "quote.bubble", nombre: "Letra")
-                SelectorSalida().frame(width: 44, height: 44).frame(maxWidth: .infinity)
-                    .accessibilityLabel("AirPlay y Bluetooth")
+                Button { dispositivos = true } label: {
+                    Image(systemName: "airplayaudio").frame(width: 44, height: 44).frame(maxWidth: .infinity)
+                }
+                .accessibilityLabel("Dispositivos y SyncPlay")
                 botonPanel(.cola, icono: "list.bullet", nombre: "A continuación")
                     .overlay(alignment: .topTrailing) {
                         if r.aleatorio || r.repetir != .no {
@@ -565,6 +569,8 @@ struct LetraBreve: View {
 /// - al deslizar con el dedo todo se enfoca y la letra deja de seguir la canción unos segundos;
 /// - tocar una línea salta a ese momento; las pausas largas muestran tres puntos que se van llenando.
 struct LetraCompleta: View {
+    var ampliada = false
+    @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
     @State private var r = Reproductor.compartido
     @State private var letras = Letras.compartido
     @State private var actual: Int?
@@ -602,12 +608,13 @@ struct LetraCompleta: View {
     }
 
     private var sincronizada: some View {
-        ScrollViewReader { lector in
+        GeometryReader { espacio in
+          ScrollViewReader { lector in
             ScrollView(showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 30) {
                     ForEach(letras.lineas) { l in
                         LineaLetraVista(linea: l, activa: l.id == actual, pasada: (actual ?? -1) > l.id,
-                                        distancia: actual.map { abs(l.id - $0) } ?? 2, enfocada: manual)
+                                        distancia: actual.map { abs(l.id - $0) } ?? 2, enfocada: manual, ampliada: ampliada)
                             .id(l.id)
                             .contentShape(Rectangle())
                             .onTapGesture {
@@ -622,7 +629,7 @@ struct LetraCompleta: View {
                 // Sin margen aquí: cada línea lleva el suyo y ocupa todo el ancho, así desplazar hasta la línea
                 // activa nunca mueve la letra hacia los lados (antes quedaba pegada al borde izquierdo).
                 .padding(.top, 36)
-                .padding(.bottom, 380)
+                .padding(.bottom, max(140, espacio.size.height * 0.6))
             }
             .simultaneousGesture(DragGesture(minimumDistance: 6).onChanged { _ in
                 manual = true
@@ -641,7 +648,7 @@ struct LetraCompleta: View {
                             if primera {
                                 lector.scrollTo(i, anchor: UnitPoint(x: 0.5, y: 0.22))
                             } else {
-                                withAnimation(.spring(response: 0.65, dampingFraction: 0.86)) {
+                                withAnimation(.easeInOut(duration: reducirMovimiento ? 0 : 0.5)) {
                                     lector.scrollTo(i, anchor: UnitPoint(x: 0.5, y: 0.22))
                                 }
                             }
@@ -650,6 +657,7 @@ struct LetraCompleta: View {
                     try? await Task.sleep(for: .milliseconds(100))
                 }
             }
+        }
         }
     }
 }
@@ -662,6 +670,7 @@ struct LineaLetraVista: View {
     let distancia: Int
     /// Mientras el usuario desliza, todas las líneas se ven nítidas (como en Apple Music).
     let enfocada: Bool
+    var ampliada = false
     @State private var r = Reproductor.compartido
     @ScaledMetric(relativeTo: .largeTitle) private var tamano: CGFloat = 31
 
@@ -680,8 +689,8 @@ struct LineaLetraVista: View {
                 karaoke(nil)
             }
         }
-        .font(.system(size: tamano, weight: .heavy))
-        .lineSpacing(2)
+        .font(.system(size: ampliada ? tamano * 1.08 : tamano, weight: .bold, design: .rounded))
+        .lineSpacing(ampliada ? 6 : 2)
         .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -198,7 +198,6 @@ struct CuentaVista: View {
             }
 
             Section("Tu música") {
-                NavigationLink(value: Destino.juntos) { Label("Escuchar juntos", systemImage: "headphones") }
                 NavigationLink { DespertadorVista() } label: { Label("Despertador", systemImage: "alarm") }
                 NavigationLink(value: Destino.resumen) { Label("Tu resumen (tu año y tus meses)", systemImage: "gift") }
                 NavigationLink(value: Destino.dedicatorias) { Label("Dedicatorias", systemImage: "heart.text.square") }

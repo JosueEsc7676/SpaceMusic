@@ -122,17 +122,22 @@ private struct AltoBarraInferior: PreferenceKey {
 struct MiniReproductor: View {
     @State private var r = Reproductor.compartido
     @State private var biblioteca = Biblioteca.compartida
+    @State private var dispositivos = false
 
     var body: some View {
         if let c = r.actual {
             VStack(spacing: 0) {
-                HStack(spacing: 12) {
+                HStack(spacing: 5) {
                     Portada(ruta: c.portadaUrl, tamano: 42, radio: 6)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(c.nombre).font(.subheadline.weight(.semibold)).lineLimit(1)
                         Text(c.artista).font(.caption).foregroundStyle(Tema.secundario).lineLimit(1)
                     }
                     Spacer(minLength: 4)
+                    Button { dispositivos = true } label: {
+                        Image(systemName: "airplayaudio").frame(width: 36, height: 40)
+                    }
+                    .accessibilityLabel("Dispositivos y SyncPlay")
                     Button { biblioteca.alternarFavorito(c) } label: {
                         Image(systemName: biblioteca.esFavorita(c.id) ? "heart.fill" : "heart")
                             .foregroundStyle(biblioteca.esFavorita(c.id) ? Tema.rosa : Tema.texto)
@@ -168,7 +173,8 @@ struct MiniReproductor: View {
             )
             .padding(.horizontal, 8)
             .contentShape(Rectangle())
-            .onTapGesture { Navegacion.compartida.reproductorAbierto = true }
+            .sheet(isPresented: $dispositivos) { DispositivosVista() }
+            .onTapGesture { if !dispositivos { Navegacion.compartida.reproductorAbierto = true } }
             .gesture(DragGesture(minimumDistance: 20).onEnded { g in
                 if g.translation.width < -60 { r.siguiente() }
                 else if g.translation.width > 60 { r.anterior() }

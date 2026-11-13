@@ -11,6 +11,7 @@ struct JuntosVista: View {
     @State private var invitando = false
     @State private var agregando = false
     @State private var filtro = ""
+    @State private var salaElegida: Int?
     @Environment(\.dismiss) private var cerrar
 
     var body: some View {
@@ -20,18 +21,19 @@ struct JuntosVista: View {
             else if let s = detalle { contenido(s) }
             else if id == nil {
                 Section {
-                    CabeceraExperiencia(icono: "headphones", titulo: "Escuchar juntos", texto: "Abre una sala y comparte la canción, el momento y la cola con tus amigos.")
-                    Button("Abrir sala") { ejecutar { let s: SalaJuntos = try await API.enviar("POST", "/api/juntos", [:]); motor.activar(s); Navegacion.compartida.ir(.salaJuntos(s.id)) } }
+                    CabeceraExperiencia(icono: "headphones", titulo: "SyncPlay", texto: "Abre una sala y comparte la canción, el momento y la cola con tus amigos.")
+                    Button { ejecutar { let s = try await motor.crear(); salaElegida = s.id } } label: { Label("Iniciar SyncPlay", systemImage: "person.2.wave.2") }
                 }
                 ForEach(salas) { s in
-                    NavigationLink(value: Destino.salaJuntos(s.id)) {
+                    NavigationLink { JuntosVista(id: s.id) } label: {
                         Label(s.soyAnfitrion ? "Tu sala" : "Sala de \(s.anfitrion?.nombre ?? "tu amigo")", systemImage: s.dentro ? "headphones" : "envelope")
                     }
                 }
                 if salas.isEmpty { Text("Todavía no hay salas ni invitaciones.").foregroundStyle(Tema.secundario) }
             } else if error == nil { ProgressView() }
         }
-        .navigationTitle("Escuchar juntos")
+        .navigationTitle("SyncPlay")
+        .navigationDestination(item: $salaElegida) { JuntosVista(id: $0) }
         .navigationBarTitleDisplayMode(.inline)
         .disabled(ocupada)
         .task { await cargar() }
@@ -63,8 +65,11 @@ struct JuntosVista: View {
                 }
                 Button("Sumar canción") { agregando = true }
             }
+            if s.dentro, let enlace = InvitacionSyncPlay.enlace(sala: s.id, servidor: Sesion.compartida.servidor) {
+                ShareLink(item: enlace) { Label("Compartir enlace de SyncPlay", systemImage: "square.and.arrow.up") }
+            }
             if s.soyAnfitrion {
-                Button("Invitar a un amigo") { ejecutar { personas = try await API.get("/api/dedicatorias/personas"); invitando = true } }
+                Button("Enviar invitación a un amigo") { ejecutar { personas = try await API.get("/api/mensajes/amigos"); invitando = true } }
             }
             Button(s.soyAnfitrion ? "Cerrar la sala" : "Salir de la sala", role: .destructive) {
                 ejecutar {
@@ -101,7 +106,7 @@ struct JuntosVista: View {
                 Button(p.nombre + " · @" + p.username) {
                     guard id != nil else { return }
                     ejecutar {
-                        let _: SalaJuntos = try await API.enviar("POST", "/api/juntos", ["username": p.username])
+                        _ = try await motor.invitarPorMensaje(p.username)
                         invitando = false; await cargar()
                     }
                 }

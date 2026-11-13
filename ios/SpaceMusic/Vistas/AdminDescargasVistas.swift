@@ -82,6 +82,7 @@ struct DescargasAdminVista: View {
     @State private var filtro = ""
     @State private var enviando = false
     @State private var configurandoSpotify = false
+    @State private var verRegistro = false
     @State private var clientId = ""
     @State private var clientSecret = ""
 
@@ -139,19 +140,30 @@ struct DescargasAdminVista: View {
                         }
                     } header: { Text("Fallidas") }
                     Section {
-                        TextField("Filtrar líneas", text: $filtro).autocorrectionDisabled().textInputAutocapitalization(.never)
-                        let lineas = filtro.isEmpty ? e.registro : e.registro.filter { $0.localizedCaseInsensitiveContains(filtro) }
-                        if lineas.isEmpty { Text("Todavía no hay registro.").foregroundStyle(Tema.secundario) }
-                        ForEach(Array(lineas.suffix(200).enumerated()), id: \.offset) { _, l in
-                            Text(l).font(.caption2.monospaced()).foregroundStyle(colorLinea(l))
-                        }
-                    } header: { Text("Registro en vivo") }
-                    Section {
                         Label(e.spotifyConfigurado ? "Configurada: las descargas de Spotify usan tus propias claves." : "Sin configurar: con tus claves (gratis) Spotify bloquea menos.",
                               systemImage: e.spotifyConfigurado ? "checkmark.seal.fill" : "exclamationmark.circle")
                             .font(.subheadline)
                         Button(e.spotifyConfigurado ? "Cambiar claves" : "Configurar") { configurandoSpotify = true }
                     } header: { Text("Cuenta de Spotify") }
+                    Section {
+                        DisclosureGroup("Registro en vivo (\(e.registro.count) líneas)", isExpanded: $verRegistro) {
+                            TextField("Filtrar líneas", text: $filtro).autocorrectionDisabled().textInputAutocapitalization(.never)
+                            let lineas = filtro.isEmpty ? e.registro : e.registro.filter { $0.localizedCaseInsensitiveContains(filtro) }
+                            ScrollView([.vertical, .horizontal]) {
+                                LazyVStack(alignment: .leading, spacing: 5) {
+                                    if lineas.isEmpty { Text("Sin líneas para mostrar.").foregroundStyle(Tema.secundario) }
+                                    ForEach(Array(lineas.suffix(200).enumerated()), id: \.offset) { _, l in
+                                        Text(l).font(.caption2.monospaced()).foregroundStyle(colorLinea(l))
+                                    }
+                                }
+                                .padding(10)
+                            }
+                            .frame(height: 180)
+                            .background(Tema.fondo, in: RoundedRectangle(cornerRadius: 10))
+                            .accessibilityLabel("Registro de descargas, desplazamiento independiente")
+                        }
+                    } footer: { Text("Abre el registro solo cuando necesites revisar una descarga. Las claves de Spotify están arriba.") }
+
                 }
             } else if error == nil { ProgressView().frame(maxWidth: .infinity) }
         }

@@ -63,7 +63,7 @@ struct UsuariosAdminVista: View {
 
             Section {
                 ForEach(visibles) { u in
-                    NavigationLink(value: Destino.usuarioAdmin(u.id)) { fila(u) }
+                    NavigationLink { UsuarioAdminVista(id: u.id).id(u.id) } label: { fila(u) }
                         .contextMenu { acciones(u) }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             if u.id != yo {
@@ -90,7 +90,7 @@ struct UsuariosAdminVista: View {
         .navigationTitle("Usuarios")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await cargar() }
-        .task { await cargar() }
+        .task { if usuarios.isEmpty { await cargar() } }
         .disabled(trabajando)
         .confirmationDialog("¿Desactivar la cuenta?", isPresented: Binding(get: { desactivar != nil }, set: { if !$0 { desactivar = nil } }),
                             titleVisibility: .visible, presenting: desactivar) { u in

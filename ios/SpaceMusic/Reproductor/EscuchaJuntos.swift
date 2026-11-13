@@ -37,6 +37,30 @@ struct SalaJuntos: Decodable, Identifiable {
     @ObservationIgnored private var agregadas: Set<Int> = []
     var esOyente: Bool { sala?.dentro == true && sala?.soyAnfitrion == false }
 
+    func crear() async throws -> SalaJuntos {
+        if let sala, sala.dentro {
+            guard sala.soyAnfitrion else { throw ErrorAPI(mensaje: "Sal de la sala actual antes de iniciar otra.", estado: 0) }
+            return sala
+        }
+        let nueva: SalaJuntos = try await API.enviar("POST", "/api/juntos", [:])
+        activar(nueva)
+        return nueva
+    }
+
+    /// Invita mediante la API existente y deja en el chat un enlace que ambos clientes pueden abrir.
+    func invitarPorMensaje(_ username: String) async throws -> (SalaJuntos, Mensaje) {
+        let actual = try await crear()
+        let invitada: SalaJuntos = try await API.enviar("POST", "/api/juntos", ["username": username])
+        guard invitada.id == actual.id,
+              let enlace = InvitacionSyncPlay.enlace(sala: actual.id, servidor: Sesion.compartida.servidor) else {
+            throw ErrorAPI(mensaje: "No se pudo preparar el enlace de SyncPlay.", estado: 0)
+        }
+        recibir(invitada)
+        let mensaje: Mensaje = try await API.enviar("POST", "/api/mensajes/\(API.segmento(username))",
+            ["texto": "Te invito a escuchar conmigo en SyncPlay 🎧\n\(enlace.absoluteString)"])
+        return (invitada, mensaje)
+    }
+
     func activar(_ s: SalaJuntos) {
         guard s.dentro else { return }
         if sala?.id != s.id { agregadas = []; ultimo = nil }
