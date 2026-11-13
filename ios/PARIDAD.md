@@ -89,3 +89,17 @@ Referencia: módulos públicos `juntos.js`, `alarma.js`, `dedicatorias.js`, `api
 | Actualizaciones | /app/version-ios.json y GitHub ios-latest | Descarga con progreso, cancelación, validación ZIP y SHA-256 y guardado/compartir | Publicación valida número del IPA, identificador, ZIP y SHA; faltan instalación y toque de notificación en iPhone |
 
 Compilar y contrastar rutas no verifica todos los permisos, estados ni acciones del servidor. No se marca paridad funcional exhaustiva ni prueba en dispositivo.
+
+
+## SyncPlay y usabilidad (13/11/2026)
+
+| Cambio | Implementación | Verificación pendiente |
+|---|---|---|
+| Registro de descargas | Sección plegable, visor de 180 puntos y claves de Spotify por encima | Desplazamiento y teclado en iPhone |
+| Ficha de usuario | Destino directo desde Usuarios, identidad por id y tarea ligada al id | Abrir ficha y volver en iPhone |
+| Dispositivos | Salida actual y AVRoutePickerView; listado de salidas disponibles gestionado por iOS | Bluetooth, audífonos y altavoz con hardware |
+| SyncPlay | API /api/juntos existente; crear desde Dispositivos o Mensajes, invitar por API y enviar enlace mediante /api/mensajes/{usuario}; compartir enlace | Crear/unirse con dos cuentas reales |
+| Invitación en chat | Tarjeta nativa con enlace validado al mismo servidor; no abre servidores ajenos ni rutas parecidas | XCTest del analizador y flujo real de chat |
+| Menús y letra ampliada | Opciones agrupadas; letra inmersiva con portada y controles, desplazamiento sin rebote | Aspecto con varios tamaños de texto e iPhone |
+
+La selección de salida se realiza con el selector público de iOS; la app no inventa una lista de dispositivos ni solicita emparejarlos por APIs privadas.

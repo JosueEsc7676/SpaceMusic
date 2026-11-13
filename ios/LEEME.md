@@ -138,3 +138,13 @@ Tú → Tu música incluye Escuchar juntos y Despertador. Las dedicatorias permi
 El menú del reproductor permite ampliar la letra o compartir versos como imagen. El temporizador baja el volumen durante los últimos 30 segundos. Con la app cerrada el despertador es una notificación que se toca para iniciar música; iOS no garantiza ejecutar el reproductor a una hora exacta con la app suspendida.
 
 Actualizaciones: toca Descargar actualización y espera el progreso; al terminar usa Guardar en Archivos o compartir IPA. El archivo se comprueba antes de ofrecerlo. También puedes abrir `/app/ios.html` en el servidor para descargarlo. Instalar sigue necesitando SideStore, AltStore o Sideloadly y tu Apple ID.
+
+
+## SyncPlay, dispositivos y mensajes
+
+- El icono de salida de audio del mini reproductor está antes del corazón. Abre Dispositivos: la salida actual, el selector nativo de iPhone/Bluetooth/AirPlay y SyncPlay. También está en el reproductor completo y la letra ampliada.
+- SyncPlay se abre desde Dispositivos o Mensajes, no desde los ajustes de cuenta. Permite crear una sala, compartir su enlace o invitar por chat a un amigo.
+- En cada chat, el icono de audífonos ofrece Iniciar SyncPlay. Se envía una tarjeta con el enlace; el destinatario la toca para abrir la sala y unirse con su cuenta.
+- En Mensajes hay accesos a SyncPlay, Coincidimos y Dedicatorias. El botón + del chat reúne enviar una canción, dedicar e iniciar Coincidimos.
+- En Descargar música, las claves de Spotify están antes del registro, y este se despliega en un panel de alto limitado con su propio desplazamiento.
+- Los menús de canciones agrupan Cola y radio, Compartir y Más acciones. La letra ampliada tiene fondo de portada, información de la canción y controles propios.

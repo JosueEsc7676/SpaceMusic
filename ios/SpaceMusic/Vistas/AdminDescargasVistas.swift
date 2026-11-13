@@ -168,6 +168,13 @@ struct DescargasAdminVista: View {
             } else if error == nil { ProgressView().frame(maxWidth: .infinity) }
         }
         .navigationTitle("Descargar música")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { configurandoSpotify = true } label: { Image(systemName: "key.fill") }
+                    .accessibilityLabel("Cambiar claves de Spotify")
+                    .disabled(estado?.instalado != true)
+            }
+        }
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await cargar() }
         // En vivo: cada 3 s mientras descarga; cada 15 s si no (como la web).

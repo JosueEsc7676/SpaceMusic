@@ -128,12 +128,18 @@ struct MiniReproductor: View {
         if let c = r.actual {
             VStack(spacing: 0) {
                 HStack(spacing: 5) {
-                    Portada(ruta: c.portadaUrl, tamano: 42, radio: 6)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(c.nombre).font(.subheadline.weight(.semibold)).lineLimit(1)
-                        Text(c.artista).font(.caption).foregroundStyle(Tema.secundario).lineLimit(1)
+                    Button { Navegacion.compartida.reproductorAbierto = true } label: {
+                        HStack(spacing: 10) {
+                            Portada(ruta: c.portadaUrl, tamano: 42, radio: 6)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(c.nombre).font(.subheadline.weight(.semibold)).lineLimit(1)
+                                Text(c.artista).font(.caption).foregroundStyle(Tema.secundario).lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .contentShape(Rectangle())
                     }
-                    Spacer(minLength: 4)
+                    .accessibilityLabel("Abrir reproductor: \(c.nombre)")
                     Button { dispositivos = true } label: {
                         Image(systemName: "airplayaudio").frame(width: 36, height: 40)
                     }
@@ -174,7 +180,6 @@ struct MiniReproductor: View {
             .padding(.horizontal, 8)
             .contentShape(Rectangle())
             .sheet(isPresented: $dispositivos) { DispositivosVista() }
-            .onTapGesture { if !dispositivos { Navegacion.compartida.reproductorAbierto = true } }
             .gesture(DragGesture(minimumDistance: 20).onEnded { g in
                 if g.translation.width < -60 { r.siguiente() }
                 else if g.translation.width > 60 { r.anterior() }

@@ -1,5 +1,12 @@
 # Registro de cambios
 
+## iPhone: SyncPlay y ajustes de navegación
+- Registro de descargas plegable con desplazamiento propio; claves de Spotify accesibles antes del registro.
+- Corrección de la navegación de Gestionar usuarios a su ficha y regreso.
+- Menú de canciones organizado por grupos; Dispositivos y SyncPlay antes del corazón del mini reproductor.
+- SyncPlay desde Dispositivos y Mensajes, invitaciones por enlace y tarjetas de chat para abrir y unirse a la sala; accesos a Coincidimos y Dedicatorias en Mensajes.
+- Letra ampliada con fondo de portada, cabecera y controles; desplazamiento suave y margen adaptable al espacio.
+
 ## iPhone: API 3.5 y actualizaciones descargables
 - Publicado en el servidor como iPhone 1.21: /app/ios.html y /app/SpaceMusic-21.ipa. Rutas específicas de iPhone añadidas al servidor 3.5 conservando intacto el resto del JAR; respaldo, arranque sano y descarga pública verificados.
 - Salas para escuchar juntos (eventos en vivo, cola compartida, invitaciones y reacciones), dedicatorias programadas y cancelación, calidad automática/alta/ligera, comparación y descubrimiento en el resumen.
