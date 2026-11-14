@@ -10,6 +10,27 @@ let pedidas = new Set();
 let programada = null;
 
 const ahorroDatos = () => !!navigator.connection?.saveData;
+/**
+ * Red con datos medidos o lenta (datos móviles, 2G/3G, poco ancho de banda o mucha latencia):
+ * no se bajan canciones enteras en segundo plano, solo el principio de la siguiente.
+ */
+export function redLimitada() {
+  const c = navigator.connection;
+  if (!c) return false;
+  return !!(c.saveData || c.type === 'cellular' || /(^|-)(slow-)?[23]g$/.test(c.effectiveType || '')
+    || (c.downlink && c.downlink < 2) || (c.rtt && c.rtt > 400));
+}
+/** Equipos con poca memoria: tampoco se guardan canciones enteras de más. */
+const pocaMemoria = () => !!(navigator.deviceMemory && navigator.deviceMemory <= 2);
+/** Bytes del principio que se precargan (≈ 40 s en calidad ligera, ≈ 16 s a 320 kbps). */
+const BYTES_INICIO = 640 * 1024;
+/** ¿La canción que suena ya tiene suficiente en memoria para no cortarse? (entonces lo de fondo puede seguir) */
+function actualAsegurada(segundos = 30) {
+  const a = player.audio, b = a.buffered;
+  if (!b.length || !isFinite(a.duration)) return false;
+  const fin = b.end(b.length - 1);
+  return fin >= a.duration - 1 || fin - a.currentTime >= segundos;
+}
 const CLAVE = 'sm_descargadas';
 
 // ── Descargas a mano (permanentes) ──
@@ -250,7 +271,7 @@ function sw() {
 /** Pide al service worker guardar la canción completa en segundo plano. */
 export function guardarCancion(id) {
   const w = sw();
-  if (!w || !id || pedidas.has(id) || ahorroDatos()) return;
+  if (!w || !id || pedidas.has(id) || ahorroDatos() || redLimitada() || pocaMemoria()) return;
   pedidas.add(id);
   w.postMessage({ tipo: 'guardar-audio', url: location.origin + audioUrl(id) });
 }
@@ -281,9 +302,21 @@ let audioPrecarga = null;
 function precargarSiguiente() {
   const sig = player.items?.[player.index + 1];
   if (!sig || precargada === sig.id) return;
+  // Primero la canción actual: lo de fondo espera a que tenga suficiente en memoria
+  // (para el principio de la siguiente, que es poco, basta un margen menor)
+  const soloInicio = redLimitada() || pocaMemoria();
+  if (!actualAsegurada(soloInicio ? 8 : 30)) return;
   precargada = sig.id;
   if (sig.portadaUrl) { const img = new Image(); img.decoding = 'async'; img.src = cover(sig.portadaUrl, 640); }
-  if (sw() && !ahorroDatos()) { guardarCancion(sig.id); return; }
+  if (disponible(sig.id)) return; // ya está en el dispositivo
+  const w = sw();
+  if (w && !ahorroDatos()) {
+    // Datos móviles, red lenta o poca memoria: solo el principio (empieza al instante y el resto llega mientras suena).
+    // WiFi: la canción entera (también queda para escuchar sin conexión).
+    if (soloInicio) w.postMessage({ tipo: 'precargar-inicio', url: location.origin + audioUrl(sig.id), bytes: BYTES_INICIO });
+    else guardarCancion(sig.id);
+    return;
+  }
   // Sin service worker (o con ahorro de datos): el navegador adelanta solo el inicio de la canción
   try {
     audioPrecarga ??= new Audio();
@@ -359,7 +392,16 @@ export function iniciarOffline({ toast }) {
       bus.emit('descargas');
     }
   });
-  bus.on('player:song', () => { programada = player.current?.id ?? null; precargada = null; });
+  bus.on('player:song', () => {
+    programada = player.current?.id ?? null;
+    precargada = null;
+    // La canción nueva tiene prioridad: el service worker cancela lo de fondo hasta que empiece a sonar
+    sw()?.postMessage({ tipo: 'prioridad', id: programada, hasta: 8000 });
+  });
+  player.audio.addEventListener('playing', () => {
+    // Ya suena: lo de fondo puede seguir en cuanto haya margen (se revisa en cada avance)
+    setTimeout(() => { if (actualAsegurada(8)) sw()?.postMessage({ tipo: 'prioridad-fin' }); }, 3000);
+  });
   // La canción que suena no es la elegida (copia vieja o equivocada en el dispositivo): se borra
   // esa copia y se vuelve a pedir al servidor
   bus.on('audio:distinto', ({ id, reintentar }) => {

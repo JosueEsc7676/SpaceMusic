@@ -28,6 +28,8 @@ function entradas(texto) {
 
 export async function descargasTab(el) {
   el.innerHTML = `<div class="dl">
+    <div class="row dl-atajos"><a href="#dl-spotify" class="btn sm ghost" data-ir-spot>${icon('sliders', 'sm')} Claves de Spotify</a>
+      <button class="btn sm ghost" data-ir-reg>${icon('text', 'sm')} Ver registro</button></div>
     <div class="dl-estado" data-estado><p class="muted">Cargando…</p></div>
     <section class="panel dl-yt" data-yt></section>
     <div class="dl-grid">
@@ -50,14 +52,19 @@ export async function descargasTab(el) {
     <section class="panel"><div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
         <h3 style="margin:0">${icon('info')} Fallidas</h3><div class="row" style="gap:8px" data-acc-fallidas></div></div>
       <div data-fallidas></div></section>
-    <section class="panel"><div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
-        <h3 style="margin:0">${icon('text')} Registro en vivo</h3>
-        <div class="row" style="gap:8px"><input class="dl-filtro" data-filtro placeholder="Filtrar líneas" aria-label="Filtrar registro">
-          <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" data-seguir checked> Seguir</label></div></div>
-      <pre class="dl-log" data-log></pre></section>
-    <section class="panel"><h3>${icon('sliders')} Cuenta de Spotify</h3><div data-spotify></div></section>
+    <section class="panel" id="dl-spotify"><h3>${icon('sliders')} Cuenta de Spotify</h3><div data-spotify></div></section>
+    <details class="panel dl-reg" data-reg>
+      <summary><h3 style="margin:0;display:inline">${icon('text')} Registro en vivo <span class="muted" data-reg-n></span></h3></summary>
+      <div class="row wrap" style="gap:8px;margin:12px 0 8px"><input class="dl-filtro" data-filtro placeholder="Filtrar líneas" aria-label="Filtrar registro">
+        <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" data-seguir checked> Seguir</label></div>
+      <pre class="dl-log" data-log tabindex="0" aria-label="Registro de descargas, desplazamiento propio"></pre>
+      <p class="muted" style="font-size:12px;margin:8px 0 0">Ábrelo solo cuando necesites revisar una descarga. Las claves de Spotify están arriba.</p></details>
   </div>`;
   const $ = (s) => el.querySelector(s);
+  // Acceso directo: el enlace por hash rompería el router, así que se desplaza a mano.
+  $('[data-ir-spot]').addEventListener('click', (e) => { e.preventDefault(); $('#dl-spotify').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  $('[data-ir-reg]').addEventListener('click', () => { const d = $('[data-reg]'); d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  $('[data-reg]').addEventListener('toggle', () => pintarLog());
   iniciarBusqueda($('[data-yt]'), () => cargar(true));
   const texto = $('[data-texto]');
   try { texto.value = store.get(BORRADOR, '') || ''; } catch { }
@@ -156,6 +163,8 @@ export async function descargasTab(el) {
   const pintarLog = () => {
     const pre = $('[data-log]');
     if (!pre || !ultimo) return;
+    const n = $('[data-reg-n]'); if (n) n.textContent = `(${ultimo.length} líneas)`;
+    if (!$('[data-reg]').open) return; // plegado: no se pinta (ahorra trabajo cada 3 s)
     const f = $('[data-filtro]').value.trim().toLowerCase();
     const lineas = f ? ultimo.filter((l) => l.toLowerCase().includes(f)) : ultimo;
     pre.innerHTML = lineas.length ? lineas.map((l) => {

@@ -84,6 +84,11 @@ public class AudioLigeroService {
         return original;
     }
 
+    /** ¿Este archivo es una versión ligera (y no el original que se entrega mientras se prepara)? */
+    public boolean esLigera(File f) {
+        return f != null && f.toPath().toAbsolutePath().normalize().startsWith(carpeta);
+    }
+
     private boolean hayFfmpeg() {
         if (ffmpegDisponible == null) {
             try {

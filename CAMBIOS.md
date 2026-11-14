@@ -1,5 +1,32 @@
 # Registro de cambios
 
+## Versión 3.6 (web y app Android 2.0, código 11)
+Paridad con los cambios de iPhone (`app-ios` 65241aa y 597d344), reutilizando las API existentes.
+
+**SyncPlay y Dispositivos**
+- **SyncPlay** es el nuevo nombre visible de «Escuchar juntos» (`js/juntos.js`; `/api/juntos` sin cambios). Se quita del menú de la cuenta y se entra desde **Dispositivos** y **Mensajes**. Crear sala, **Compartir enlace** (hoja de Android, `navigator.share` o copiar) e **Invitar a un amigo**: invita con `POST /api/juntos {username}` y envía un mensaje real con `POST /api/mensajes/{usuario}` que lleva `https://servidor/#/juntos/ID`.
+- **Enlaces de invitación** (`js/syncplay-enlace.js`): solo se reconocen enlaces del servidor de la cuenta (mismo esquema, host y puerto, sin usuario/contraseña, ruta `/`, fragmento exacto `#/juntos/N`). El servidor sigue validando la pertenencia a la sala. Prueba: `node --test pruebas/syncplay-enlace.test.mjs`.
+- **Dispositivos** (`js/dispositivos.js`), botón antes del corazón en el mini reproductor y en la pantalla completa: salida actual y cambio según la plataforma. Android: puente `SpaceMusicApp.salidaAudio()`/`elegirSalida()` (`Salidas.java`): `MediaRouter2.showSystemOutputSwitcher()` en Android 14+, cuadro «Salida de medios» de SystemUI en 12–13, panel `MEDIA_OUTPUT` en 10–11 y, de respaldo, panel de volumen o ajustes de Bluetooth; avisa a la web cuando cambia la salida (`window.smSalida`). Web: `selectAudioOutput`/`setSinkId` (también en el ecualizador vía `AudioContext.setSinkId`) y transmitir (Remote Playback) donde existan; si no, explica que la salida la elige el sistema.
+
+**Mensajes**
+- Accesos visibles a SyncPlay, Coincidimos y Dedicatorias. En el chat: botón de auriculares (Iniciar SyncPlay · Mis salas) y botón «+» (enviar o dedicar la canción que suena a esa persona, iniciar Coincidimos con ella, mis dedicatorias). Las invitaciones se ven como tarjetas «Abrir sala y unirme»; la lista y los avisos muestran «Invitación a SyncPlay» en vez del enlace.
+
+**Menú de canciones, letra y administración**
+- Menú agrupado (`showMenu` admite grupos plegables): Me gusta y Agregar a playlist arriba; **Cola y radio**, **Compartir** (nuevo: Enviar a un amigo, Compartir enlace) y **Más acciones**. Se conservan todas las acciones.
+- **Letra a pantalla completa**: portada desenfocada de fondo, cabecera compacta con canción, artista y botón para salir, letra grande y controles abajo (con Dispositivos). Las líneas ya no se escalan ni los interludios cambian de alto (sin rebotes en el avance automático); curva de desplazamiento simétrica y salto directo con `prefers-reduced-motion`.
+- **Descargas**: registro en vivo plegado por defecto, en un panel de altura limitada con desplazamiento propio (no se pinta mientras está plegado); claves de Spotify antes del registro y accesos directos arriba.
+- **Usuarios**: tocar cualquier parte de la fila abre la ficha en el acto (con los datos de la lista) y se completa al llegar el detalle; la lista no se recarga y la ventana queda encima de todo.
+
+**Inicio de reproducción (smart buffering)**
+- Prioridad para la canción actual: al cambiar de canción el service worker cancela las descargas automáticas en curso y las que esperan; las descargas a mano esperan hasta que la nueva arranca.
+- Precarga según la red y la memoria (`navigator.connection`, `deviceMemory`): con datos móviles, red lenta o ≤ 2 GB solo se precarga el principio de la siguiente (640 KB por rangos, caché `sm-inicio`, que responde a la primera petición `bytes=0-`; el resto llega de la red); con WiFi, la canción entera. Todo espera a que la actual tenga margen en memoria.
+- Sin descargas duplicadas: ya no se precarga además con un segundo `<audio>` cuando hay service worker; con datos móviles no se vuelve a bajar entera la canción que suena para guardarla; el audio que no está en el dispositivo va directo a la red sin pasar por el service worker (índice en memoria).
+- Calidad automática: también la versión ligera con red lenta (`downlink` < 1,5 Mbps o `rtt` > 500 ms).
+- Servidor (`CancionController`): ETag fuerte en `/api/canciones/{id}/audio` y cabecera `X-SM-Calidad`; si se pidió la ligera y aún no está, el original se cachea 10 min (no 7 días). Prueba: `AudioStreamingTest` (206, `Content-Range`, 304 con `If-None-Match`, 416, caché corta).
+- Medición (`pruebas/arranque-audio.mjs`, Android simulado, canciones WAV de 90 s, sin ffmpeg local): con datos móviles simulados (1,6 Mbps, 120 ms) la siguiente canción pasó de p95 7,7 s a 2,1–3,2 s; tocar→sonar quedó igual (≈1,5 s, limitado por el tamaño del WAV: sin la versión ligera no hay menos que bajar). Con WiFi todo quedó igual (≈0,25–0,3 s al tocar, ≈0,1 s la siguiente). Resultados en `pruebas/resultados/arranque-*.json`.
+
+**Pruebas**: `pruebas/syncplay-dos-cuentas.mjs` (dos navegadores con dos cuentas reales: invitación por mensaje, tarjeta, unirse, misma canción con desfase < 2 s, pausa sincronizada, Dispositivos, menú, letra, registro largo y ficha de usuario, a 390×844).
+
 ## Versión 3.5
 **Optimización**
 - **Service worker por huella de contenido** (`ServiceWorkerController`, `sw/sw.js`): la versión ya no cambia en cada reinicio del servidor; cada archivo lleva su huella y al instalar se copia de la versión anterior lo que no cambió (solo se descarga lo nuevo).

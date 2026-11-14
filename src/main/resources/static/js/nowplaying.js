@@ -17,13 +17,19 @@ export { parseLrc };
 const esSafari = /iP(hone|ad|od)/.test(navigator.userAgent) ||
   (/Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Edg|OPR|Android/.test(navigator.userAgent));
 
-/** Desplazamiento suave con desaceleración (como Apple Music). */
-function scrollSuave(box, destino, ms = 650) {
+const menosMovimiento = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+
+/**
+ * Desplazamiento suave con desaceleración (como Apple Music). En la letra a pantalla completa se usa una
+ * curva simétrica sin rebote, y con «reducir movimiento» del sistema el salto es directo.
+ */
+function scrollSuave(box, destino, ms = 650, simetrica = false) {
   cancelAnimationFrame(box._anim);
   const ini = box.scrollTop, delta = destino - ini;
   if (Math.abs(delta) < 2) return;
+  if (menosMovimiento?.matches) { box.scrollTop = destino; return; }
   const t0 = performance.now();
-  const ease = (x) => 1 - Math.pow(1 - x, 4);
+  const ease = simetrica ? (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2) : (x) => 1 - Math.pow(1 - x, 4);
   const paso = (now) => {
     const k = Math.min(1, (now - t0) / ms);
     box.scrollTop = ini + delta * ease(k);
@@ -130,6 +136,7 @@ export const np = {
           <div class="np-thumb" data-np-thumb></div>
           <div class="tt"><div class="name ellipsis" data-np-name></div><div class="artist ellipsis" data-np-artist></div></div>
           <button class="np-more" data-np-more aria-label="Más opciones">${icon('more')}</button>
+          <button class="np-salir-focus" data-salir-focus aria-label="Cerrar la letra a pantalla completa" title="Cerrar letra ampliada">${icon('down')}</button>
         </div>
         <button class="np-mini-lyr hidden" data-mini-lyr aria-label="Ver la letra completa"></button>
         <div class="np-controls">
@@ -147,6 +154,7 @@ export const np = {
             <button class="np-tb" data-np-fav aria-label="Me gusta">${icon('heart')}</button>
             <span class="grow"></span>
             <button class="np-tb" data-panel="letra" aria-label="Letra" title="Letra">${icon('quote')}</button>
+            <button class="np-tb" data-np-disp aria-label="Dispositivos y SyncPlay" title="Dispositivos y SyncPlay">${icon('devices')}</button>
             <button class="np-tb" data-panel="cola" aria-label="A continuación" title="A continuación">${icon('list')}</button>
           </div>
         </div>
@@ -157,6 +165,8 @@ export const np = {
 
     el.querySelector('[data-np-close]').onclick = () => this.close();
     el.querySelector('[data-np-more]').onclick = (e) => this.menu(e.currentTarget);
+    el.querySelector('[data-salir-focus]').onclick = () => { if (this.lyrFocus) this.toggleFocus(); };
+    el.querySelector('[data-np-disp]').onclick = () => import('./dispositivos.js').then((m) => m.abrirDispositivos()).catch(errorToast);
     el.querySelector('[data-np-fav]').onclick = () => player.current && lib.toggleFav(player.current.id).catch(errorToast);
     el.querySelector('.np-ctrls').addEventListener('click', (e) => {
       const c = e.target.closest('[data-c]')?.dataset.c;
@@ -453,8 +463,9 @@ export const np = {
       if (Date.now() > this.userScrollUntil) {
         const a = box.querySelector(`.lyrics [data-i="${Math.max(0, i)}"]`);
         if (a) {
-          const destino = a.offsetTop - box.clientHeight * 0.32;
-          if (force) { cancelAnimationFrame(box._anim); box.scrollTop = destino; } else scrollSuave(box, destino);
+          // Letra ampliada: la línea actual queda siempre a la misma altura (sin rebotes) y el avance es parejo
+          const destino = a.offsetTop - box.clientHeight * (this.lyrFocus ? 0.3 : 0.32);
+          if (force) { cancelAnimationFrame(box._anim); box.scrollTop = destino; } else scrollSuave(box, destino, this.lyrFocus ? 520 : 650, this.lyrFocus);
         }
       }
     }

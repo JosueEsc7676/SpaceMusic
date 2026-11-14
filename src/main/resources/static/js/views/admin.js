@@ -129,7 +129,7 @@ async function bibliotecaTab(el) {
 async function usuariosTab(el) {
   let users = await api('/api/admin/usuarios');
   const me = session.user?.id;
-  const row = (u) => `<tr data-u="${u.id}">
+  const row = (u) => `<tr data-u="${u.id}" class="fila-tocable" title="Ver detalles">
     <td><div class="user-cell">${avatarHtml(u)}<div><div><strong>${esc(u.nombreDisplay)}</strong></div><div class="muted" style="font-size:12px">@${esc(u.username)}</div></div></div></td>
     <td class="muted">${esc(u.email)} ${u.emailVerificado ? '' : `<span class="badge warning" title="Correo sin verificar">sin verificar</span>`}</td>
     <td><select data-rol ${u.id === me ? 'disabled title="No puedes cambiar tu propio rol"' : ''}>${['USER', 'COLABORADOR', 'ADMIN'].map((r) => `<option ${u.rol === r ? 'selected' : ''} value="${r}">${{ USER: 'Usuario', COLABORADOR: 'Colaborador', ADMIN: 'Admin' }[r]}</option>`).join('')}</select></td>
@@ -165,8 +165,9 @@ async function usuariosTab(el) {
         if (u.activo && !(await confirmDialog(`${u.nombreDisplay} no podrá iniciar sesión.`, { title: 'Desactivar cuenta', ok: 'Desactivar', danger: true }))) return;
         const r = await api(`/api/admin/usuarios/${id}/estado`, { method: 'PUT', body: { activo: !u.activo } });
         upd(r.usuario);
-      } else if (e.target.closest('[data-detalle]')) {
-        detalleUsuario(id);
+      } else if (e.target.closest('[data-detalle]') || !e.target.closest('button, select, a, input')) {
+        // Tocar cualquier parte de la fila abre la ficha al instante (sin recargar la lista).
+        detalleUsuario(id, u);
       } else if (e.target.closest('[data-verify]')) {
         const r = await api(`/api/admin/usuarios/${id}/verificar`, { method: 'POST' });
         upd(r.usuario);
@@ -282,11 +283,10 @@ export async function uploadView(el) {
 // ═══════════════════ Soporte técnico ═══════════════════
 
 /** Ficha de soporte de un usuario: su cuenta, actividad y acciones rápidas. */
-async function detalleUsuario(id) {
-  let u;
-  try { u = await api(`/api/admin/usuarios/${id}/detalle`); } catch (e) { errorToast(e); return; }
+async function detalleUsuario(id, basico = null) {
   const kv = (k, v) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`;
-  const body = `<div class="user-cell" style="margin-bottom:14px">${avatarHtml(u)}<div><strong>${esc(u.nombreDisplay)}</strong><div class="muted" style="font-size:13px">@${esc(u.username)} · ${esc(u.email)}</div></div></div>
+  const cabecera = (u) => `<div class="user-cell" style="margin-bottom:14px">${avatarHtml(u)}<div><strong>${esc(u.nombreDisplay)}</strong><div class="muted" style="font-size:13px">@${esc(u.username)} · ${esc(u.email)}</div></div></div>`;
+  const ficha = (u) => `${cabecera(u)}
     ${kv('Estado', u.activo ? (u.estadoCuenta === 'PENDIENTE' ? 'Esperando aprobación' : 'Activa') : 'Desactivada')}
     ${kv('Correo', u.emailVerificado ? 'Verificado' : 'Sin verificar')}
     ${kv('Rol', { USER: 'Usuario', COLABORADOR: 'Colaborador', ADMIN: 'Administrador' }[u.rol] || u.rol)}
@@ -299,11 +299,20 @@ async function detalleUsuario(id) {
     ${kv('Sin leer', `${plural(u.mensajesSinLeer, 'mensaje', 'mensajes')} · ${plural(u.notificacionesSinLeer, 'notificación', 'notificaciones')}`)}
     <h4 style="margin:16px 0 6px">Últimas canciones</h4>
     ${u.ultimasCanciones.length ? u.ultimasCanciones.map((c) => `<div class="kv"><span class="ellipsis">${esc(c.nombre)} <small class="muted">${esc(c.artista)}</small></span><small class="muted">${esc(timeAgo(c.fecha))}</small></div>`).join('') : '<p class="muted">Aún no escucha nada.</p>'}`;
+  // La ficha se abre en el acto (con lo que ya tiene la lista) y se completa cuando llega el detalle.
+  let u = basico;
   const v = await modal({
-    title: 'Soporte de usuario', body,
-    actions: [{ label: 'Cerrar', value: null }, ...(u.id === session.user?.id ? [] : [{ label: 'Cerrar sus sesiones', value: 'salir', danger: true }]),
+    title: 'Soporte de usuario', body: `<div data-ficha>${basico ? cabecera(basico) : ''}<p class="muted">Cargando detalles…</p></div>`,
+    actions: [{ label: 'Cerrar', value: null }, ...(id === session.user?.id ? [] : [{ label: 'Cerrar sus sesiones', value: 'salir', danger: true }]),
       { label: 'Enviar correo de contraseña', value: 'reset', primary: true }],
+    onOpen: async (m, cerrar) => {
+      try {
+        u = await api(`/api/admin/usuarios/${id}/detalle`);
+        if (m.isConnected) m.querySelector('[data-ficha]').innerHTML = ficha(u);
+      } catch (e) { errorToast(e); cerrar(null); }
+    },
   });
+  if (!u) return;
   if (v === 'salir') {
     if (!(await confirmDialog(`${u.nombreDisplay} tendrá que volver a iniciar sesión en todos sus dispositivos.`, { title: 'Cerrar sesiones', ok: 'Cerrar sesiones', danger: true }))) return;
     try { await api(`/api/admin/usuarios/${id}/cerrar-sesiones`, { method: 'POST' }); toast('Sesiones cerradas'); } catch (e) { errorToast(e); }

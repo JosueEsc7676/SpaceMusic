@@ -92,7 +92,7 @@ public class JuntosService {
         if (s.dentro.size() + s.invitados.size() >= MAX_PERSONAS) throw new IllegalArgumentException("La sala está llena (máximo " + MAX_PERSONAS + ")");
         if (!s.dentro.contains(otro.getId())) s.invitados.add(otro.getId());
         String quien = usuarios.findById(uid).map(Usuario::getNombreVisible).orElse("Alguien");
-        notificaciones.crear(otro.getId(), "JUNTOS", uid, quien + " te invita a escuchar música juntos, en vivo", "#/juntos/" + s.id);
+        notificaciones.crear(otro.getId(), "JUNTOS", uid, quien + " te invita a SyncPlay: escuchar música juntos, en vivo", "#/juntos/" + s.id);
         avisar(s);
         return ver(s.id, uid);
     }

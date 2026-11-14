@@ -3,7 +3,8 @@ import { api, deUsuario } from '../api.js';
 import { esc, timeAgo, coverImg, bus, store } from '../util.js';
 import { icon } from '../icons.js';
 import { setHero, setTitle } from '../router.js';
-import { emptyState, errorToast, registerList, toast } from '../ui.js';
+import { emptyState, errorToast, registerList, toast, showMenu } from '../ui.js';
+import { salaDeInvitacion } from '../syncplay-enlace.js';
 import { player } from '../player.js';
 import { avatarPersona } from './people.js';
 
@@ -30,7 +31,7 @@ function filaConversacion(c, activa) {
   return `<a class="conv ${activa ? 'active' : ''} ${c.noLeidos ? 'unread' : ''}" href="#/mensajes/${encodeURIComponent(u.username)}">
     ${avatarPersona(u)}
     <span class="conv-tt"><b class="ellipsis">${esc(u.nombre)}</b>
-      <span class="ellipsis">${m.mio ? 'Tú: ' : ''}${m.cancion ? '🎵 ' + esc(m.cancion.nombre) : esc(m.texto)}</span></span>
+      <span class="ellipsis">${m.mio ? 'Tú: ' : ''}${m.cancion ? '🎵 ' + esc(m.cancion.nombre) : salaDeInvitacion(m.texto) ? '🎧 Invitación a SyncPlay' : esc(m.texto)}</span></span>
     <span class="conv-end"><small>${esc(timeAgo(m.fecha))}</small>${c.noLeidos ? `<i class="conv-badge">${c.noLeidos}</i>` : ''}</span></a>`;
 }
 
@@ -41,8 +42,13 @@ function burbuja(m) {
     cancion = `<div class="msg-song" data-act="play-list" data-list="${lid}" data-i="0">${coverImg(m.cancion.portadaUrl, 160)}
       <span><b class="ellipsis">${esc(m.cancion.nombre)}</b><small class="ellipsis">${esc(m.cancion.artista)}</small></span>${icon('play', 'sm')}</div>`;
   }
-  const texto = m.cancion && m.texto === '🎵' ? '' : `<p>${esc(m.texto)}</p>`;
-  return `<div class="bubble ${m.mio ? 'mine' : ''}" data-id="${m.id}">${cancion}${texto}<time>${esc(hora(m.fecha))}${m.mio ? (m.leido ? ' · Visto' : '') : ''}</time></div>`;
+  // Invitación a SyncPlay: tarjeta para abrir la sala y unirse (solo enlaces de este servidor; la sala comprueba el acceso)
+  const sala = salaDeInvitacion(m.texto);
+  const texto = sala ? `<a class="msg-sync" href="#/juntos/${sala}" aria-label="Abrir la sala de SyncPlay y unirme">
+      <b>${icon('headphones')} SyncPlay</b><span>${m.mio ? 'Invitaste a escuchar juntos' : 'Te invitaron a escuchar juntos'}</span>
+      <span class="ir">Abrir sala y unirme ${icon('right', 'sm')}</span></a>`
+    : m.cancion && m.texto === '🎵' ? '' : `<p>${esc(m.texto)}</p>`;
+  return `<div class="bubble ${m.mio ? 'mine' : ''} ${sala ? 'sync' : ''}" data-id="${m.id}">${cancion}${texto}<time>${esc(hora(m.fecha))}${m.mio ? (m.leido ? ' · Visto' : '') : ''}</time></div>`;
 }
 
 function htmlLista(convs, amigos, username) {
@@ -72,7 +78,12 @@ export async function mensajesView(el, params, _q, isStale) {
 
   // Se muestra al instante la última lista conocida; la actual llega en paralelo con el chat
   el.innerHTML = `<div class="dm ${username ? 'has-chat' : ''}">
-    <aside class="dm-list"><header><h1 class="page-title">Mensajes</h1></header><div class="dm-scroll" data-lista>${ultimaLista ? htmlLista(...ultimaLista, username) : '<div class="dm-loading">Cargando…</div>'}</div></aside>
+    <aside class="dm-list"><header><h1 class="page-title">Mensajes</h1></header>
+      <nav class="dm-accesos" aria-label="Escuchar y compartir con amigos">
+        <a class="dm-acceso" href="#/juntos" style="--c:#8fd0ff">${icon('headphones')}SyncPlay</a>
+        <a class="dm-acceso" href="#/coincidimos" style="--c:#b49cff">${icon('users')}Coincidimos</a>
+        <a class="dm-acceso" href="#/dedicatorias" style="--c:#ff8fb8">${icon('heart')}Dedicatorias</a></nav>
+      <div class="dm-scroll" data-lista>${ultimaLista ? htmlLista(...ultimaLista, username) : '<div class="dm-loading">Cargando…</div>'}</div></aside>
     <section class="dm-chat" data-chat>${username ? '<div class="dm-loading">Cargando…</div>'
       : emptyState('send', 'Tus mensajes', 'Elige una conversación. Solo puedes escribir a tus amigos: personas que se siguen mutuamente.')}</section></div>`;
   const pintarLista = async () => {
@@ -159,11 +170,12 @@ function pintarChat(box, d, isStale, copia) {
   const u = d.usuario;
   if (!copia) bus.emit('mensajes:leidos');
   box.innerHTML = `<header class="dm-head"><a class="round-btn dm-back" href="#/mensajes" aria-label="Volver">${icon('left')}</a>
-      <a class="dm-who" href="#/u/${encodeURIComponent(u.username)}">${avatarPersona(u)}<span><b>${esc(u.nombre)}</b><small>@${esc(u.username)}${d.puedeEscribir ? ' · Amigos' : ''}</small></span></a></header>
+      <a class="dm-who" href="#/u/${encodeURIComponent(u.username)}">${avatarPersona(u)}<span><b>${esc(u.nombre)}</b><small>@${esc(u.username)}${d.puedeEscribir ? ' · Amigos' : ''}</small></span></a>
+      <span class="dm-head-acc"><button class="icon-btn" data-syncplay aria-label="SyncPlay con este amigo" title="SyncPlay">${icon('headphones')}</button></span></header>
     <div class="dm-msgs" data-msgs>${d.mensajes.length ? d.mensajes.map(burbuja).join('')
       : `<div class="dm-hello">${avatarPersona(u, 'xl')}<b>${esc(u.nombre)}</b><span>Salúdale o compártele una canción.</span></div>`}</div>
     ${d.puedeEscribir ? `<form class="dm-send" data-form>
-        <button type="button" class="icon-btn" data-share title="Compartir lo que estás escuchando" aria-label="Compartir canción">${icon('note')}</button>
+        <button type="button" class="icon-btn" data-mas title="Compartir música y conectar" aria-label="Compartir música y conectar">${icon('plus')}</button>
         <input data-text maxlength="1000" placeholder="Escribe un mensaje" autocomplete="off" enterkeyhint="send">
         <button class="send-btn" aria-label="Enviar">${icon('send')}</button></form>`
       : `<div class="dm-locked">${icon('lock', 'sm')} Para escribirse tienen que seguirse los dos.</div>`}`;
@@ -201,9 +213,35 @@ function pintarChat(box, d, isStale, copia) {
     inp.value = '';
     enviar(t);
   });
-  box.querySelector('[data-share]')?.addEventListener('click', () => {
-    if (!player.current) return toast('Pon una canción para compartirla');
-    enviar('', player.current.id);
+  // «+»: compartir la canción que suena, dedicarla a esta persona o iniciar Coincidimos con ella
+  box.querySelector('[data-mas]')?.addEventListener('click', (e) => {
+    const c = player.current;
+    showMenu(e.currentTarget, [
+      c ? { label: 'Enviar la canción que suena', icon: 'note', fn: () => enviar('', c.id) } : null,
+      c ? { label: 'Dedicar esta canción', icon: 'heart', fn: () => import('../dedicatorias.js').then((m) => m.dedicarCancion(c, { para: u.username })).catch(errorToast) } : null,
+      c ? null : { title: 'Pon una canción para enviarla o dedicarla' },
+      { label: 'Iniciar Coincidimos', icon: 'users', fn: async () => {
+        try { const r = await api('/api/coincidimos', { method: 'POST', body: { username: u.username } }); location.hash = '#/coincidimos/' + r.id; } catch (err) { errorToast(err); }
+      } },
+      { label: 'Mis dedicatorias', icon: 'gift', fn: () => { location.hash = '#/dedicatorias'; } },
+    ]);
+  });
+  // Auriculares: iniciar SyncPlay con este amigo (envía un mensaje real con el enlace) o ver mis salas
+  box.querySelector('[data-syncplay]')?.addEventListener('click', (e) => {
+    let enviando = false;
+    showMenu(e.currentTarget, [
+      { label: 'Iniciar SyncPlay', icon: 'headphones', disabled: !d.puedeEscribir, fn: async () => {
+        if (enviando) return;
+        enviando = true;
+        try {
+          const j = await import('../juntos.js');
+          const { mensaje } = await j.invitarPorMensaje(u.username);
+          pintar([mensaje]);
+          toast('Invitación a SyncPlay enviada');
+        } catch (err) { errorToast(err); } finally { enviando = false; }
+      } },
+      { label: 'Mis salas', icon: 'list', fn: () => { location.hash = '#/juntos'; } },
+    ]);
   });
 
   // En vivo: los mensajes de esta conversación aparecen al instante, sin recargar

@@ -91,6 +91,7 @@ pintarCuerpo(`
     <div class="np-mini">
       <div class="cover" data-open-np title="Reproduciendo ahora"><span data-pcover></span><span class="expand">${icon('up')}</span></div>
       <div class="tt"><div class="name ellipsis" data-pname></div><div class="artist ellipsis" data-partist></div></div>
+      <button class="icon-btn" data-dispositivos aria-label="Dispositivos y SyncPlay" title="Dispositivos y SyncPlay">${icon('devices')}</button>
       <button class="icon-btn" data-pfav aria-label="Me gusta">${icon('heart')}</button>
     </div>
     <div class="controls">
@@ -221,7 +222,6 @@ $('[data-user-menu]').addEventListener('click', (e) => {
     { label: 'Rutas musicales', icon: 'compass', fn: () => go('/rutas') },
     { label: 'Descubrir', icon: 'sparkles', fn: () => go('/descubrir') },
     { label: 'El punto donde coincidimos', icon: 'users', fn: () => go('/coincidimos') },
-    { label: 'Escuchar juntos (en vivo)', icon: 'users', fn: () => go('/juntos') },
     { label: 'Dedicatorias', icon: 'heart', fn: () => go('/dedicatorias') },
     { label: 'Preparar sin internet', icon: 'download', fn: () => go('/preparar') },
     { label: 'Ecualizador', icon: 'sliders', fn: () => openEqualizer() },
@@ -522,6 +522,7 @@ bar.addEventListener('click', (e) => {
   if (isMobile() && !e.target.closest('button, [data-seek]')) { e.preventDefault(); np.open(); return; }
   const c = e.target.closest('[data-c]')?.dataset.c;
   if (e.target.closest('[data-open-np]') || (isMobile() && !c && !e.target.closest('a, button, [data-seek]'))) { np.open(); return; }
+  if (e.target.closest('[data-dispositivos]')) { import('./dispositivos.js').then((m) => m.abrirDispositivos()).catch(errorToast); return; }
   if (e.target.closest('[data-pfav]') && player.current) { lib.toggleFav(player.current.id).catch(errorToast); return; }
   if (!c) return;
   if (c === 'play') player.toggle();
@@ -644,7 +645,7 @@ async function boot() {
   // App de Android: la página ya arrancó (si no llega este aviso sin internet, la app muestra
   // las canciones guardadas en el teléfono en vez de una pantalla negra)
   iniciarAlarma();
-  // Escuchar juntos: si estabas en una sala al cerrar la app, se retoma (el módulo solo se carga si hace falta)
+  // SyncPlay: si estabas en una sala al cerrar la app, se retoma (el módulo solo se carga si hace falta)
   setTimeout(() => {
     if (sinConexion()) return;
     api('/api/juntos').then((l) => { if (l?.some((x) => x.dentro)) import('./juntos.js').then((m) => m.retomarSala()); }).catch(() => { });

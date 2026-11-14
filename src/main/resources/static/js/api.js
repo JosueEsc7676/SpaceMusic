@@ -110,7 +110,9 @@ export function calidadAudio() {
   const c = ajustesCalidad.escucha;
   if (c !== 'auto') return c;
   const n = navigator.connection;
-  return n && (n.saveData || n.type === 'cellular' || /2g|3g/.test(n.effectiveType || '')) ? 'ligera' : 'alta';
+  // Datos móviles o red lenta (también una WiFi mala): se empieza con la versión ligera, que llega mucho antes
+  return n && (n.saveData || n.type === 'cellular' || /2g|3g/.test(n.effectiveType || '')
+    || (n.downlink && n.downlink < 1.5) || (n.rtt && n.rtt > 500)) ? 'ligera' : 'alta';
 }
 export const audioUrl = (id, calidad = calidadAudio()) =>
   `/api/canciones/${id}/audio?t=${encodeURIComponent(session.token || '')}${calidad === 'ligera' ? '&calidad=ligera' : ''}`;

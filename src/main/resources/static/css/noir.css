@@ -922,8 +922,14 @@ input[type=range][data-mezcla] { accent-color: #fff; }
 .dl-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; background: var(--bg-elev-3); border-radius: 10px; }
 .dl-fallidas { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
 .dl-fallidas code { font-size: 12px; color: var(--text-2); word-break: break-all; }
-.dl-log { background: #050507; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; height: 340px; overflow: auto; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; margin: 12px 0 0; }
+.dl-log { background: #050507; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; height: 340px; max-height: 45vh; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; margin: 12px 0 0; }
 .dl-log .ok { color: #7ee2a8; } .dl-log .bad { color: var(--danger); } .dl-log .warn { color: var(--warning); } .dl-log .tit { color: #fff; font-weight: 700; }
+.dl-reg > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; min-height: 32px; }
+.dl-reg > summary::-webkit-details-marker { display: none; }
+.dl-reg > summary::after { content: '▾'; margin-left: auto; color: var(--text-dim, #999); transition: transform .2s; }
+.dl-reg:not([open]) > summary::after { transform: rotate(-90deg); }
+.dl-atajos { gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-bottom: 10px; }
+#dl-spotify { scroll-margin-top: 80px; }
 .dl-filtro { background: var(--bg-elev-3); border: 1px solid var(--line-strong); color: var(--text); border-radius: 999px; padding: 6px 12px; font-size: 13px; width: 170px; }
 .dl-pasos { padding-left: 18px; margin-top: 0; display: grid; gap: 6px; font-size: 14px; }
 @media (max-width: 900px) { .dl-grid { grid-template-columns: 1fr; } .dl-log { height: 260px; } }
@@ -1142,3 +1148,40 @@ body.admin-mode .sop-lado, body.admin-mode .sop-contenido { min-width: 0; }
 /* Selectores dentro de los ajustes (calidad del audio) */
 .setting-row select { flex: none; max-width: 46%; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border, rgba(255,255,255,.14));
   background: var(--bg-elev-2, #1c1c22); color: var(--text, #fff); font: inherit; font-size: 14px; color-scheme: dark; }
+.table tr.fila-tocable { cursor: pointer; } .table tr.fila-tocable:hover td { background: rgba(255,255,255,.03); }
+
+/* Menú de canción: grupos plegables (Cola y radio, Compartir, Más acciones) */
+.menu-grupo .chev { transition: transform .2s; }
+.menu-grupo[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.menu-sub { margin: 0 0 4px 14px; padding-left: 6px; border-left: 1px solid var(--line); }
+.menu-sub[hidden] { display: none; }
+
+/* Dispositivos y SyncPlay */
+.disp-h { margin: 4px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); }
+.disp-h:not(:first-child) { margin-top: 20px; }
+.disp-actual { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: rgba(124,200,255,.10); }
+.disp-actual .icon { width: 26px; height: 26px; color: #8fd0ff; flex-shrink: 0; }
+.disp-actual span { display: flex; flex-direction: column; min-width: 0; }
+.disp-actual small { font-size: 12px; }
+.disp-btn { width: 100%; margin-top: 10px; justify-content: center; }
+.disp-nota { font-size: 13px; margin: 8px 0 0; }
+.disp-lista { margin-top: 10px; }
+.disp-lista .option.sel { outline: 2px solid #8fd0ff; }
+.disp-sync { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; border-radius: 12px; background: var(--bg-elev-3); text-align: left; color: var(--text); }
+.disp-sync:hover { background: rgba(255,255,255,.1); }
+.disp-sync > span:not(.disp-sync-ico) { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.disp-sync small { font-size: 12px; }
+.disp-sync-ico { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(124,200,255,.16); color: #8fd0ff; flex-shrink: 0; }
+.disp-sync-acc { gap: 8px; margin-top: 10px; }
+
+/* Mensajes: accesos sociales, SyncPlay en el chat e invitaciones */
+.dm-accesos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 4px 12px 12px; }
+.dm-acceso { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 68px; border-radius: 14px; font-size: 12px; font-weight: 700; color: var(--text); background: color-mix(in srgb, var(--c) 12%, transparent); }
+.dm-acceso:hover { text-decoration: none; background: color-mix(in srgb, var(--c) 20%, transparent); }
+.dm-acceso .icon { width: 22px; height: 22px; color: var(--c); }
+.dm-head-acc { margin-left: auto; display: flex; gap: 6px; }
+.msg-sync { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 16px; background: rgba(124,200,255,.16); color: var(--text); text-align: left; min-width: 220px; max-width: 280px; }
+.msg-sync b { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.msg-sync b .icon { width: 18px; height: 18px; color: #8fd0ff; }
+.msg-sync .ir { font-weight: 700; font-size: 13px; color: #8fd0ff; display: flex; align-items: center; gap: 4px; }
+.bubble.mine .msg-sync { margin-left: auto; }

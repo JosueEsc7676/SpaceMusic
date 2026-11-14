@@ -1,4 +1,4 @@
-// Escuchar juntos, en vivo: quien abre la sala (anfitrión) pone la música y todos escuchan la misma
+// SyncPlay (antes «Escuchar juntos»), en vivo: quien abre la sala (anfitrión) pone la música y todos escuchan la misma
 // canción en el mismo segundo. Cualquiera en la sala suma canciones a la cola y reacciona.
 // Los cambios llegan al instante por la conexión en vivo (eventos "juntos", "juntos-reaccion", "juntos-fin").
 import { api, session } from './api.js';
@@ -8,11 +8,45 @@ import { player } from './player.js';
 import { setHero, setTitle } from './router.js';
 import { toast, errorToast, emptyState, modal } from './ui.js';
 import { avatarPersona } from './views/people.js';
+import { enlaceSala, textoInvitacion } from './syncplay-enlace.js';
 
 // ═══════════════════ Motor de sincronía ═══════════════════
 
 const motor = { sala: null, anfitrion: false, ultimoEnviado: null, agregadas: new Set(), revisar: null };
-const CTX_OYENTE = (id) => ({ type: 'juntos-oyente', label: 'Escuchando juntos', route: '#/juntos/' + id });
+const CTX_OYENTE = (id) => ({ type: 'juntos-oyente', label: 'SyncPlay', route: '#/juntos/' + id });
+
+/** Sala activa (para el panel de Dispositivos). */
+export const salaActiva = () => (motor.sala ? { id: motor.sala, anfitrion: motor.anfitrion } : null);
+
+/** Crea tu sala (o devuelve la que ya tienes abierta). Si estás escuchando en la sala de otra persona, primero hay que salir. */
+export async function crearSala() {
+  if (motor.sala && !motor.anfitrion) throw new Error('Sal de la sala actual antes de iniciar otra.');
+  const d = await api('/api/juntos', { method: 'POST', body: {} });
+  activar(d);
+  return d;
+}
+
+/** Invita con la API de salas y deja en el chat un mensaje real con el enlace (ambas cuentas lo pueden abrir). */
+export async function invitarPorMensaje(username) {
+  const sala = await crearSala();
+  const d = await api('/api/juntos', { method: 'POST', body: { username } });
+  if (d.id !== sala.id || !enlaceSala(d.id)) throw new Error('No se pudo preparar el enlace de SyncPlay.');
+  const mensaje = await api('/api/mensajes/' + encodeURIComponent(username), { method: 'POST', body: { texto: textoInvitacion(d.id) } });
+  bus.emit('dm:mensaje', { con: username, mensaje });
+  return { sala: d, mensaje };
+}
+
+/** Comparte el enlace de la sala (hoja de compartir del sistema o, si no hay, se copia). */
+export async function compartirEnlace(id) {
+  const url = enlaceSala(id);
+  if (!url) return;
+  if (window.SpaceMusicApp?.compartir) { window.SpaceMusicApp.compartir('Escucha conmigo en SyncPlay 🎧\n' + url); return; }
+  if (navigator.share) {
+    try { await navigator.share({ title: 'SyncPlay', text: 'Escucha conmigo en SyncPlay 🎧', url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(url); toast('Enlace copiado'); }
+  catch { await modal({ title: 'Enlace de la sala', body: `<input class="input" readonly value="${esc(url)}" style="width:100%" onfocus="this.select()">` }); }
+}
 
 function activar(d) {
   if (!d?.dentro) return;
@@ -61,7 +95,7 @@ function tomarCola(d) {
   const nuevas = (d.cola || []).map((x) => x.cancion).filter((c) => c && !motor.agregadas.has(c.id));
   if (!nuevas.length) return;
   nuevas.forEach((c) => motor.agregadas.add(c.id));
-  if (!player.current) player.play(nuevas, 0, { type: 'juntos', label: 'Escuchando juntos', route: '#/juntos/' + d.id });
+  if (!player.current) player.play(nuevas, 0, { type: 'juntos', label: 'SyncPlay', route: '#/juntos/' + d.id });
   else player.addToQueue(nuevas);
 }
 
@@ -127,22 +161,26 @@ export async function retomarSala() {
 
 const personaHtml = (p, extra = '') => `<span class="juntos-persona" title="${esc(p.nombre)}">${avatarPersona(p)}<span class="ellipsis">${esc(p.nombre)}</span>${extra}</span>`;
 
+/** Elegir a un amigo e invitarlo (crea la sala si hace falta). */
+export const invitarAmigo = () => invitar(null);
+
 async function invitar(salaId) {
-  const personas = await api('/api/dedicatorias/personas').catch(() => []);
+  // Amigos (se siguen los dos): a ellos se les puede escribir y les llega el enlace por mensaje
+  const personas = await api('/api/mensajes/amigos').catch(() => []);
   let elegido = null;
   await modal({
-    title: 'Invitar a escuchar juntos',
-    body: `<input class="input" data-q placeholder="Buscar por nombre o @usuario" aria-label="Buscar persona" style="width:100%;margin-bottom:10px">
+    title: 'Invitar a SyncPlay',
+    body: `<input class="input" data-q placeholder="Buscar por nombre o @usuario" aria-label="Buscar amigo" style="width:100%;margin-bottom:10px">
       <div class="ded-personas" data-l role="listbox"></div>
-      <p class="muted" style="font-size:13px">Solo personas que te siguen. Les llega una notificación con el enlace a la sala.</p>`,
-    actions: [{ label: 'Cancelar', value: null }, { label: 'Invitar', value: 'ok', primary: true }],
+      <p class="muted" style="font-size:13px">Le llega un mensaje con el enlace de la sala y una notificación.</p>`,
+    actions: [{ label: 'Cancelar', value: null }, { label: 'Enviar invitación', value: 'ok', primary: true }],
     onOpen: (m) => {
       const pintar = (q = '') => {
         const f = q.toLowerCase().replace(/^@/, '');
         const l = personas.filter((p) => !f || (p.username + ' ' + p.nombre).toLowerCase().includes(f));
-        m.querySelector('[data-l]').innerHTML = l.length ? l.map((p) => `<button class="ded-persona ${elegido === p.username ? 'sel' : ''}" data-u="${esc(p.username)}">
-          ${avatarPersona(p)}<span class="ded-persona-txt"><b class="ellipsis">${esc(p.nombre)}</b><span class="muted ellipsis">@${esc(p.username)}</span></span>
-          ${p.mutuo ? '<span class="sop-chip ok">Se siguen</span>' : ''}</button>`).join('') : `<p class="muted">${personas.length ? 'Nadie coincide.' : 'Todavía nadie te sigue.'}</p>`;
+        m.querySelector('[data-l]').innerHTML = l.length ? l.map((p) => `<button class="ded-persona ${elegido === p.username ? 'sel' : ''}" data-u="${esc(p.username)}" role="option" aria-selected="${elegido === p.username}">
+          ${avatarPersona(p)}<span class="ded-persona-txt"><b class="ellipsis">${esc(p.nombre)}</b><span class="muted ellipsis">@${esc(p.username)}</span></span></button>`).join('')
+          : `<p class="muted">${personas.length ? 'Nadie coincide.' : 'Todavía no tienes amigos (personas que se siguen mutuamente).'}</p>`;
         m.querySelectorAll('[data-u]').forEach((b) => b.onclick = () => { elegido = b.dataset.u; pintar(m.querySelector('[data-q]').value); });
       };
       m.querySelector('[data-q]').addEventListener('input', (e) => pintar(e.target.value));
@@ -150,10 +188,10 @@ async function invitar(salaId) {
     },
     onAction: async (v) => {
       if (v !== 'ok') return;
-      if (!elegido) { toast('Elige a una persona'); return false; }
-      const d = await api('/api/juntos', { method: 'POST', body: { username: elegido } });
+      if (!elegido) { toast('Elige a un amigo'); return false; }
+      const { sala } = await invitarPorMensaje(elegido);
       toast(`Invitación enviada a @${elegido}`);
-      if (!salaId) location.hash = '#/juntos/' + d.id;
+      if (!salaId) location.hash = '#/juntos/' + sala.id;
     },
   }).catch(errorToast);
 }
@@ -195,7 +233,8 @@ function pintarSala(el, d) {
     <div class="row wrap juntos-acc">
       ${!d.dentro ? `<button class="btn primary" data-unirse>${icon('headphones', 'sm')} Unirme y escuchar</button>` : ''}
       ${d.dentro ? `<button class="btn" data-sumar>${icon('plus', 'sm')} Sumar canción</button>` : ''}
-      ${d.soyAnfitrion ? `<button class="btn" data-invitar>${icon('users', 'sm')} Invitar</button>` : ''}
+      ${d.soyAnfitrion ? `<button class="btn" data-invitar>${icon('send', 'sm')} Invitar a un amigo</button>` : ''}
+      ${d.dentro ? `<button class="btn" data-compartir>${icon('share', 'sm')} Compartir enlace</button>` : ''}
       <button class="btn" data-salir>${d.soyAnfitrion ? 'Cerrar la sala' : d.dentro ? 'Salir' : 'No, gracias'}</button>
     </div>
     <h3 class="juntos-h">En la sala (${d.personas.length})</h3>
@@ -213,6 +252,7 @@ function pintarSala(el, d) {
   });
   el.querySelector('[data-sumar]')?.addEventListener('click', () => agregarCancion(id));
   el.querySelector('[data-invitar]')?.addEventListener('click', () => invitar(id));
+  el.querySelector('[data-compartir]')?.addEventListener('click', () => compartirEnlace(id));
   el.querySelector('[data-salir]')?.addEventListener('click', async () => {
     try { await api(`/api/juntos/${id}/salir`, { method: 'POST' }); } catch { }
     if (motor.sala === id) desactivar();
@@ -223,7 +263,7 @@ function pintarSala(el, d) {
 }
 
 export async function juntosView(el, params, _q, isStale) {
-  setTitle('Escuchar juntos');
+  setTitle('SyncPlay');
   if (params.id) {
     let d;
     try { d = await api('/api/juntos/' + params.id); } catch (e) { el.innerHTML = emptyState('users', 'Esta sala ya terminó', 'Las salas se cierran cuando el anfitrión sale o tras 30 minutos sin actividad.', '<a class="btn" href="#/juntos">Volver</a>'); return; }
@@ -241,16 +281,18 @@ export async function juntosView(el, params, _q, isStale) {
   }
   const salas = await api('/api/juntos').catch(() => []);
   if (isStale?.()) return;
-  el.innerHTML = `<h1 class="page-title">Escuchar juntos</h1>
+  el.innerHTML = `<h1 class="page-title">SyncPlay</h1>
     <p class="muted" style="max-width:640px">Abre una sala e invita a quien te sigue: escucharán la misma canción en el mismo segundo,
       podrán sumar canciones a la cola y reaccionar en vivo. Tú pones la música.</p>
-    <div class="row wrap" style="gap:10px;margin:16px 0 24px"><button class="btn primary" data-abrir>${icon('headphones', 'sm')} Abrir mi sala e invitar</button></div>
+    <div class="row wrap" style="gap:10px;margin:16px 0 24px"><button class="btn primary" data-abrir>${icon('headphones', 'sm')} Iniciar SyncPlay</button>
+      <button class="btn" data-invitar-amigo>${icon('send', 'sm')} Invitar a un amigo</button></div>
     ${salas.length ? `<h3 class="juntos-h">Tus salas e invitaciones</h3><div class="juntos-lista">${salas.map((s) => `<a class="juntos-item" href="#/juntos/${s.id}">
         ${s.cancion ? coverImg(s.cancion.portadaUrl, 64) : `<span class="juntos-item-ico">${icon('users')}</span>`}
         <span class="ellipsis"><b>${s.soyAnfitrion ? 'Tu sala' : 'Sala de ' + esc(s.anfitrion?.nombre || '')}</b><br>
         <span class="muted">${s.dentro ? `${s.personas.length} en la sala` : 'Te invitaron'}${s.cancion ? ' · ' + esc(s.cancion.nombre) : ''}</span></span>
         ${!s.dentro ? '<span class="sop-chip warn">Invitación</span>' : ''}</a>`).join('')}</div>` : ''}`;
   el.querySelector('[data-abrir]').onclick = async () => {
-    try { const d = await api('/api/juntos', { method: 'POST', body: {} }); location.hash = '#/juntos/' + d.id; setTimeout(() => invitar(d.id), 600); } catch (e) { errorToast(e); }
+    try { const d = await crearSala(); location.hash = '#/juntos/' + d.id; } catch (e) { errorToast(e); }
   };
+  el.querySelector('[data-invitar-amigo]').onclick = () => invitar(null);
 }

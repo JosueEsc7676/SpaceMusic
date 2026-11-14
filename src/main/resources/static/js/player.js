@@ -475,7 +475,9 @@ audio.addEventListener('timeupdate', () => {
   if (!nxt || !audio.duration) return;
   if (esIOS) {
     if (audio.currentTime > audio.duration * 0.35 && siguiente.id !== nxt.id) traerSiguiente(nxt.id);
-  } else if (audio.currentTime > audio.duration * 0.6 && preloader.dataset.id !== String(nxt.id)) {
+  } else if (!navigator.serviceWorker?.controller && audio.currentTime > audio.duration * 0.6 && preloader.dataset.id !== String(nxt.id)) {
+    // Con service worker la siguiente ya la precarga offline.js (entera o solo el principio, según la red):
+    // un segundo <audio> la bajaría otra vez
     preloader.dataset.id = String(nxt.id);
     preloader.src = audioUrl(nxt.id);
     preloader.load();
@@ -573,6 +575,21 @@ export const mezcla = {
     if (this.entrada !== 1) { this.entrada = 1; player._applyVolume(); }
   },
 };
+/**
+ * Salida de audio elegida en «Dispositivos» (solo navegadores con setSinkId). Se aplica al <audio> principal,
+ * al de la transición y, si el ecualizador está activo, al contexto de Web Audio (por ahí suena entonces).
+ */
+export async function fijarSalida(deviceId = '') {
+  const destinos = [audio, cola].filter((a) => typeof a.setSinkId === 'function');
+  if (!destinos.length) throw new Error('Este navegador no permite elegir la salida de audio.');
+  for (const a of destinos) await a.setSinkId(deviceId);
+  if (fx.ctx && typeof fx.ctx.setSinkId === 'function') await fx.ctx.setSinkId(deviceId);
+  store.set('sm_salida', deviceId);
+}
+export const salidaActual = () => audio.sinkId ?? null;
+// Al abrir, se vuelve a la última salida elegida (si ya no existe, el navegador usa la predeterminada)
+{ const guardada = store.get('sm_salida', ''); if (guardada && typeof audio.setSinkId === 'function') audio.setSinkId(guardada).catch(() => store.del('sm_salida')); }
+
 // Pausar durante la transición detiene también la canción que sale
 // (se comprueba un momento después: al cambiar de canción el navegador también avisa "pause")
 audio.addEventListener('pause', () => setTimeout(() => { if (audio.paused && mezcla._t) mezcla.cortar(); }, 300));

@@ -6,6 +6,8 @@
 //   - sm-api:           respuestas de la API (red primero; sin conexión se usa la última copia).
 //   - sm-portadas:      portadas (la URL lleva la huella de la imagen: nunca cambian).
 //   - sm-audio:         canciones guardadas en el dispositivo para escuchar sin conexión.
+//   - sm-inicio:        solo el principio de la siguiente canción (datos móviles o poca memoria): empieza al instante
+//                       y el resto llega de la red mientras suena.
 const CACHE = '__VERSION__';
 const SHELL = [__SHELL__]; // [ruta, huella del contenido]
 const API = 'sm-api';
@@ -15,7 +17,39 @@ const DESCARGAS = 'sm-descargas'; // descargadas a mano: nunca se borran solas
 const MAX_CANCIONES = 150;   // canciones guardadas como máximo (se borran las más antiguas)
 const MAX_PORTADAS = 1500;
 const ESPERA_RED_MS = 4000;  // pasado este tiempo sin respuesta, se usa la copia guardada
-const PERMANENTES = [API, PORTADAS, AUDIO, DESCARGAS];
+const INICIO = 'sm-inicio';
+const MAX_INICIOS = 20;
+const PERMANENTES = [API, PORTADAS, AUDIO, DESCARGAS, INICIO];
+
+// ── Prioridad: la canción que suena va primero ──
+// Al cambiar de canción se cancelan las descargas automáticas en curso (guardar y precargar) y las que
+// esperan en la cola se saltan: así no le quitan ancho de banda a lo que el usuario quiere oír ya.
+// Las descargas hechas a mano esperan a que la canción nueva arranque (como mucho unos segundos).
+let generacion = 0;
+const enVuelo = new Set();   // AbortController de las descargas automáticas
+let prioridadHasta = 0;
+function darPrioridad(ms = 8000) {
+  generacion++;
+  for (const c of enVuelo) c.abort();
+  enVuelo.clear();
+  prioridadHasta = Date.now() + ms;
+}
+async function esperarPrioridad() {
+  while (Date.now() < prioridadHasta) await new Promise((r) => setTimeout(r, Math.min(500, prioridadHasta - Date.now())));
+}
+
+// ── Índice de lo guardado: si una canción no está en el dispositivo, su audio va directo a la red ──
+// (sin pasar por el service worker: empieza antes y el navegador usa su propia caché por rangos)
+let indice = null;
+let cargandoIndice = null;
+function recargarIndice() {
+  cargandoIndice = (async () => {
+    const s = new Set();
+    for (const nombre of [AUDIO, DESCARGAS, INICIO]) for (const r of await (await caches.open(nombre)).keys()) s.add(new URL(r.url).pathname);
+    indice = s;
+  })().catch(() => { indice = null; }).finally(() => { cargandoIndice = null; });
+  return cargandoIndice;
+}
 
 self.addEventListener('install', (e) => {
   e.waitUntil(instalar());
@@ -51,18 +85,24 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('message', (e) => {
   const d = e.data;
   if (d === 'activar') { self.skipWaiting(); return; }
-  if (d?.tipo === 'guardar-audio') e.waitUntil(enCola(() => guardarAudio(d.url, d.clave)));
+  if (d?.tipo === 'guardar-audio') { const g = generacion; e.waitUntil(enCola(() => (g === generacion ? guardarAudio(d.url, d.clave) : null))); }
+  if (d?.tipo === 'precargar-inicio') { const g = generacion; e.waitUntil(enCola(() => (g === generacion ? guardarInicio(d.url, d.bytes) : null))); }
+  // Empezó otra canción: lo de fondo se aparta (hasta: ms que la canción nueva tiene preferencia)
+  if (d?.tipo === 'prioridad') darPrioridad(d.hasta);
+  if (d?.tipo === 'prioridad-fin') prioridadHasta = 0;
   // Al cerrar sesión se borran los datos de la cuenta; las canciones descargadas se conservan
   // (cada cuenta solo ve su propia lista de descargas)
   if (d?.tipo === 'limpiar-usuario') e.waitUntil(caches.delete(API));
   if (d?.tipo === 'descargar-audio') e.waitUntil(enCola(() => descargar(d.url, d.id)).then((ok) => avisar({ tipo: 'descarga', id: d.id, ok })));
-  if (d?.tipo === 'quitar-descarga') e.waitUntil(caches.open(DESCARGAS).then((c) => c.delete(`/offline/audio/${d.id}`)));
+  if (d?.tipo === 'quitar-descarga') e.waitUntil(caches.open(DESCARGAS).then((c) => c.delete(`/offline/audio/${d.id}`)).then(recargarIndice));
   // La copia guardada no coincide con la canción (otra duración): se borra y, si era descarga, se vuelve a bajar
   if (d?.tipo === 'audio-equivocado') e.waitUntil((async () => {
     const clave = `/offline/audio/${d.id}`;
     await (await caches.open(AUDIO)).delete(clave);
     const eraDescarga = await (await caches.open(DESCARGAS)).delete(clave);
     e.source?.postMessage({ tipo: 'audio-revisado', id: d.id });
+    await (await caches.open(INICIO)).delete(clave);
+    await recargarIndice();
     if (eraDescarga && d.url) await enCola(() => descargar(d.url, d.id));
   })());
   if (d?.tipo === 'estado-offline') e.waitUntil(contarAudio().then((n) => e.source?.postMessage({ tipo: 'estado-offline', canciones: n })));
@@ -80,7 +120,8 @@ const claveAudio = (url) => {
 // la app (con HTTP/1.1 el navegador solo abre 6 a la vez con el servidor)
 let cola = Promise.resolve();
 function enCola(tarea) {
-  const p = cola.then(tarea, tarea);
+  const conTurno = () => esperarPrioridad().then(tarea);
+  const p = cola.then(conTurno, conTurno);
   cola = p.catch(() => { });
   return p;
 }
@@ -90,12 +131,68 @@ async function guardarAudio(url, clave) {
   if (!clave) return;
   const c = await caches.open(AUDIO);
   if (await c.match(clave)) return;
+  const ctrl = new AbortController();
+  enVuelo.add(ctrl);
   try {
-    const r = await fetch(url, { credentials: 'same-origin' });
+    const r = await fetch(url, { credentials: 'same-origin', signal: ctrl.signal });
     if (!r.ok || r.status !== 200) return;
-    await c.put(clave, r);
+    // Se lee entera antes de guardar: si se cancela a medias no queda una copia incompleta
+    const tipo = r.headers.get('Content-Type') || 'audio/mpeg';
+    const blob = await r.blob();
+    const total = Number(r.headers.get('Content-Length')) || 0;
+    if (total && blob.size < total) return;
+    await c.put(clave, new Response(blob, { headers: { 'Content-Type': tipo, 'Content-Length': String(blob.size) } }));
+    await (await caches.open(INICIO)).delete(clave); // ya está entera
     await recortar(c, MAX_CANCIONES);
-  } catch { /* sin conexión: se intentará otra vez */ }
+    await recargarIndice();
+  } catch { /* sin conexión o cancelada (empezó otra canción): se intentará otra vez */ }
+  finally { enVuelo.delete(ctrl); }
+}
+
+/** Solo el principio de la canción (petición por rangos), para que la siguiente empiece sin esperar a la red. */
+async function guardarInicio(url, bytes = 640 * 1024) {
+  const clave = claveAudio(url);
+  if (!clave) return;
+  const ligera = /[?&]calidad=ligera/.test(url);
+  const c = await caches.open(INICIO);
+  const previa = await c.match(clave);
+  if (previa && previa.headers.get('X-SM-Ligera') === String(ligera)) return;
+  if (await (await caches.open(AUDIO)).match(clave) || await (await caches.open(DESCARGAS)).match(clave)) return;
+  const ctrl = new AbortController();
+  enVuelo.add(ctrl);
+  try {
+    const r = await fetch(url, { credentials: 'same-origin', signal: ctrl.signal, headers: { Range: `bytes=0-${Math.max(65536, bytes) - 1}` } });
+    const rango = /bytes 0-(\d+)\/(\d+)/.exec(r.headers.get('Content-Range') || '');
+    if (r.status !== 206 || !rango) return; // el servidor no da rangos: no se guarda nada
+    const blob = await r.blob();
+    if (blob.size !== Number(rango[1]) + 1) return;
+    await c.put(clave, new Response(blob, { headers: {
+      'Content-Type': r.headers.get('Content-Type') || 'audio/mpeg', 'X-SM-Total': rango[2], 'X-SM-Ligera': String(ligera),
+      'X-SM-Fecha': String(Date.now()), 'X-SM-Validador': r.headers.get('ETag') || r.headers.get('Last-Modified') || '' } }));
+    await recortar(c, MAX_INICIOS);
+    await recargarIndice();
+  } catch { /* cancelada o sin conexión */ }
+  finally { enVuelo.delete(ctrl); }
+}
+
+/** El principio guardado responde a la primera petición (bytes=0-); el reproductor pide el resto a la red. */
+async function inicioGuardado(req, clave) {
+  const range = req.headers.get('range') || 'bytes=0-';
+  if (!/^bytes=0-/.test(range)) return null;
+  const r = await (await caches.open(INICIO)).match(clave);
+  if (!r) return null;
+  const ligera = new URL(req.url).searchParams.get('calidad') === 'ligera';
+  // De otra calidad o de hace más de un día (el archivo pudo cambiar): no se usa
+  if (r.headers.get('X-SM-Ligera') !== String(ligera) || Date.now() - Number(r.headers.get('X-SM-Fecha') || 0) > 86400000) return null;
+  const total = Number(r.headers.get('X-SM-Total'));
+  const blob = await r.blob();
+  if (!total || !blob.size) return null;
+  return new Response(blob, { status: 206, headers: {
+    'Content-Type': r.headers.get('Content-Type') || 'audio/mpeg',
+    'Content-Range': `bytes 0-${blob.size - 1}/${total}`,
+    'Content-Length': String(blob.size),
+    'Accept-Ranges': 'bytes',
+  } });
 }
 
 async function avisar(m) {
@@ -109,7 +206,7 @@ async function descargar(url, id) {
   if (await c.match(clave)) return true;
   // Si ya estaba guardada automáticamente, se pasa a descargas sin volver a bajarla
   const auto = await (await caches.open(AUDIO)).match(clave);
-  if (auto) { await c.put(clave, auto); return true; }
+  if (auto) { await c.put(clave, auto); await recargarIndice(); return true; }
   for (let intento = 1; intento <= 3; intento++) {
     try {
       const r = await fetch(url, { credentials: 'same-origin' });
@@ -130,6 +227,8 @@ async function descargar(url, id) {
       const tipo = r.headers.get('Content-Type') || 'audio/mpeg';
       const blob = new Blob(partes, { type: tipo });
       await c.put(clave, new Response(blob, { headers: { 'Content-Type': tipo, 'Content-Length': String(blob.size) } }));
+      await (await caches.open(INICIO)).delete(clave);
+      await recargarIndice();
       return true;
     } catch { /* se reintenta */ }
     await new Promise((res) => setTimeout(res, intento * 2000));
@@ -229,8 +328,11 @@ self.addEventListener('fetch', (e) => {
   if (url.pathname.startsWith('/api/')) {
     const clave = claveAudio(url.pathname);
     if (clave) {
-      // Canción guardada → se sirve del dispositivo; si no, de la red como siempre
-      e.respondWith(audioGuardado(req, clave).then((r) => r || fetch(req)));
+      if (!indice && !cargandoIndice) recargarIndice();
+      // No está en el dispositivo y hay red: directo al servidor, sin pasar por aquí (empieza antes)
+      if (indice && !indice.has(clave) && self.navigator.onLine !== false) return;
+      // Canción guardada → se sirve del dispositivo; si solo está el principio, ese trozo; si no, de la red
+      e.respondWith(audioGuardado(req, clave).then((r) => r || inicioGuardado(req, clave)).then((r) => r || fetch(req)).catch(() => fetch(req)));
       return;
     }
     if (url.pathname.startsWith('/api/portada/')) { e.respondWith(portada(req)); return; }

@@ -163,7 +163,7 @@ export async function compartirImagen(blob, nombre) {
 
 // ═══════════════════ Dedicar (tres pasos) ═══════════════════
 
-export async function dedicarCancion(song) {
+export async function dedicarCancion(song, { para: paraInicial = null } = {}) {
   const enCurso = player.current?.id === song.id ? Math.floor(player.audio.currentTime || 0) : 0;
   let personas = [], para = null, bloques = [], completa = false, desde = null, hasta = null, previa = null;
   try {
@@ -237,6 +237,8 @@ export async function dedicarCancion(song) {
         m.querySelectorAll('[data-u]').forEach((b) => b.onclick = () => { para = b.dataset.u; pintarPersonas($('[data-q]').value); botones(); });
       };
       $('[data-q]').addEventListener('input', (e) => pintarPersonas(e.target.value));
+      // Desde una conversación: la persona ya viene elegida (si puede recibir dedicatorias) y se pasa al paso 2
+      if (paraInicial && personas.some((p) => p.username === paraInicial)) { para = paraInicial; setTimeout(() => m._ir(2), 0); }
       pintarPersonas();
 
       const pintarSeleccion = () => {

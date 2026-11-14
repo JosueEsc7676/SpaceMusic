@@ -46,16 +46,39 @@ export function showMenu(anchor, items, head) {
   const m = document.createElement('div');
   m.className = 'menu';
   m.setAttribute('role', 'menu');
-  m.innerHTML = (head || '') + items.filter(Boolean).map((it, i) => {
+  // { group: 'Nombre', icon, items: [...] } se muestra plegado y se despliega en el mismo menú
+  const list = [];
+  const pintar = (it) => {
+    if (!it) return '';
     if (it.sep) return '<div class="menu-sep"></div>';
     if (it.title) return `<div class="menu-title">${esc(it.title)}</div>`;
+    if (it.group) {
+      const hijos = it.items.filter(Boolean);
+      if (!hijos.length) return '';
+      return `<button class="menu-item menu-grupo" role="menuitem" aria-expanded="false" data-g>${icon(it.icon || 'more')}<span class="ellipsis">${esc(it.group)}</span>${icon('down', 'sm chev')}</button>
+        <div class="menu-sub" role="group" aria-label="${esc(it.group)}" hidden>${hijos.map(pintar).join('')}</div>`;
+    }
+    const i = list.push(it) - 1;
     return `<button class="menu-item ${it.danger ? 'danger' : ''}" role="menuitem" data-i="${i}" ${it.disabled ? 'disabled' : ''}>
       ${icon(it.icon || 'note')}<span class="ellipsis">${esc(it.label)}</span>${it.sub ? icon('right', 'sm chev') : ''}</button>`;
-  }).join('');
-  const list = items.filter(Boolean);
+  };
+  m.innerHTML = (head || '') + items.map(pintar).join('');
   m.addEventListener('click', (e) => {
     const b = e.target.closest('.menu-item');
     if (!b) return;
+    if (b.hasAttribute('data-g')) {
+      const sub = b.nextElementSibling, abrir = sub.hidden;
+      sub.hidden = !abrir;
+      b.setAttribute('aria-expanded', String(abrir));
+      if (abrir) sub.querySelector('.menu-item')?.focus({ preventScroll: true });
+      // En PC el menú flota: si al desplegar se sale por abajo, se sube
+      if (!isMobile()) {
+        const r = m.getBoundingClientRect();
+        if (r.bottom > innerHeight - 8) m.style.top = Math.max(8, innerHeight - m.offsetHeight - 8) + 'px';
+      }
+      if (abrir) sub.scrollIntoView({ block: 'nearest' });
+      return;
+    }
     const it = list[+b.dataset.i];
     if (!it.keepOpen) closeMenu();
     it.fn?.(e);
@@ -318,27 +341,79 @@ bus.on('favs', refreshFavMarks);
 export function songMenu(anchor, song, { playlistId } = {}) {
   const fav = lib.isFav(song.id);
   const head = `<div class="menu-head">${coverImg(song.portadaUrl, 64)}<div class="tt" style="min-width:0"><div class="t ellipsis">${esc(song.nombre)}</div><div class="s ellipsis">${esc(song.artista)}</div></div></div>`;
+  // Me gusta y Agregar a playlist siempre a la vista; el resto, agrupado (todas las acciones se conservan)
   showMenu(anchor, [
-    { label: 'Reproducir a continuación', icon: 'play', fn: () => { player.playNext(song); toast('Sonará a continuación'); } },
-    { label: 'Agregar a la cola', icon: 'queue', fn: () => { player.addToQueue(song); toast('Agregada a la cola'); } },
-    { label: 'Iniciar radio', icon: 'radio', fn: () => player.startRadio(song).catch(errorToast) },
-    { sep: true },
+    { label: fav ? 'Quitar de Me gusta' : 'Me gusta', icon: fav ? 'heartFill' : 'heart', fn: () => lib.toggleFav(song.id).then((f) => toast(f ? 'Agregada a Me gusta' : 'Quitada de Me gusta')).catch(errorToast) },
     { label: 'Agregar a playlist', icon: 'plusCircle', sub: true, fn: () => pickPlaylist([song]) },
-    { label: fav ? 'Quitar de Me gusta' : 'Agregar a Me gusta', icon: fav ? 'heartFill' : 'heart', fn: () => lib.toggleFav(song.id).then((f) => toast(f ? 'Agregada a Me gusta' : 'Quitada de Me gusta')).catch(errorToast) },
     playlistId ? { label: 'Quitar de esta playlist', icon: 'trash', fn: () => bus.emit('playlist:remove', { playlistId, song }) } : null,
     { sep: true },
-    { label: 'Ir al artista', icon: 'user', fn: () => { location.hash = '#/artista/' + encodeURIComponent(song.artista); } },
-    song.album && song.album !== 'Single' ? { label: 'Ir al álbum', icon: 'disc', fn: () => { location.hash = albumHref(song.album, song.artista); } } : null,
-    { label: 'Ver letra', icon: 'mic', fn: () => bus.emit('np:lyrics', song) },
-    { label: 'Dedicar esta canción', icon: 'send', fn: () => import('./dedicatorias.js').then((m) => m.dedicarCancion(song)) },
-    { label: 'Reportar un problema', icon: 'flag', fn: () => reportarProblema(song) },
-    ...(session.canEdit ? [
-      { sep: true },
-      { label: 'Editar información', icon: 'edit', fn: () => editSong(song) },
-      { label: 'Cambiar portada', icon: 'disc', fn: () => changeCover(song) },
-      { label: 'Editar letra', icon: 'text', fn: () => editLyrics(song) },
-    ] : []),
+    { group: 'Cola y radio', icon: 'queue', items: [
+      { label: 'Reproducir a continuación', icon: 'play', fn: () => { player.playNext(song); toast('Sonará a continuación'); } },
+      { label: 'Agregar a la cola', icon: 'queue', fn: () => { player.addToQueue(song); toast('Agregada a la cola'); } },
+      { label: 'Iniciar radio', icon: 'radio', fn: () => player.startRadio(song).catch(errorToast) },
+    ] },
+    { group: 'Compartir', icon: 'share', items: [
+      { label: 'Enviar a un amigo', icon: 'send', fn: () => enviarAAmigo(song) },
+      { label: 'Dedicar esta canción', icon: 'heart', fn: () => import('./dedicatorias.js').then((m) => m.dedicarCancion(song)) },
+      { label: 'Compartir enlace', icon: 'link', fn: () => compartirEnlace(song) },
+    ] },
+    { group: 'Más acciones', icon: 'more', items: [
+      { label: 'Ver letra', icon: 'mic', fn: () => bus.emit('np:lyrics', song) },
+      { label: 'Ir al artista', icon: 'user', fn: () => { location.hash = '#/artista/' + encodeURIComponent(song.artista); } },
+      song.album && song.album !== 'Single' ? { label: 'Ir al álbum', icon: 'disc', fn: () => { location.hash = albumHref(song.album, song.artista); } } : null,
+      { label: 'Reportar un problema', icon: 'flag', fn: () => reportarProblema(song) },
+      ...(session.canEdit ? [
+        { label: 'Editar información', icon: 'edit', fn: () => editSong(song) },
+        { label: 'Cambiar portada', icon: 'disc', fn: () => changeCover(song) },
+        { label: 'Editar letra', icon: 'text', fn: () => editLyrics(song) },
+      ] : []),
+    ] },
   ], head);
+}
+
+/** Comparte un texto con enlace: hoja de Android, la del navegador o, si no hay, se copia. */
+export async function compartirTexto(titulo, url) {
+  if (window.SpaceMusicApp?.compartir) { window.SpaceMusicApp.compartir(`${titulo}\n${url}`); return; }
+  if (navigator.share) {
+    try { await navigator.share({ title: titulo, text: titulo, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(url); toast('Enlace copiado'); }
+  catch { await modal({ title: 'Enlace', body: `<input class="input" readonly value="${esc(url)}" style="width:100%" onfocus="this.select()">` }); }
+}
+
+function compartirEnlace(song) {
+  const ruta = song.album && song.album !== 'Single' ? albumHref(song.album, song.artista) : '#/artista/' + encodeURIComponent(song.artista);
+  compartirTexto(`${song.nombre} · ${song.artista}`, new URL('/' + ruta, location.origin).href);
+}
+
+/** Envía la canción por mensaje a un amigo (personas que se siguen mutuamente). */
+export async function enviarAAmigo(song) {
+  const amigos = await api('/api/mensajes/amigos').catch(() => []);
+  await modal({
+    title: 'Enviar a un amigo',
+    body: amigos.length ? `<input class="input" data-q placeholder="Buscar amigo" aria-label="Buscar amigo" style="width:100%;margin-bottom:10px">
+      <div class="option-list" data-l>${amigos.map((a) => `<button class="option" data-u="${esc(a.username)}" data-n="${esc(norm(a.nombre + ' ' + a.username))}">
+        <div class="ph">${icon('user')}</div><div style="min-width:0"><div class="t ellipsis">${esc(a.nombre)}</div><div class="s ellipsis">@${esc(a.username)}</div></div></button>`).join('')}</div>`
+      : '<p class="muted">Todavía no tienes amigos: cuando tú y otra persona se sigan, podrán enviarse canciones.</p>',
+    actions: [{ label: 'Cancelar', value: null }],
+    onOpen: (m, cerrar) => {
+      m.querySelector('[data-q]')?.addEventListener('input', (e) => {
+        const v = norm(e.target.value);
+        m.querySelectorAll('[data-u]').forEach((o) => o.classList.toggle('hidden', !o.dataset.n.includes(v)));
+      });
+      m.addEventListener('click', async (e) => {
+        const o = e.target.closest('[data-u]');
+        if (!o) return;
+        o.disabled = true;
+        try {
+          const msg = await api('/api/mensajes/' + encodeURIComponent(o.dataset.u), { method: 'POST', body: { texto: '', cancionId: song.id } });
+          bus.emit('dm:mensaje', { con: o.dataset.u, mensaje: msg });
+          cerrar(null);
+          toast(`Enviada a @${o.dataset.u}`, { action: { label: 'Ver chat', fn: () => { location.hash = '#/mensajes/' + encodeURIComponent(o.dataset.u); } } });
+        } catch (err) { o.disabled = false; errorToast(err); }
+      });
+    },
+  });
 }
 
 // ═══════════════════ Elegir playlist ═══════════════════

@@ -85,6 +85,10 @@ public class MainActivity extends Activity {
         s.setAllowContentAccess(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         web.addJavascriptInterface(new Puente(), "SpaceMusicApp");
+        // Cuando cambia la salida (audífonos, Bluetooth…), la web lo muestra en «Dispositivos»
+        Salidas.vigilar(this, json -> runOnUiThread(() -> {
+            if (web != null) web.evaluateJavascript("window.smSalida && window.smSalida(" + json + ")", null);
+        }));
         WebView.setWebContentsDebuggingEnabled(false);
         web.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -477,6 +481,34 @@ public class MainActivity extends Activity {
             runOnUiThread(MainActivity.this::pedirPermisoMusica);
         }
 
+        /** Hoja de compartir de Android para un texto (la vista web no tiene navigator.share). */
+        @JavascriptInterface
+        public void compartir(String texto) {
+            if (texto == null || texto.length() > 2000) return;
+            runOnUiThread(() -> {
+                try {
+                    Intent i = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, texto);
+                    startActivity(Intent.createChooser(i, "Compartir"));
+                } catch (Exception ignored) { }
+            });
+        }
+
+        /** Salida de audio actual (lo que el sistema tiene elegido para la música), en JSON. */
+        @JavascriptInterface
+        public String salidaAudio() {
+            return Salidas.actual(MainActivity.this);
+        }
+
+        /** Abre el selector de salida de medios del sistema (o el mejor respaldo de esta versión de Android). */
+        @JavascriptInterface
+        public String elegirSalida() {
+            final String[] r = { "" };
+            final java.util.concurrent.CountDownLatch listo = new java.util.concurrent.CountDownLatch(1);
+            runOnUiThread(() -> { try { r[0] = Salidas.elegir(MainActivity.this); } finally { listo.countDown(); } });
+            try { listo.await(2, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+            return r[0];
+        }
+
         /** Descarga e instala la versión nueva de la app. */
         @JavascriptInterface
         public void actualizar(String url) {
@@ -507,6 +539,7 @@ public class MainActivity extends Activity {
         if (vigilaRed != null && Build.VERSION.SDK_INT >= 24) {
             try { ((ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE)).unregisterNetworkCallback(vigilaRed); } catch (Exception ignored) { }
         }
+        Salidas.dejarDeVigilar(this);
         stopService(new Intent(this, ReproductorService.class));
         if (web != null) {
             web.destroy();

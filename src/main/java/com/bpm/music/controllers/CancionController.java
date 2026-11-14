@@ -116,14 +116,32 @@ public class CancionController {
     @GetMapping("/{id}/audio")
     public ResponseEntity<Resource> audio(@PathVariable Long id, @RequestParam(required = false) String calidad) {
         // calidad=ligera: versión AAC 128 kbps para datos móviles (si todavía no está lista, el original)
-        File f = "ligera".equals(calidad) && ligero != null ? ligero.archivo(id) : canciones.archivo(id);
+        boolean pidioLigera = "ligera".equals(calidad) && ligero != null;
+        File f = pidioLigera ? ligero.archivo(id) : canciones.archivo(id);
         if (f == null || !f.canRead()) return ResponseEntity.notFound().build();
+        boolean ligera = pidioLigera && ligero.esLigera(f);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(mime(f.getName())))
                 .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                .cacheControl(CacheControl.maxAge(7, TimeUnit.DAYS).cachePrivate())
+                .header("X-SM-Calidad", ligera ? "ligera" : "original")
+                .cacheControl(cacheAudio(pidioLigera, ligera))
+                // Validador fuerte: el navegador puede reutilizar y combinar los trozos (rangos) que ya tiene
+                .eTag(etagAudio(f, ligera))
                 .lastModified(f.lastModified())
                 .body(new FileSystemResource(f));
+    }
+
+    /**
+     * Pidió la versión ligera y todavía no está lista: se entrega el original, pero el navegador solo lo guarda
+     * unos minutos bajo esta dirección (así, en cuanto la ligera esté preparada, la usa).
+     */
+    public static CacheControl cacheAudio(boolean pidioLigera, boolean ligera) {
+        return pidioLigera && !ligera ? CacheControl.maxAge(10, TimeUnit.MINUTES).cachePrivate()
+                : CacheControl.maxAge(7, TimeUnit.DAYS).cachePrivate();
+    }
+
+    public static String etagAudio(File f, boolean ligera) {
+        return "\"" + Long.toHexString(f.length()) + "-" + Long.toHexString(f.lastModified()) + (ligera ? "-l" : "") + "\"";
     }
 
     private com.bpm.music.services.AudioLigeroService ligero;
