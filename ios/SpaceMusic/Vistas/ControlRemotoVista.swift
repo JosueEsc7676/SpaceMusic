@@ -64,14 +64,19 @@ struct ControlRemotoVista: View {
         }
     }
 
+    /// Posición con el reloj del servidor (como Spotify Connect); «ahora» hace que se redibuje cada segundo.
     private func segundoAhora(_ d: DispositivoRemoto) -> Double {
-        let s = d.segundo + (d.sonando ? ahora.timeIntervalSince(recibido) : 0)
-        return d.duracion > 0 ? min(s, d.duracion) : s
+        _ = ahora
+        return control.posicion(d)
     }
 
     @ViewBuilder private func contenido(_ d: DispositivoRemoto) -> some View {
         ScrollView {
             VStack(spacing: 18) {
+                if d.activo == true {
+                    Label("Dispositivo activo", systemImage: "dot.radiowaves.left.and.right")
+                        .font(.caption.weight(.semibold)).foregroundStyle(Tema.celeste)
+                }
                 if let c = d.cancion {
                     Portada(ruta: c.portadaUrl, tamano: 220, radio: 16)
                     VStack(spacing: 4) {
@@ -136,6 +141,17 @@ struct ControlRemotoVista: View {
                     }
                 }
                 .padding(.top, 6)
+
+                if let cola = d.cola, !cola.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("A continuación en \(d.nombre)").font(.headline)
+                        ForEach(cola.prefix(5)) { c in
+                            Text("\(c.nombre) · \(c.artista)").font(.subheadline).foregroundStyle(Tema.secundario).lineLimit(1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 8)
+                }
             }
             .padding(20)
         }

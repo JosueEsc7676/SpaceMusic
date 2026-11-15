@@ -163,7 +163,7 @@ final class Eventos {
             }
         case "juntos", "juntos-fin", "juntos-reaccion":
             EscuchaJuntos.compartida.evento(evento, datos: d)
-        case "control-orden", "control-dispositivos":
+        case "control-orden", "control-dispositivos", "control-ack":
             ControlRemoto.compartido.evento(evento, datos: d)
         case "notificacion":
             Task { await actualizarResumen() }

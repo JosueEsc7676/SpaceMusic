@@ -11,22 +11,40 @@ struct DispositivoRemoto: Decodable, Identifiable, Hashable {
     let duracion: Double
     let sonando: Bool
     let volumen: Double
+    /// Hora del servidor (ms) en la que valía «segundo».
+    var ts: Double? = nil
+    /// Es el dispositivo activo de la cuenta (el que suena, como en Spotify Connect).
+    var activo: Bool? = nil
+    /// Lo que sigue en su cola.
+    var cola: [Cancion]? = nil
 }
 
-private struct ListaDispositivos: Decodable { let dispositivos: [DispositivoRemoto] }
+private struct ListaDispositivos: Decodable { let dispositivos: [DispositivoRemoto]; var version: Int? = nil }
+private struct Cluster: Decodable { let version: Int; let activo: String?; let dispositivos: [DispositivoRemoto] }
 private struct OrdenCanciones: Decodable { let canciones: [Cancion] }
+private struct OrdenEnviada: Decodable { let id: String }
 
-/// Controlar otro dispositivo de la cuenta (como «Spotify Connect»), igual que en la web y en Android.
+struct ErrorControl: LocalizedError {
+    let mensaje: String
+    var errorDescription: String? { mensaje }
+}
+
+/// Controlar la reproducción entre los dispositivos de la cuenta con el modelo de «Spotify Connect», igual que la web:
 ///
-/// Este iPhone informa al servidor qué suena (POST /api/control/presencia: al cambiar algo y cada 30 s)
-/// y recibe las órdenes por la conexión en vivo (evento «control-orden»); solo ejecuta las que son para él.
-/// Desde aquí también se ven los otros dispositivos (evento «control-dispositivos») y se les mandan órdenes.
+/// - Conexión permanente por WebSocket (`/api/control/ws`, como el «dealer» de Spotify): llegan el estado de la cuenta
+///   («cluster»: dispositivos, cuál está activo y versión) y las órdenes; salen el estado de este iPhone y las confirmaciones.
+/// - Cada orden lleva identificador y el dispositivo destino la confirma: aquí se sabe si se aplicó o por qué no.
+/// - Un solo dispositivo suena a la vez: si este empieza a sonar, el servidor pausa el que sonaba.
+/// - Reloj sincronizado con el servidor (ping/pong) para mostrar la posición exacta de los otros.
+/// Si el WebSocket no está disponible se usa la vía anterior (HTTP + eventos en vivo «control-*»).
 @MainActor
 @Observable
 final class ControlRemoto {
     static let compartido = ControlRemoto()
 
     private(set) var dispositivos: [DispositivoRemoto] = []
+    private(set) var activo: String?
+    private(set) var conectadoEnVivo = false
     /// Los demás dispositivos de la cuenta (sin este).
     var otros: [DispositivoRemoto] { dispositivos.filter { $0.id != id } }
     /// Otro dispositivo donde está sonando música ahora.
@@ -47,21 +65,46 @@ final class ControlRemoto {
         set {
             let n = String(newValue.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))
             UserDefaults.standard.set(n, forKey: "sm.dispositivo.nombre")
-            Task { await informar() }
+            Task { await informar(forzar: true) }
         }
     }
 
     @ObservationIgnored private var vigilancia: Task<Void, Never>?
-    @ObservationIgnored private var ultimo: (cancion: Int?, sonando: Bool, segundo: Double, volumen: Double, cuando: Date)?
+    @ObservationIgnored private var lectura: Task<Void, Never>?
+    @ObservationIgnored private var socket: URLSessionWebSocketTask?
+    @ObservationIgnored private let sesionWS = URLSession(configuration: .default)
+    @ObservationIgnored private var espera: Double = 1
+    @ObservationIgnored private var ultimo: (cancion: Int?, sonando: Bool, segundo: Double, volumen: Double, cola: [Int], cuando: Date)?
     @ObservationIgnored private var ultimoLatido = Date.distantPast
+    @ObservationIgnored private var ultimoPing = Date.distantPast
+    @ObservationIgnored private var seq = Int(Date().timeIntervalSince1970 * 1000)
+    @ObservationIgnored private var version = -1
+    /// Diferencia con la hora del servidor (ms) y la menor demora medida (como NTP).
+    @ObservationIgnored private var desfase: Double = 0
+    @ObservationIgnored private var mejorDemora = Double.infinity
+    /// Órdenes enviadas que esperan confirmación: por referencia propia y, cuando el servidor la acepta, por su id.
+    @ObservationIgnored private var porRef: [String: CheckedContinuation<Void, Error>] = [:]
+    @ObservationIgnored private var refDeId: [String: String] = [:]
 
-    // MARK: Informar el estado de este iPhone
+    // MARK: Reloj
 
-    /// Al conectarse: se anuncia y revisa cada segundo si cambió algo (canción, pausa, salto, volumen).
+    private var ahoraServidor: Double { Date().timeIntervalSince1970 * 1000 + desfase }
+
+    /// Segundo en que va otro dispositivo ahora mismo.
+    func posicion(_ d: DispositivoRemoto) -> Double {
+        var s = d.segundo
+        if d.sonando, let ts = d.ts { s += max(0, ahoraServidor - ts) / 1000 }
+        return d.duracion > 0 ? min(s, d.duracion) : s
+    }
+
+    // MARK: Ciclo de vida
+
+    /// Al conectarse: abre el WebSocket y revisa cada segundo si cambió algo (canción, pausa, salto, volumen, cola).
     func iniciar() {
         guard vigilancia == nil, Sesion.compartida.conectado else { return }
+        conectar()
         vigilancia = Task { [weak self] in
-            await self?.informar()
+            await self?.informar(forzar: true)
             await self?.cargar()
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
@@ -70,62 +113,181 @@ final class ControlRemoto {
         }
     }
 
-    /// Al cerrar sesión: deja de aparecer en los otros dispositivos al instante.
+    /// Al cerrar sesión: cierra la conexión y deja de aparecer en los otros dispositivos al instante.
     func detener() {
-        vigilancia?.cancel()
-        vigilancia = nil
+        vigilancia?.cancel(); vigilancia = nil
+        lectura?.cancel(); lectura = nil
+        socket?.cancel(with: .goingAway, reason: nil); socket = nil
+        conectadoEnVivo = false
+        fallarPendientes("Se cerró la sesión")
         ultimo = nil
         dispositivos = []
+        activo = nil
+        version = -1
         // La petición se arma ya (con el token actual): al cerrar sesión el token se borra enseguida
         if Sesion.compartida.conectado, let r = try? API.peticion("/api/control/presencia/\(id)", metodo: "DELETE") {
             Task.detached { _ = try? await URLSession.shared.data(for: r) }
         }
     }
 
+    // MARK: WebSocket
+
+    private func urlWS() -> URL? {
+        guard let token = Sesion.compartida.token,
+              var c = URLComponents(string: Sesion.compartida.servidor) else { return nil }
+        c.scheme = c.scheme == "http" ? "ws" : "wss"
+        c.path = "/api/control/ws"
+        c.queryItems = [URLQueryItem(name: "t", value: token)]
+        return c.url
+    }
+
+    private func conectar() {
+        guard socket == nil, Sesion.compartida.conectado, let url = urlWS() else { return }
+        let t = sesionWS.webSocketTask(with: url)
+        socket = t
+        t.resume()
+        lectura = Task { [weak self] in await self?.leer(t) }
+        Task { [weak self] in
+            guard let self else { return }
+            var hola = self.estado()
+            hola["tipo"] = "hola"
+            await self.enviar(hola)
+            self.ping()
+        }
+    }
+
+    private func leer(_ t: URLSessionWebSocketTask) async {
+        while !Task.isCancelled {
+            do {
+                let m = try await t.receive()
+                if !conectadoEnVivo { conectadoEnVivo = true; espera = 1 }
+                switch m {
+                case .string(let s): recibir(Data(s.utf8))
+                case .data(let d): recibir(d)
+                @unknown default: break
+                }
+            } catch {
+                break
+            }
+        }
+        guard socket === t else { return }
+        // Se cortó: las órdenes pendientes fallan ya y se reconecta con espera creciente
+        socket = nil
+        conectadoEnVivo = false
+        fallarPendientes("Se perdió la conexión")
+        guard vigilancia != nil, Sesion.compartida.conectado else { return }
+        let s = espera
+        espera = min(espera * 2, 30)
+        try? await Task.sleep(for: .seconds(s))
+        if vigilancia != nil { conectar() }
+    }
+
+    @discardableResult
+    private func enviar(_ m: [String: Any]) async -> Bool {
+        guard let socket, let d = try? JSONSerialization.data(withJSONObject: m), let s = String(data: d, encoding: .utf8) else { return false }
+        do { try await socket.send(.string(s)); return true } catch { return false }
+    }
+
+    private func ping() {
+        ultimoPing = Date()
+        Task { await enviar(["tipo": "ping", "t": Date().timeIntervalSince1970 * 1000]) }
+    }
+
+    private func recibir(_ datos: Data) {
+        guard let m = try? JSONSerialization.jsonObject(with: datos) as? [String: Any] else { return }
+        switch m["tipo"] as? String {
+        case "hola":
+            if let s = (m["servidorMs"] as? NSNumber)?.doubleValue, mejorDemora == .infinity { desfase = s - Date().timeIntervalSince1970 * 1000 }
+        case "pong":
+            guard let t = (m["t"] as? NSNumber)?.doubleValue, let s = (m["servidorMs"] as? NSNumber)?.doubleValue else { return }
+            let demora = Date().timeIntervalSince1970 * 1000 - t
+            if demora <= mejorDemora * 1.5 || demora < 150 {
+                mejorDemora = min(mejorDemora, demora)
+                desfase = s - (t + demora / 2)
+            }
+        case "cluster":
+            if let c = try? JSONDecoder().decode(Cluster.self, from: datos) { aplicar(version: c.version, activo: c.activo, c.dispositivos) }
+        case "orden":
+            ejecutar(m, datos: datos, porWS: true)
+        case "orden-enviada":
+            if let ref = m["ref"] as? String, let id = m["id"] as? String, porRef[ref] != nil { refDeId[id] = ref }
+        case "ack":
+            confirmar(m)
+        default:
+            break
+        }
+    }
+
+    private func aplicar(version v: Int?, activo a: String??, _ lista: [DispositivoRemoto]) {
+        if let v { if v < version { return }; version = v }   // un cluster que llegó tarde no pisa al actual
+        if let a { activo = a }
+        dispositivos = lista
+    }
+
+    // MARK: Estado de este iPhone
+
+    private func estado() -> [String: Any] {
+        let r = Reproductor.compartido
+        var e: [String: Any] = [
+            "dispositivo": id, "nombre": nombre, "plataforma": "ios",
+            "segundo": r.tiempo, "duracion": r.duracion, "sonando": r.sonando, "volumen": r.volumen,
+            "cola": r.siguientes.prefix(10).map(\.id),
+        ]
+        if let c = r.actual?.id { e["cancionId"] = c }
+        return e
+    }
+
     private func revisar() async {
         guard Sesion.compartida.conectado else { return }
+        if socket == nil { conectar() }
+        if conectadoEnVivo, Date().timeIntervalSince(ultimoPing) > 25 { ping() }
         let r = Reproductor.compartido
-        let ahora = (cancion: r.actual?.id, sonando: r.sonando, segundo: r.tiempo, volumen: r.volumen)
+        let cola = r.siguientes.prefix(10).map(\.id)
         var cambio = Date().timeIntervalSince(ultimoLatido) > 30
         if let u = ultimo {
             let esperado = u.segundo + (u.sonando ? Date().timeIntervalSince(u.cuando) : 0)
-            cambio = cambio || u.cancion != ahora.cancion || u.sonando != ahora.sonando
-                || abs(u.volumen - ahora.volumen) > 0.02 || abs(esperado - ahora.segundo) > 3
+            cambio = cambio || u.cancion != r.actual?.id || u.sonando != r.sonando || u.cola != cola
+                || abs(u.volumen - r.volumen) > 0.02 || abs(esperado - r.tiempo) > 2
         } else {
             cambio = true
         }
         if cambio { await informar() }
     }
 
-    func informar() async {
+    func informar(forzar: Bool = false) async {
         guard Sesion.compartida.conectado else { return }
         let r = Reproductor.compartido
-        ultimo = (r.actual?.id, r.sonando, r.tiempo, r.volumen, Date())
+        ultimo = (r.actual?.id, r.sonando, r.tiempo, r.volumen, r.siguientes.prefix(10).map(\.id), Date())
         ultimoLatido = Date()
-        var cuerpo: [String: Any] = [
-            "dispositivo": id, "nombre": nombre, "plataforma": "ios",
-            "segundo": r.tiempo, "duracion": r.duracion, "sonando": r.sonando, "volumen": r.volumen,
-        ]
-        if let c = r.actual?.id { cuerpo["cancionId"] = c }
-        try? await API.hacer("POST", "/api/control/presencia", cuerpo)
+        var e = estado()
+        seq += 1
+        e["tipo"] = "estado"
+        e["seq"] = seq
+        if conectadoEnVivo, await enviar(e) { return }
+        e.removeValue(forKey: "tipo")
+        try? await API.hacer("POST", "/api/control/presencia", e)
     }
 
     // MARK: Otros dispositivos
 
     func cargar() async {
+        if conectadoEnVivo { await enviar(["tipo": "cluster"]); return }
         guard Sesion.compartida.conectado,
               let l: [DispositivoRemoto] = try? await API.get("/api/control/dispositivos?yo=\(id)", tiempo: 15) else { return }
         dispositivos = l
     }
 
-    /// Eventos en vivo: «control-dispositivos» (la lista cambió) y «control-orden» (una orden).
+    /// Vía anterior (sin WebSocket): eventos en vivo «control-dispositivos», «control-orden» y «control-ack».
     func evento(_ tipo: String, datos: Data) {
         switch tipo {
         case "control-dispositivos":
-            if let l = try? JSONDecoder().decode(ListaDispositivos.self, from: datos) { dispositivos = l.dispositivos }
+            guard !conectadoEnVivo, let l = try? JSONDecoder().decode(ListaDispositivos.self, from: datos) else { return }
+            aplicar(version: l.version, activo: nil, l.dispositivos)
         case "control-orden":
-            guard let o = try? JSONSerialization.jsonObject(with: datos) as? [String: Any], o["para"] as? String == id else { return }
-            ejecutar(o, datos: datos)
+            guard !conectadoEnVivo, let o = try? JSONSerialization.jsonObject(with: datos) as? [String: Any] else { return }
+            ejecutar(o, datos: datos, porWS: false)
+        case "control-ack":
+            if let a = try? JSONSerialization.jsonObject(with: datos) as? [String: Any] { confirmar(a) }
         default:
             break
         }
@@ -135,11 +297,17 @@ final class ControlRemoto {
         dispositivos.first { $0.id == dispositivo }?.nombre ?? "otro dispositivo"
     }
 
-    private func ejecutar(_ o: [String: Any], datos: Data) {
+    // MARK: Órdenes que llegan
+
+    private func ejecutar(_ o: [String: Any], datos: Data, porWS: Bool) {
+        guard o["para"] as? String == id else { return }
         let r = Reproductor.compartido
         let numero = { (k: String) -> Double in (o[k] as? NSNumber)?.doubleValue ?? 0 }
+        var ok = true
+        var error: String?
         switch o["accion"] as? String {
-        case "play": if r.actual != nil && !r.sonando { r.continuar() }
+        case "play":
+            if r.actual != nil { if !r.sonando { r.continuar() } } else { ok = false; error = "No hay nada para reproducir" }
         case "pause": if r.sonando { r.pausar() }
         case "toggle": r.alternar()
         case "next": r.siguiente()
@@ -147,15 +315,21 @@ final class ControlRemoto {
         case "seek": r.buscar(numero("segundo"))
         case "volumen": r.fijarVolumen(numero("volumen"))
         case "reproducir", "transferir":
-            guard let canciones = (try? JSONDecoder().decode(OrdenCanciones.self, from: datos))?.canciones, !canciones.isEmpty else { return }
-            let indice = min(max(0, Int(numero("indice"))), canciones.count - 1)
-            r.reproducir(canciones, desde: indice, contexto: "remoto")
-            buscarCuandoEsteLista(numero("segundo"))
-            Avisos.compartido.mostrar("Sonando aquí por orden de \(nombreDe(o["de"] as? String))")
+            if let canciones = (try? JSONDecoder().decode(OrdenCanciones.self, from: datos))?.canciones, !canciones.isEmpty {
+                let indice = min(max(0, Int(numero("indice"))), canciones.count - 1)
+                r.reproducir(canciones, desde: indice, contexto: "remoto")
+                buscarCuandoEsteLista(numero("segundo"))
+                Avisos.compartido.mostrar("Sonando aquí por orden de \(nombreDe(o["de"] as? String))")
+            } else { ok = false; error = "No llegaron las canciones" }
         default:
-            return
+            ok = false; error = "Orden desconocida"
         }
-        Task { try? await Task.sleep(for: .milliseconds(400)); await informar() }
+        if porWS, let idOrden = o["id"] as? String {
+            var ack: [String: Any] = ["tipo": "ack", "id": idOrden, "ok": ok]
+            if let error { ack["error"] = error }
+            Task { await enviar(ack) }
+        }
+        Task { try? await Task.sleep(for: .milliseconds(300)); await informar(forzar: true) }
     }
 
     /// Adelanta al segundo pedido en cuanto la canción nueva se puede adelantar (como mucho 10 s de espera).
@@ -171,22 +345,67 @@ final class ControlRemoto {
 
     // MARK: Mandar órdenes
 
-    func ordenar(_ dispositivo: String, _ accion: String, _ extra: [String: Any] = [:]) async throws {
-        var cuerpo = extra
-        cuerpo["accion"] = accion
-        cuerpo["de"] = id
-        try await API.hacer("POST", "/api/control/\(API.segmento(dispositivo))/orden", cuerpo)
+    private func confirmar(_ a: [String: Any]) {
+        let ref = (a["id"] as? String).flatMap { refDeId.removeValue(forKey: $0) } ?? (a["ref"] as? String)
+        guard let ref, let c = porRef.removeValue(forKey: ref) else { return }
+        if a["ok"] as? Bool == false {
+            c.resume(throwing: ErrorControl(mensaje: a["error"] as? String ?? "El dispositivo no pudo hacerlo"))
+        } else {
+            c.resume()
+        }
     }
 
-    /// Trae a este iPhone lo que suena en otro dispositivo (desde el mismo segundo) y lo pausa allá.
+    private func fallarPendientes(_ motivo: String) {
+        let pendientes = porRef
+        porRef = [:]
+        refDeId = [:]
+        for c in pendientes.values { c.resume(throwing: ErrorControl(mensaje: motivo)) }
+    }
+
+    /// Envía una orden a otro dispositivo y espera su confirmación (máximo 5 s). «activo» = el que está sonando.
+    func ordenar(_ dispositivo: String, _ accion: String, _ extra: [String: Any] = [:]) async throws {
+        let ref = String(UUID().uuidString.prefix(8))
+        try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+            Task { @MainActor in self.registrarOrden(ref, c, dispositivo, accion, extra) }
+        }
+    }
+
+    /// Guarda la espera de confirmación, envía la orden (WebSocket o HTTP) y pone el límite de 5 s.
+    private func registrarOrden(_ ref: String, _ c: CheckedContinuation<Void, Error>, _ dispositivo: String,
+                                _ accion: String, _ extra: [String: Any]) {
+        porRef[ref] = c
+        Task {
+            var m = extra
+            m["tipo"] = "orden"; m["ref"] = ref; m["para"] = dispositivo; m["accion"] = accion
+            if conectadoEnVivo, await enviar(m) { return }
+            // Sin WebSocket: por HTTP; la confirmación llega por los eventos en vivo («control-ack»)
+            var cuerpo = extra
+            cuerpo["accion"] = accion; cuerpo["de"] = id
+            do {
+                let r: OrdenEnviada = try await API.enviar("POST", "/api/control/\(API.segmento(dispositivo))/orden", cuerpo)
+                if porRef[ref] != nil { refDeId[r.id] = ref }
+            } catch {
+                porRef.removeValue(forKey: ref)?.resume(throwing: error)
+            }
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(5))
+            if let pendiente = porRef.removeValue(forKey: ref) {
+                refDeId = refDeId.filter { $0.value != ref }
+                pendiente.resume(throwing: ErrorControl(mensaje: "El dispositivo no respondió"))
+            }
+        }
+    }
+
+    /// Trae a este iPhone lo que suena en otro dispositivo (desde el mismo segundo); el servidor pausa el otro.
     func escucharAqui(_ d: DispositivoRemoto) async {
         guard let c = d.cancion else { return }
-        Reproductor.compartido.reproducir([c], desde: 0, contexto: "remoto")
-        buscarCuandoEsteLista(d.segundo)
+        Reproductor.compartido.reproducir([c] + (d.cola ?? []), desde: 0, contexto: "remoto")
+        buscarCuandoEsteLista(posicion(d))
         if d.sonando { try? await ordenar(d.id, "pause") }
     }
 
-    /// Pasa lo que suena aquí (y lo que sigue en la cola) a otro dispositivo y lo pausa aquí.
+    /// Pasa lo que suena aquí (y lo que sigue en la cola) a otro dispositivo; este se pausa cuando el otro confirma.
     func pasarA(_ d: DispositivoRemoto) async throws {
         let r = Reproductor.compartido
         guard let actual = r.actual else { return }
