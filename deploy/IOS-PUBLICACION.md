@@ -1,5 +1,14 @@
 # Publicación de iPhone: 13/11/2026
 
+## Actualización 1.25: controlar otro dispositivo y accesos de Mensajes
+
+- App compilada desde `5753835`, compilación **25**.
+- [GitHub Actions correcto](https://github.com/JosueEsc7676/SpaceMusic/actions/runs/43677310117): pruebas, Xcode Release e IPA.
+- Artefacto descargado por el dueño con su sesión de GitHub; SHA-256 del ZIP igual al de GitHub (`e381a753…`). IPA: compilación 25, `com.bpm.spacemusic.ios`, ZIP íntegro.
+- [IPA publicado](https://spacemusic.tail8ccfdf.ts.net/app/SpaceMusic-25.ipa). SHA-256: `b0bcbb3477a4c9e3d3b52f46afa62c7b44389498a2de816dd6a2a34261db9b7f`.
+- Publicado con `publicar-ios.py` sobre el servidor 3.7 (que ya incluye `IosAppsController` en master). Manifiesto 25, página HTTP 200, IPA parcial 206 y descarga completa con SHA-256 idéntico.
+- Pendiente en iPhone: control remoto con otro dispositivo real y los tres accesos de Mensajes con «Atrás».
+
 ## Actualización 1.23: SyncPlay y navegación
 
 - App compilada desde `597d344`, compilación **23**.
