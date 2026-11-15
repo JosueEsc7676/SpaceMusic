@@ -39,6 +39,7 @@ final class Eventos {
         guard tarea == nil, Sesion.compartida.conectado else { return }
         tarea = Task { await bucle() }
         Task { await actualizarResumen() }
+        ControlRemoto.compartido.iniciar()
         // Respaldo por si la conexión en vivo se corta
         sondeo?.cancel()
         sondeo = Task {
@@ -58,6 +59,7 @@ final class Eventos {
 
     func limpiar() {
         EscuchaJuntos.compartida.detener()
+        ControlRemoto.compartido.detener()
         Despertador.compartido.cancelar()
         desconectar()
         mensajesSinLeer = 0
@@ -161,6 +163,8 @@ final class Eventos {
             }
         case "juntos", "juntos-fin", "juntos-reaccion":
             EscuchaJuntos.compartida.evento(evento, datos: d)
+        case "control-orden", "control-dispositivos":
+            ControlRemoto.compartido.evento(evento, datos: d)
         case "notificacion":
             Task { await actualizarResumen() }
         default:

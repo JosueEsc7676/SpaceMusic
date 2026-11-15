@@ -142,8 +142,14 @@ struct MiniReproductor: View {
                     .accessibilityLabel("Abrir reproductor: \(c.nombre)")
                     Button { dispositivos = true } label: {
                         Image(systemName: "airplayaudio").frame(width: 36, height: 40)
+                            // Punto: está sonando música en otro de tus dispositivos (se puede controlar desde aquí)
+                            .overlay(alignment: .topTrailing) {
+                                if ControlRemoto.compartido.sonandoEnOtro != nil {
+                                    Circle().fill(Tema.celeste).frame(width: 7, height: 7).offset(x: -4, y: 6)
+                                }
+                            }
                     }
-                    .accessibilityLabel("Dispositivos y SyncPlay")
+                    .accessibilityLabel(ControlRemoto.compartido.sonandoEnOtro.map { "Dispositivos y SyncPlay. Sonando en \($0.nombre)" } ?? "Dispositivos y SyncPlay")
                     Button { biblioteca.alternarFavorito(c) } label: {
                         Image(systemName: biblioteca.esFavorita(c.id) ? "heart.fill" : "heart")
                             .foregroundStyle(biblioteca.esFavorita(c.id) ? Tema.rosa : Tema.texto)

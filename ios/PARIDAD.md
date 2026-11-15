@@ -101,5 +101,7 @@ Compilar y contrastar rutas no verifica todos los permisos, estados ni acciones 
 | SyncPlay | API /api/juntos existente; crear desde Dispositivos o Mensajes, invitar por API y enviar enlace mediante /api/mensajes/{usuario}; compartir enlace | Crear/unirse con dos cuentas reales |
 | Invitación en chat | Tarjeta nativa con enlace validado al mismo servidor; no abre servidores ajenos ni rutas parecidas | XCTest del analizador y flujo real de chat |
 | Menús y letra ampliada | Opciones agrupadas; letra inmersiva con portada y controles, desplazamiento sin rebote | Aspecto con varios tamaños de texto e iPhone |
+| Controlar otro dispositivo | `/api/control/*` y eventos `control-orden`/`control-dispositivos`; órdenes play, pause, toggle, next, prev, seek, volumen, reproducir y transferir | Dos dispositivos reales con la misma cuenta (iPhone ↔ web/Android) |
+| Accesos de Mensajes | Botones independientes con `Navegacion.ir` (antes tres enlaces en una fila) | Tocar cada acceso y volver con «Atrás» |
 
 La selección de salida se realiza con el selector público de iOS; la app no inventa una lista de dispositivos ni solicita emparejarlos por APIs privadas.

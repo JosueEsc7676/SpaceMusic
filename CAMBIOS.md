@@ -1,5 +1,10 @@
 # Registro de cambios
 
+## iPhone: controlar otro dispositivo y accesos de Mensajes
+- **Controlar otro dispositivo de la cuenta** (`Reproductor/ControlRemoto.swift`, `Vistas/ControlRemotoVista.swift`): el iPhone se anuncia en `POST /api/control/presencia` (al cambiar canción, pausa, salto o volumen, y cada 30 s), recibe órdenes por la conexión en vivo (`control-orden`) y ve los demás dispositivos (`control-dispositivos`). En **Dispositivos → Tus otros dispositivos**: reproducir/pausar, anterior/siguiente, adelantar, volumen, «Escuchar aquí» y «Pasar mi música». Punto en el botón Dispositivos del mini reproductor cuando suena música en otro dispositivo. Nombre del dispositivo editable. Mismo contrato que la web y Android (servidor 3.7).
+- `Reproductor.fijarVolumen(_:)`: volumen propio de la app (iOS no permite mover el volumen del sistema).
+- **Arreglo en Mensajes**: los accesos SyncPlay, Coincidimos y Dedicatorias eran tres `NavigationLink` en una sola fila de la lista; SwiftUI activaba los tres con un toque (siempre aparecía SyncPlay y «Atrás» pasaba por Dedicatorias y Coincidimos). Ahora son botones independientes (`.borderless`) que abren una sola pantalla con `Navegacion.ir`, y «Atrás» vuelve directo a Mensajes.
+
 ## iPhone: SyncPlay y ajustes de navegación
 - Registro de descargas plegable con desplazamiento propio; claves de Spotify accesibles antes del registro.
 - Corrección de la navegación de Gestionar usuarios a su ficha y regreso.

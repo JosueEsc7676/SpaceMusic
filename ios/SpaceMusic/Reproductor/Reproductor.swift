@@ -116,6 +116,15 @@ final class Reproductor {
         }
     }
 
+    /// Volumen de la app (0 a 1). Lo cambia, por ejemplo, otro dispositivo de la cuenta (control remoto).
+    /// iOS no deja a las apps mover el volumen del sistema: este es el volumen propio del reproductor.
+    private(set) var volumen: Double = 1
+
+    func fijarVolumen(_ v: Double) {
+        volumen = min(1, max(0, v))
+        jugador.volume = Float(volumen)
+    }
+
     func subirVolumenDurante(_ segundos: Int) {
         subidaVolumen?.cancel()
         jugador.volume = 0.05

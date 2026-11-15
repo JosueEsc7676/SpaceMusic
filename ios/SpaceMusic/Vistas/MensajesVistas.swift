@@ -456,14 +456,32 @@ struct NotificacionesVista: View {
 
 
 /// Entradas sociales a mano en la cabecera de Mensajes, sin ocupar la barra de escritura.
-private struct AccesosSocialesMensajes: View {
+///
+/// Son botones (no NavigationLink): dentro de una fila de List, SwiftUI convierte toda la fila en una sola
+/// zona táctil y activaba los tres enlaces a la vez. Se abrían SyncPlay, Coincidimos y Dedicatorias apiladas,
+/// y «Atrás» recorría las tres antes de volver a Mensajes. Con `.borderless` cada botón tiene su propia zona
+/// y abre una sola pantalla, encima de Mensajes.
+struct AccesosSocialesMensajes: View {
     var body: some View {
         HStack(spacing: 8) {
-            NavigationLink { JuntosVista() } label: { acceso("SyncPlay", "headphones", Tema.celeste) }
-            NavigationLink(value: Destino.coincidimos) { acceso("Coincidimos", "person.2", Tema.lila) }
-            NavigationLink(value: Destino.dedicatorias) { acceso("Dedicatorias", "heart.text.square", Tema.rosa) }
+            boton("SyncPlay", "headphones", Tema.celeste, .juntos)
+            boton("Coincidimos", "person.2", Tema.lila, .coincidimos)
+            boton("Dedicatorias", "heart.text.square", Tema.rosa, .dedicatorias)
         }
-        .buttonStyle(.plain)
+    }
+
+    private func boton(_ titulo: String, _ icono: String, _ color: Color, _ destino: Destino) -> some View {
+        Button { AccesosSocialesMensajes.abrir(destino) } label: { acceso(titulo, icono, color) }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(titulo)
+            .accessibilityAddTraits(.isButton)
+    }
+
+    /// Abre la pantalla una sola vez sobre Mensajes (un toque doble no la apila dos veces).
+    @MainActor static func abrir(_ destino: Destino) {
+        let nav = Navegacion.compartida
+        if nav.pestana == .mensajes, let r = nav.rutas[.mensajes], !r.isEmpty { return }
+        nav.ir(destino)
     }
     private func acceso(_ titulo: String, _ icono: String, _ color: Color) -> some View {
         VStack(spacing: 8) {
@@ -472,5 +490,6 @@ private struct AccesosSocialesMensajes: View {
         }
         .frame(maxWidth: .infinity, minHeight: 76)
         .background(RoundedRectangle(cornerRadius: 16).fill(color.opacity(0.10)))
+        .contentShape(RoundedRectangle(cornerRadius: 16))
     }
 }

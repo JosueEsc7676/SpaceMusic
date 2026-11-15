@@ -7,6 +7,9 @@ struct DispositivosVista: View {
     @Environment(\.dismiss) private var cerrar
     @State private var salidas = AVAudioSession.sharedInstance().currentRoute.outputs
     @State private var sync = EscuchaJuntos.compartida
+    @State private var control = ControlRemoto.compartido
+    @State private var renombrando = false
+    @State private var nombreNuevo = ""
     var body: some View {
         NavigationStack {
             List {
@@ -26,6 +29,23 @@ struct DispositivosVista: View {
                     }
                 }
                 Section {
+                    if control.otros.isEmpty {
+                        Text("Abre SpaceMusic con tu cuenta en otro teléfono, tablet o computadora y podrás controlarlo desde aquí.")
+                            .font(.caption).foregroundStyle(Tema.secundario)
+                    }
+                    ForEach(control.otros) { d in
+                        NavigationLink { ControlRemotoVista(dispositivoId: d.id) } label: { FilaDispositivoRemoto(d: d) }
+                    }
+                } header: {
+                    HStack {
+                        Text("Tus otros dispositivos")
+                        Spacer()
+                        Button("Este: \(control.nombre)") { nombreNuevo = control.nombre; renombrando = true }
+                            .font(.caption).textCase(nil)
+                            .accessibilityLabel("Cambiar el nombre de este dispositivo")
+                    }
+                }
+                Section {
                     NavigationLink { JuntosVista() } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "person.2.wave.2.fill").foregroundStyle(Tema.celeste)
@@ -41,6 +61,12 @@ struct DispositivosVista: View {
             .navigationTitle("Dispositivos")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Listo") { cerrar() } } }
+            .alert("Nombre de este dispositivo", isPresented: $renombrando) {
+                TextField("App iPhone", text: $nombreNuevo)
+                Button("Guardar") { control.nombre = nombreNuevo }
+                Button("Cancelar", role: .cancel) { }
+            } message: { Text("Así lo verás en tus otros dispositivos.") }
+            .task { await control.cargar() }
             .task {
                 for await _ in NotificationCenter.default.notifications(named: AVAudioSession.routeChangeNotification) {
                     guard !Task.isCancelled else { return }
