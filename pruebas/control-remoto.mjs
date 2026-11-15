@@ -89,6 +89,12 @@ const idB = await b.js(`${MOD} return R.miDispositivo();`);
 const idA = await a.js(`${MOD} return R.miDispositivo();`);
 const cancion = await b.js(`const r = await fetch('/api/canciones/top?limite=5', { headers: { Authorization: 'Bearer ' + localStorage.getItem('sm_token') } }); const l = await r.json(); return l.find((c) => c.duracionSegundos > 90) || l[0];`);
 
+await prueba('Los dos usan la conexión permanente (WebSocket, como Spotify Connect)', async () => {
+  await a.hasta(`${MOD} return R.conectadoEnVivo();`, 8000);
+  await b.hasta(`${MOD} return R.conectadoEnVivo();`, 8000);
+  return 'WebSocket abierto en A y en B';
+});
+
 await prueba('Cada navegador es un dispositivo distinto', async () => {
   afirmar(idA && idB && idA !== idB, 'mismo id');
   return `${idA.slice(0, 7)}… y ${idB.slice(0, 7)}…`;
@@ -152,6 +158,23 @@ await prueba('«Pasar mi música» de A a B', async () => {
   await a.hasta(`${MOD} return !P.player.playing;`, 3000);
   await b.captura('remoto-03-b-recibe');
   return 'B suena y A quedó en pausa';
+});
+
+await prueba('Un solo dispositivo suena a la vez: al poner música en A, B se pausa solo', async () => {
+  await b.hasta(`${MOD} return P.player.playing;`, 5000);
+  await a.js(`${MOD} P.player.play([${JSON.stringify(cancion)}], 0, { type: 'prueba' }); return 1;`);
+  await a.hasta(`${MOD} return P.player.playing;`, 8000);
+  await b.hasta(`${MOD} return !P.player.playing;`, 5000);
+  const act = await a.hasta(`${MOD} await R.cargarDispositivos(); return R.dispositivoActivo() === R.miDispositivo() && R.dispositivoActivo();`, 5000);
+  return 'A quedó como dispositivo activo y B en pausa';
+});
+
+await prueba('Orden confirmada por el dispositivo (ack) y error si no existe', async () => {
+  const r = await a.js(`${MOD} const t0 = performance.now(); const x = await R.ordenar(${JSON.stringify(idB)}, 'volumen', { volumen: 0.5 }); return { ms: performance.now() - t0, legado: x.legado };`);
+  afirmar(r.legado === false, 'la confirmación no vino del dispositivo');
+  const e = await a.js(`${MOD} try { await R.ordenar('no-existe-123', 'pause'); return 'sin error'; } catch (e) { return e.message; }`);
+  afirmar(e !== 'sin error', 'una orden a un dispositivo inexistente debería fallar');
+  return `confirmada en ${r.ms.toFixed(0)} ms · inexistente: «${e}»`;
 });
 
 await prueba('Al cerrar sesión en B, deja de aparecer en A', async () => {

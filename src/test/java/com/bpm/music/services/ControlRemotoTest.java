@@ -88,4 +88,55 @@ class ControlRemotoTest {
         assertNull(d.get("cancion"));
         assertEquals(false, d.get("sonando"));
     }
+
+    /** Canal de prueba: guarda lo que el servidor le manda a ese dispositivo. */
+    static final class CanalPrueba implements ControlRemotoService.Canal {
+        final List<String> recibido = Collections.synchronizedList(new ArrayList<>());
+        public boolean enviar(String json) { recibido.add(json); return true; }
+        boolean tiene(String fragmento) { synchronized (recibido) { return recibido.stream().anyMatch(x -> x.contains(fragmento)); } }
+    }
+
+    @Test
+    void comoSpotifyConnectUnSoloDispositivoActivoYOrdenesConfirmadas() {
+        long uid = 4004L;
+        CanalPrueba telefono = new CanalPrueba(), compu = new CanalPrueba();
+        control.conectar(uid, "telefono-dani-1", new HashMap<>(Map.of("nombre", "Teléfono", "plataforma", "android")), telefono);
+        control.conectar(uid, "compu-dani-0001", new HashMap<>(Map.of("nombre", "Compu", "plataforma", "web")), compu);
+        assertTrue(telefono.tiene("\"tipo\":\"hola\""), "saludo con la hora del servidor");
+        assertTrue(compu.tiene("\"tipo\":\"cluster\""), "cada cambio llega como cluster");
+
+        // Suena en el teléfono: pasa a ser el activo
+        Map<String, Object> e = new HashMap<>(estado("telefono-dani-1", c1, true)); e.put("tipo", "estado"); e.put("seq", 1);
+        control.mensaje(uid, "telefono-dani-1", e, telefono);
+        assertEquals("telefono-dani-1", control.cluster(uid).get("activo"));
+
+        // Un estado más viejo que llega tarde (seq menor) no pisa el actual
+        Map<String, Object> viejo = new HashMap<>(estado("telefono-dani-1", c2, false)); viejo.put("tipo", "estado"); viejo.put("seq", 0);
+        control.mensaje(uid, "telefono-dani-1", viejo, telefono);
+        assertEquals(true, control.lista(uid, null).get(0).get("sonando"));
+
+        // Empieza a sonar en la compu: la compu pasa a ser la activa y el teléfono recibe la orden de pausar
+        Map<String, Object> e2 = new HashMap<>(estado("compu-dani-0001", c2, true)); e2.put("tipo", "estado"); e2.put("seq", 1);
+        control.mensaje(uid, "compu-dani-0001", e2, compu);
+        assertEquals("compu-dani-0001", control.cluster(uid).get("activo"));
+        assertTrue(telefono.tiene("\"accion\":\"pause\""), "el anterior se pausa: un solo dispositivo suena a la vez");
+
+        // Orden con confirmación: la compu manda «next» al teléfono, el teléfono confirma y la compu recibe el ack
+        String id = control.orden(uid, "telefono-dani-1", "compu-dani-0001", "next", Map.of());
+        assertTrue(telefono.tiene(id), "la orden llega por el WebSocket del destino");
+        control.mensaje(uid, "telefono-dani-1", new HashMap<>(Map.of("tipo", "ack", "id", id, "ok", true)), telefono);
+        assertTrue(compu.tiene("\"tipo\":\"ack\"") && compu.tiene(id), "quien mandó la orden recibe la confirmación");
+
+        // «activo» como destino: va al dispositivo que está sonando
+        String id2 = control.orden(uid, "activo", "telefono-dani-1", "pause", Map.of());
+        assertTrue(compu.tiene(id2));
+
+        // Reloj: ping → pong con la hora del servidor
+        control.mensaje(uid, "compu-dani-0001", new HashMap<>(Map.of("tipo", "ping", "t", 123)), compu);
+        assertTrue(compu.tiene("\"tipo\":\"pong\"") && compu.tiene("servidorMs"));
+
+        // Al cerrarse el WebSocket sigue en la lista unos segundos (recargar no lo hace desaparecer)
+        control.desconectar(uid, "telefono-dani-1", telefono);
+        assertTrue(control.lista(uid, null).stream().anyMatch(d -> d.get("id").equals("telefono-dani-1") && d.get("enVivo").equals(false)));
+    }
 }

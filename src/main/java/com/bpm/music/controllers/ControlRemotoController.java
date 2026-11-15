@@ -38,9 +38,13 @@ public class ControlRemotoController {
 
     /** Orden para otro dispositivo: {accion, de, segundo | volumen | cancionIds, indice}. */
     @PostMapping("/{dispositivo}/orden")
-    public ResponseEntity<Void> orden(@PathVariable String dispositivo, @RequestBody Map<String, Object> b) {
-        control.orden(CurrentUser.id(), dispositivo, b.get("de") instanceof String s ? s : null,
+    public Map<String, Object> orden(@PathVariable String dispositivo, @RequestBody Map<String, Object> b) {
+        String id = control.orden(CurrentUser.id(), dispositivo, b.get("de") instanceof String s ? s : null,
                 Objects.toString(b.get("accion"), ""), b);
-        return ResponseEntity.noContent().build();
+        return Map.of("id", id);
     }
+
+    /** Estado completo de la cuenta («cluster»): dispositivo activo, versión, hora del servidor y dispositivos. */
+    @GetMapping("/cluster")
+    public Map<String, Object> cluster() { return control.cluster(CurrentUser.id()); }
 }

@@ -1,13 +1,22 @@
 {
-  "version": "3.7",
-  "titulo": "Novedades: controla la música de tus otros dispositivos",
+  "version": "3.7.1",
+  "titulo": "Control entre dispositivos al estilo Spotify Connect",
   "puntos": [
-    "Si tienes SpaceMusic abierto con tu cuenta en varios dispositivos (computadora, Android, iPhone), desde uno puedes controlar la música del otro: reproducir o pausar, anterior y siguiente, adelantar y cambiar el volumen.",
-    "«Escuchar aquí»: trae a este dispositivo lo que suena en el otro, desde el mismo segundo. «Pasar mi música»: envía lo que suena aquí (con lo que sigue) al otro dispositivo.",
-    "Está en Dispositivos → Tus otros dispositivos. Un punto en el botón Dispositivos avisa cuando suena música en otro de tus dispositivos.",
-    "Puedes cambiar el nombre con el que aparece cada dispositivo."
+    "El control entre tus dispositivos ahora funciona como Spotify Connect: conexión permanente con el servidor, cada orden se confirma y verás si el otro dispositivo no respondió.",
+    "Un solo dispositivo suena a la vez: si pones música en uno, el que estaba sonando se pausa solo. El que suena aparece como «Activo».",
+    "La posición del otro dispositivo se calcula con la hora del servidor, y ves lo que sigue en su cola."
   ],
   "anteriores": [
+    {
+      "version": "3.7",
+      "titulo": "Novedades: controla la música de tus otros dispositivos",
+      "puntos": [
+        "Si tienes SpaceMusic abierto con tu cuenta en varios dispositivos (computadora, Android, iPhone), desde uno puedes controlar la música del otro: reproducir o pausar, anterior y siguiente, adelantar y cambiar el volumen.",
+        "«Escuchar aquí»: trae a este dispositivo lo que suena en el otro, desde el mismo segundo. «Pasar mi música»: envía lo que suena aquí (con lo que sigue) al otro dispositivo.",
+        "Está en Dispositivos → Tus otros dispositivos. Un punto en el botón Dispositivos avisa cuando suena música en otro de tus dispositivos.",
+        "Puedes cambiar el nombre con el que aparece cada dispositivo."
+      ]
+    },
     {
       "version": "3.6.2",
       "titulo": "Corrección de inicio de reproducción",

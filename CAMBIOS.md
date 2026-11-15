@@ -1,6 +1,15 @@
 # Registro de cambios
 
 
+## Versión 3.7.1
+- **Control remoto con el modelo de Spotify Connect** (`ControlRemotoService`, `ControlRemotoWs`, `js/remoto.js`; iPhone en `app-ios`):
+  - Estado único por cuenta («cluster»: dispositivos, **dispositivo activo**, versión, `ts` del servidor para cada posición y la cola siguiente); se difunde a todos en cada cambio.
+  - **WebSocket** `/api/control/ws?t=…` por dispositivo (Tomcat estándar, sin dependencias nuevas; token validado por `JwtFilter`): `hola`, `estado` (con `seq`: los atrasados se descartan), `orden` (con `ref` → `orden-enviada` con `id`), `ack` (confirmación o error del destino) y `ping`/`pong` para sincronizar el reloj. Límite de 40 mensajes/s.
+  - **Un solo dispositivo suena a la vez**: el que empieza a sonar pasa a ser el activo y el anterior recibe «pause».
+  - Órdenes con confirmación (5 s máximo) y error claro («El dispositivo no respondió», «Ese dispositivo ya no está conectado»). Destino `activo` = el que suena.
+  - Compatibilidad: la vía HTTP + SSE anterior sigue (app de iPhone 1.25); el destino que no confirma se marca `legado`.
+  - Pruebas: `ControlRemotoTest` (3) y `pruebas/control-remoto.mjs` (12 de 12: WebSocket, activo único, confirmación en ~7 ms en local).
+
 ## Versión 3.7
 - **Controlar otro dispositivo de la cuenta** (como «Spotify Connect»), en la web, la app Android (misma web, sin APK nueva) y iPhone (rama `app-ios`).
   - Servidor (`ControlRemotoService`, `/api/control/*`): `POST presencia` (estado de cada dispositivo: canción, segundo, pausa, volumen; vence a los 75 s), `GET dispositivos`, `POST {id}/orden` (play, pause, toggle, next, prev, seek, volumen, reproducir, transferir) y `DELETE presencia/{id}`. Solo entre dispositivos de la misma cuenta (el usuario sale del token); ids y órdenes validados; máximo 12 dispositivos por cuenta. Las órdenes viajan por la conexión en vivo (`control-orden`) y la lista cambia en vivo (`control-dispositivos`).

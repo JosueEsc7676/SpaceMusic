@@ -181,7 +181,7 @@ function conectarEnVivo() {
   fuente.addEventListener('actividad', (e) => { try { bus.emit('amigo:actividad', JSON.parse(e.data)); } catch { } });
   // SyncPlay: estado de la sala, reacciones y cierre
   // Control remoto entre tus dispositivos: órdenes y lista de dispositivos
-  for (const ev of ['juntos', 'juntos-reaccion', 'juntos-fin', 'control-orden', 'control-dispositivos']) {
+  for (const ev of ['juntos', 'juntos-reaccion', 'juntos-fin', 'control-orden', 'control-dispositivos', 'control-ack']) {
     fuente.addEventListener(ev, (e) => { try { bus.emit(ev, JSON.parse(e.data)); } catch { } });
   }
 }
