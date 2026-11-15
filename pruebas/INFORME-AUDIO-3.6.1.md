@@ -59,3 +59,5 @@ El despliegue conserva el jar anterior y solo reinicia spacemusic. Para volver, 
 - Copia de reversión: `~/spacemusic/spacemusic.jar.antes-audio-3.6.1-20261115-0030` (fecha UTC del servidor; noche del 14 en El Salvador).
 - Sin migraciones de base de datos ni modificaciones de APK. Android sigue en la app 2.0, recibiendo los cambios de la interfaz web.
 - No se usaron contraseñas ni cuentas de oyentes para probar producción. La reproducción autenticada y los rangos se probaron en el entorno local.
+
+- Preparación real observada tras el despliegue: dos copias creadas por el servicio. Se comprobó la de la canción ID 3 contra el original: flujo comprimido SHA-256 idéntico y duración idéntica de 213,609146 segundos.
