@@ -180,7 +180,8 @@ function conectarEnVivo() {
   fuente.addEventListener('notificacion', () => consultar());
   fuente.addEventListener('actividad', (e) => { try { bus.emit('amigo:actividad', JSON.parse(e.data)); } catch { } });
   // SyncPlay: estado de la sala, reacciones y cierre
-  for (const ev of ['juntos', 'juntos-reaccion', 'juntos-fin']) {
+  // Control remoto entre tus dispositivos: órdenes y lista de dispositivos
+  for (const ev of ['juntos', 'juntos-reaccion', 'juntos-fin', 'control-orden', 'control-dispositivos']) {
     fuente.addEventListener(ev, (e) => { try { bus.emit(ev, JSON.parse(e.data)); } catch { } });
   }
 }
@@ -192,7 +193,9 @@ export function iniciarAvisos() {
     // con el servidor y las demás peticiones esperaban). Al volver se reabre y se revisa lo nuevo.
     // En la app de Android se mantiene, para que lleguen los avisos con la app en segundo plano.
     if (document.hidden) {
-      if (!window.SpaceMusicApp) { try { fuente?.close(); } catch { } fuente = null; }
+      // Si está sonando música se mantiene: así este dispositivo sigue recibiendo órdenes de tus otros dispositivos
+      const sonando = [...document.querySelectorAll('audio')].some((x) => !x.paused);
+      if (!window.SpaceMusicApp && !sonando) { try { fuente?.close(); } catch { } fuente = null; }
     } else if (!fuente || fuente.readyState === 2) conectarEnVivo();
   });
   document.addEventListener('click', (e) => {

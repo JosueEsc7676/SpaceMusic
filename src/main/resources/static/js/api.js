@@ -33,6 +33,11 @@ export const deUsuario = (clave) => `${clave}:${session.user?.id ?? 'anon'}`;
 export function logout(reason) {
   // Para la música de esta cuenta antes de salir
   try { document.querySelectorAll('audio').forEach((a) => a.pause()); } catch { }
+  // Deja de aparecer en «Tus dispositivos» de la cuenta (control remoto)
+  try {
+    const disp = localStorage.getItem('sm_dispositivo');
+    if (disp && session.token) fetch('/api/control/presencia/' + encodeURIComponent(disp), { method: 'DELETE', keepalive: true, headers: { Authorization: 'Bearer ' + session.token } }).catch(() => { });
+  } catch { }
   session.clear();
   // Los datos y canciones guardados sin conexión son de esta cuenta: se borran al salir
   try { navigator.serviceWorker?.controller?.postMessage({ tipo: 'limpiar-usuario' }); } catch { }

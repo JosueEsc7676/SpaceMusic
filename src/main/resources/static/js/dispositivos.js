@@ -1,9 +1,9 @@
-// «Dispositivos»: dónde suena la música y acceso a SyncPlay.
+// «Dispositivos»: dónde suena la música, tus otros dispositivos (control remoto) y acceso a SyncPlay.
 // Cada plataforma ofrece solo lo que de verdad permite:
 //  - app Android: el selector de salida de medios del sistema (puente SpaceMusicApp);
 //  - navegador: selectAudioOutput / setSinkId donde existan, y transmitir (Remote Playback) si el navegador lo ofrece;
 //  - en el resto, la salida la elige el sistema (Bluetooth, audífonos…) y aquí se explica cómo.
-import { esc } from './util.js';
+import { esc, bus } from './util.js';
 import { icon } from './icons.js';
 import { modal, toast, errorToast } from './ui.js';
 import { player, fijarSalida } from './player.js';
@@ -65,22 +65,38 @@ async function htmlSyncPlay() {
 }
 
 export async function abrirDispositivos() {
-  let quitarAviso = null;
+  let quitarAviso = null, quitarLista = null;
   await modal({
     title: 'Dispositivos',
     body: `<div class="disp">
       <h4 class="disp-h">Escuchando en</h4><div data-salida><p class="muted">Buscando…</p></div>
+      <h4 class="disp-h disp-h-fila">Tus otros dispositivos <button class="btn sm ghost" data-renombrar title="Cambiar el nombre de este dispositivo">Este: <span data-mi-nombre></span></button></h4>
+      <div data-otros><p class="muted">Buscando…</p></div>
       <h4 class="disp-h">Escuchar en compañía</h4><div data-sync><p class="muted">Cargando…</p></div></div>`,
     actions: [{ label: 'Listo', value: null }],
     onOpen: async (m, cerrar) => {
       const pintarSalida = async () => { m.querySelector('[data-salida]').innerHTML = await htmlSalida(); };
       // Android avisa cuando cambia la salida (se conectan audífonos, Bluetooth…)
       if (app?.salidaAudio) { window.smSalida = () => { if (m.isConnected) pintarSalida(); }; quitarAviso = () => { window.smSalida = null; }; }
+      const remoto = await import('./remoto.js');
+      const pintarOtros = (l) => {
+        const box = m.querySelector('[data-otros]');
+        if (box) box.innerHTML = remoto.htmlOtros(l.filter((d) => d.id !== remoto.miDispositivo()));
+        const n = m.querySelector('[data-mi-nombre]');
+        if (n) n.textContent = remoto.miNombre();
+      };
+      quitarLista = bus.on('remoto:lista', (l) => { if (m.isConnected) pintarOtros(l); });
       m.addEventListener('click', async (e) => {
         const b = e.target.closest('button, a');
         if (!b) return;
         try {
-          if (b.matches('[data-elegir-nativo]')) {
+          if (b.matches('[data-remoto]')) {
+            cerrar(null);
+            remoto.controlar(b.dataset.remoto);
+          } else if (b.matches('[data-renombrar]')) {
+            await remoto.renombrar();
+            pintarOtros(await remoto.cargarDispositivos());
+          } else if (b.matches('[data-elegir-nativo]')) {
             const r = app.elegirSalida();
             if (!r) toast('Este Android no tiene selector de salida: conecta los audífonos o el Bluetooth desde Ajustes', { ms: 5000 });
             setTimeout(pintarSalida, 1500);
@@ -115,8 +131,10 @@ export async function abrirDispositivos() {
           errorToast(err);
         }
       });
-      await Promise.all([pintarSalida(), htmlSyncPlay().then((h) => { m.querySelector('[data-sync]').innerHTML = h; })]);
+      await Promise.all([pintarSalida(), htmlSyncPlay().then((h) => { m.querySelector('[data-sync]').innerHTML = h; }),
+        remoto.cargarDispositivos().then(pintarOtros)]);
     },
   });
   quitarAviso?.();
+  quitarLista?.();
 }

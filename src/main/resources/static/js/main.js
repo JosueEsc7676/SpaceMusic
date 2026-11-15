@@ -652,6 +652,8 @@ async function boot() {
   // App de Android: la página ya arrancó (si no llega este aviso sin internet, la app muestra
   // las canciones guardadas en el teléfono en vez de una pantalla negra)
   iniciarAlarma();
+  // Control remoto entre tus dispositivos: este se anuncia y queda listo para recibir órdenes
+  import('./remoto.js').then((m) => m.iniciarRemoto()).catch(() => { });
   // SyncPlay: si estabas en una sala al cerrar la app, se retoma (el módulo solo se carga si hace falta)
   setTimeout(() => {
     if (sinConexion()) return;

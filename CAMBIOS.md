@@ -1,5 +1,12 @@
 # Registro de cambios
 
+
+## Versión 3.7
+- **Controlar otro dispositivo de la cuenta** (como «Spotify Connect»), en la web, la app Android (misma web, sin APK nueva) y iPhone (rama `app-ios`).
+  - Servidor (`ControlRemotoService`, `/api/control/*`): `POST presencia` (estado de cada dispositivo: canción, segundo, pausa, volumen; vence a los 75 s), `GET dispositivos`, `POST {id}/orden` (play, pause, toggle, next, prev, seek, volumen, reproducir, transferir) y `DELETE presencia/{id}`. Solo entre dispositivos de la misma cuenta (el usuario sale del token); ids y órdenes validados; máximo 12 dispositivos por cuenta. Las órdenes viajan por la conexión en vivo (`control-orden`) y la lista cambia en vivo (`control-dispositivos`).
+  - Web (`js/remoto.js`): identificador aleatorio por dispositivo, nombre editable, informe al cambiar algo y cada 30 s, despedida al cerrar sesión o la pestaña; con música sonando la conexión en vivo sigue abierta aunque la pestaña esté oculta. Panel **Dispositivos → Tus otros dispositivos** y pantalla de control (tiempo, botones, volumen, «Escuchar aquí», «Pasar mi música»); punto en el botón Dispositivos.
+  - Pruebas: `ControlRemotoTest` (aislamiento por cuenta y validación) y `pruebas/control-remoto.mjs` (dos navegadores con la misma cuenta: 9 de 9; la pausa llega en ~20 ms en local).
+
 ## Versión 3.6.2
 - Rangos abiertos de streaming limitados a bloques de 256 KB; se conserva ETag, If-Range, posición y continuidad byte por byte. Las descargas completas siguen entregándose completas.
 - Caché de audio: en línea, límite de 150 ms para buscar copias antes de iniciar streaming de red. Sin conexión no se aplica el límite. Las respuestas tardías se cancelan para liberar su flujo.
