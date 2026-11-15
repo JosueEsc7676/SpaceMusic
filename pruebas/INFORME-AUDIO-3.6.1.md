@@ -51,3 +51,11 @@ Son medidas de una canción y red simulada, no una prueba en un teléfono físic
 ## Reversión
 
 El despliegue conserva el jar anterior y solo reinicia spacemusic. Para volver, detener el servicio, sustituir el jar por su copia de antes de 3.6.1 y volver a iniciarlo. Las copias de reproducción en ligero/inicio son derivadas; los originales y la base siguen sirviendo con el jar anterior. No hay migraciones de base de datos.
+
+## Despliegue verificado
+
+- Versión publicada: 3.6.1. Jar local y remoto coinciden: MD5 `4aed6d85503ba90056f46a4377da5caa`.
+- Servicio spacemusic activo; sitio público HTTP 200; archivo de novedades 3.6.1; service worker con rangos por flujo; audio anónimo HTTP 401.
+- Copia de reversión: `~/spacemusic/spacemusic.jar.antes-audio-3.6.1-20261115-0030` (fecha UTC del servidor; noche del 14 en El Salvador).
+- Sin migraciones de base de datos ni modificaciones de APK. Android sigue en la app 2.0, recibiendo los cambios de la interfaz web.
+- No se usaron contraseñas ni cuentas de oyentes para probar producción. La reproducción autenticada y los rangos se probaron en el entorno local.
