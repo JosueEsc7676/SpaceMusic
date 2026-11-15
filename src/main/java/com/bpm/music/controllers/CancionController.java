@@ -130,7 +130,8 @@ public class CancionController {
                 .contentType(MediaType.parseMediaType(mime(f.getName())))
                 .header(HttpHeaders.ACCEPT_RANGES, "bytes")
                 .header("X-SM-Calidad", ligera ? "ligera" : "original")
-                .cacheControl(cacheAudio(pidioLigera, ligera))
+                .cacheControl(ligero != null && ligero.inicioPendiente(f)
+                        ? CacheControl.noCache().cachePrivate() : cacheAudio(pidioLigera, ligera))
                 // Validador fuerte: el navegador puede reutilizar y combinar los trozos (rangos) que ya tiene
                 .eTag(etagAudio(f, ligera))
                 .lastModified(f.lastModified())

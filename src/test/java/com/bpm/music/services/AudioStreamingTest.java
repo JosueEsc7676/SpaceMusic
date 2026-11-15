@@ -80,7 +80,7 @@ class AudioStreamingTest {
         assertNotNull(etag, "sin ETag el navegador no puede combinar trozos guardados");
         assertTrue(etag.startsWith("\"") && !etag.startsWith("W/"), "validador fuerte: " + etag);
         String cache = r.getResponse().getHeader("Cache-Control");
-        assertTrue(cache.contains("max-age=604800") && cache.contains("private"), cache);
+        assertTrue(cache.contains("no-cache") && cache.contains("private"), cache);
         // El resto de la canción, desde donde se quedó
         mvc.perform(get("/api/canciones/" + id + "/audio").header("Authorization", token).header("Range", "bytes=65536-"))
                 .andExpect(status().isPartialContent())
@@ -101,7 +101,7 @@ class AudioStreamingTest {
                 .andExpect(header().string("X-SM-Calidad", "original"))
                 .andReturn();
         String cache = r.getResponse().getHeader("Cache-Control");
-        assertTrue(cache.contains("max-age=600"), "la ligera llegará pronto: el original no se guarda 7 días: " + cache);
+        assertTrue(cache.contains("no-cache"), "la ligera llegará pronto: el original no se guarda 7 días: " + cache);
     }
 
     @Test

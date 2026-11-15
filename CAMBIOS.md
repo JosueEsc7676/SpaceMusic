@@ -1,5 +1,16 @@
 # Registro de cambios
 
+## Versión 3.6.2
+- Rangos abiertos de streaming limitados a bloques de 256 KB; se conserva ETag, If-Range, posición y continuidad byte por byte. Las descargas completas siguen entregándose completas.
+- Caché de audio: en línea, límite de 150 ms para buscar copias antes de iniciar streaming de red. Sin conexión no se aplica el límite. Las respuestas tardías se cancelan para liberar su flujo.
+- La preparación solicitada durante una transferencia se aplaza y reintenta (antes se descartaba); cola limitada a 8 tareas.
+- Los originales pendientes se revalidan en cada uso; las copias definitivas conservan su caché larga.
+- Renueva la URL de streaming (`v=4`) para evitar reutilizar durante siete días representaciones anteriores a la preparación de audio. No invalida ni elimina descargas offline.
+- Cancela la precarga incompleta de iOS incluso cuando corresponde a la pista elegida y detiene la precarga HTML de offline.js antes de iniciar otra canción.
+- El reproductor ampliado muestra carga y etiqueta accesible mientras espera audio.
+- El elemento multimedia expone tiempos de metadatos, evento playing y primer avance en atributos DOM, sin credenciales ni URLs de autenticación en los registros.
+
+
 ## Versión 3.6.1
 - Inicio de audio: copias sin imágenes ni etiquetas incrustadas con ffmpeg `-c:a copy` y `+faststart` para M4A/MP4. Originales intactos; `/descargar` conserva el original; `/audio` usa la copia preparada o vuelve al original sin esperar.
 - Se reutiliza AudioLigeroService: una sola cola, máximo 8 pendientes, menor prioridad, una conversión a la vez, un hilo para AAC, espera ante transferencias de audio o CPU >70 %. Preparación gradual de 4 canciones/minuto y bajo demanda; espacio mínimo de 200 MB.

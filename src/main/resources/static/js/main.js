@@ -418,6 +418,11 @@ function paintFav() {
 }
 
 function paintState() {
+  const bar = document.getElementById('playerBar');
+  if (bar) {
+    bar.dataset.audioArranqueMs = player.audio.dataset.arranqueMs || '';
+    bar.dataset.audioMetadataMs = player.audio.dataset.metadataMs || '';
+  }
   const b = $('[data-c="play"]');
   b.innerHTML = player.buffering && player.playing ? '<span class="spinner" style="width:18px;height:18px;border-color:rgba(0,0,0,.25);border-top-color:#000"></span>' : icon(player.playing ? 'pause' : 'play');
   b.setAttribute('aria-label', player.playing ? 'Pausa' : 'Reproducir');
@@ -442,6 +447,8 @@ function setSeek(el, frac, buf) {
 
 let dragging = null;
 function paintTime() {
+  const bar = document.getElementById('playerBar');
+  if (bar) bar.dataset.audioAvanceMs = player.audio.dataset.avanceMs || '';
   const a = player.audio;
   const dur = isFinite(a.duration) ? a.duration : player.current?.duracionSegundos || 0;
   if (dragging !== 'main') {

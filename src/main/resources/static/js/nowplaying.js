@@ -363,7 +363,9 @@ export const np = {
     const s = player.current;
     if (!el || !s) return;
     el.classList.toggle('paused', !player.playing);
-    el.querySelector('[data-c="play"]').innerHTML = icon(player.playing ? 'pause' : 'play');
+    const play = el.querySelector('[data-c="play"]');
+    play.innerHTML = player.buffering && player.playing ? '<span class="spinner" style="width:28px;height:28px"></span>' : icon(player.playing ? 'pause' : 'play');
+    play.setAttribute('aria-label', player.buffering && player.playing ? 'Cargando audio' : player.playing ? 'Pausa' : 'Reproducir');
     el.querySelector('[data-c="shuffle"]').classList.toggle('active', player.shuffle);
     const rep = el.querySelector('[data-c="repeat"]');
     rep.classList.toggle('active', player.repeat !== 'off');

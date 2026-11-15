@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 const codigo = readFileSync(new URL('../src/main/resources/sw/sw.js', import.meta.url), 'utf8')
   .replaceAll('__VERSION__', 'sm-test').replaceAll('__SHELL__', '');
 const contexto = vm.createContext({ Response, Request, Headers, ReadableStream, AbortController, URL,
-  setTimeout, Date, console, self: { addEventListener() {}, navigator: { onLine: true } },
+  setTimeout, clearTimeout, Date, console, self: { addEventListener() {}, navigator: { onLine: true } },
   caches: { async open() { return { async match() { return contexto.copia; } }; } } });
 vm.runInContext(codigo, contexto);
 const rango = (r, cabecera, total) => contexto.rangoGuardado(r, cabecera, total);
@@ -71,4 +71,31 @@ test('la precarga de otra calidad o con If-Range distinto no se mezcla', async (
     assert.equal(await contexto.inicioGuardado(new Request('https://ejemplo.test/api/canciones/1/audio', { headers }), '/offline/audio/1'), null);
   }
   assert.equal(await contexto.inicioGuardado(new Request('https://ejemplo.test/api/canciones/1/audio?calidad=ligera'), '/offline/audio/1'), null);
+});
+
+
+test('una caché ocupada no bloquea el streaming en línea', async () => {
+  const anterior = contexto.caches;
+  let red = 0;
+  contexto.caches = { async open() { return { match() { return new Promise(() => {}); } }; } };
+  contexto.fetch = async () => { red++; return new Response('red'); };
+  try {
+    const inicio = Date.now();
+    const r = await contexto.audioConPrioridad(new Request('https://ejemplo.test/api/canciones/1/audio'), '/offline/audio/1');
+    assert.equal(await r.text(), 'red');
+    assert.equal(red, 1);
+    assert.ok(Date.now() - inicio < 2000, 'no debe esperar indefinidamente al almacenamiento');
+  } finally { contexto.caches = anterior; }
+});
+
+test('la copia local rápida evita la red y funciona sin conexión', async () => {
+  contexto.copia = new Response('copia');
+  contexto.fetch = async () => { throw new Error('no debe usar red'); };
+  for (const online of [true, false]) {
+    contexto.self.navigator.onLine = online;
+    contexto.copia = new Response('copia');
+    const r = await contexto.audioConPrioridad(new Request('https://ejemplo.test/api/canciones/1/audio'), '/offline/audio/1');
+    assert.equal(await r.text(), 'copia');
+  }
+  contexto.self.navigator.onLine = true;
 });

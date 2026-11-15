@@ -355,6 +355,29 @@ async function portada(req) {
 // Datos de la API que conviene tener sin conexión (solo lectura)
 const API_OFFLINE = /^\/api\/(inicio|buscar|albumes|artistas|generos|mixes|playlists|letras|canciones\/\d+$|canciones\/(recientes|top|favoritos)|usuario\/favoritos|usuario\/guardados|historial|biblioteca)/;
 
+// CacheStorage puede quedar ocupado por escrituras/limpiezas del dispositivo.
+// En línea nunca retener el streaming detrás de ese trabajo; sin red se espera la copia.
+async function audioConPrioridad(req, clave) {
+  let vencio = false;
+  const copia = audioGuardado(req, clave).then(r => r || inicioGuardado(req, clave)).then(r => {
+    if (vencio) { r?.body?.cancel().catch(() => {}); return null; }
+    return r;
+  });
+  if (self.navigator.onLine === false) return (await copia) || fetch(req);
+  let reloj;
+  try {
+    const r = await Promise.race([
+      copia,
+      new Promise(resolve => { reloj = setTimeout(() => { vencio = true; resolve(null); }, 150); }),
+    ]);
+    return r || fetch(req);
+  } catch {
+    return fetch(req);
+  } finally {
+    clearTimeout(reloj);
+  }
+}
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   const url = new URL(req.url);
@@ -367,7 +390,7 @@ self.addEventListener('fetch', (e) => {
       // No está en el dispositivo y hay red: directo al servidor, sin pasar por aquí (empieza antes)
       if (indice && !indice.has(clave) && self.navigator.onLine !== false) return;
       // Canción guardada → se sirve del dispositivo; si solo está el principio, ese trozo; si no, de la red
-      e.respondWith(audioGuardado(req, clave).then((r) => r || inicioGuardado(req, clave)).then((r) => r || fetch(req)).catch(() => fetch(req)));
+      e.respondWith(audioConPrioridad(req, clave));
       return;
     }
     if (url.pathname.startsWith('/api/portada/')) { e.respondWith(portada(req)); return; }

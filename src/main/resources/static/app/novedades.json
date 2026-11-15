@@ -1,12 +1,21 @@
 {
-  "version": "3.6.1",
-  "titulo": "Audio que empieza más rápido",
+  "version": "3.6.2",
+  "titulo": "Corrección de inicio de reproducción",
   "puntos": [
-    "Reproducción más ágil: las canciones guardadas empiezan sin leer el archivo completo antes de sonar.",
-    "Copias preparadas en segundo plano para que el sonido llegue antes, conservando la calidad del audio y los archivos originales.",
-    "Iniciar radio ya reproduce la canción elegida mientras llegan las recomendaciones."
+    "Se renueva la dirección de streaming para no conservar audio anterior a la optimización en la caché del navegador.",
+    "Se cancelan las precargas incompletas que compiten con la canción elegida.",
+    "El reproductor ampliado indica cuando el audio todavía está cargando."
   ],
   "anteriores": [
+    {
+      "version": "3.6.1",
+      "titulo": "Audio que empieza más rápido",
+      "puntos": [
+        "Reproducción más ágil: las canciones guardadas empiezan sin leer el archivo completo antes de sonar.",
+        "Copias preparadas en segundo plano para que el sonido llegue antes, conservando la calidad del audio y los archivos originales.",
+        "Iniciar radio ya reproduce la canción elegida mientras llegan las recomendaciones."
+      ]
+    },
     {
       "version": "3.6",
       "titulo": "Novedades: SyncPlay, Dispositivos y letra a pantalla completa",

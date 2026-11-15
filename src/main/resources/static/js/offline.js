@@ -392,7 +392,11 @@ export function iniciarOffline({ toast }) {
       bus.emit('descargas');
     }
   });
-  bus.on('audio:prioridad', () => sw()?.postMessage({ tipo: 'prioridad', hasta: 8000 }));
+  bus.on('audio:prioridad', () => {
+    // También apartar la precarga del navegador cuando no interviene el worker.
+    if (audioPrecarga) { audioPrecarga.pause(); audioPrecarga.removeAttribute('src'); audioPrecarga.load(); }
+    sw()?.postMessage({ tipo: 'prioridad', hasta: 8000 });
+  });
   bus.on('player:song', () => {
     programada = player.current?.id ?? null;
     precargada = null;

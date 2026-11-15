@@ -13,7 +13,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
@@ -35,7 +35,7 @@ public class AudioLigeroService {
     private final boolean activo;
     private final CancionService canciones;
     private final BibliotecaService biblioteca;
-    private final ExecutorService cola = Executors.newSingleThreadExecutor(r -> {
+    private final ScheduledExecutorService cola = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "audio-ligero");
         t.setDaemon(true);
         t.setPriority(Thread.MIN_PRIORITY);
@@ -118,6 +118,12 @@ public class AudioLigeroService {
         return f != null && carpeta.equals(f.toPath().toAbsolutePath().normalize().getParent());
     }
 
+    public boolean inicioPendiente(File f) {
+        if (!activo || f == null || esLigera(f)) return false;
+        return !carpeta.resolve("inicio").equals(f.toPath().toAbsolutePath().normalize().getParent())
+                && Set.of("mp3", "m4a", "mp4").contains(MetadataService.extension(f.getName()).toLowerCase(java.util.Locale.ROOT));
+    }
+
     private boolean hayFfmpeg() {
         if (ffmpegDisponible == null) {
             try {
@@ -132,9 +138,16 @@ public class AudioLigeroService {
 
     private synchronized void encolar(long id) {
         if (!activo || pendientes.size() >= 8 || !pendientes.add(id)) return;
-        cola.submit(() -> {
-            try { if (!ocupado()) convertir(id); } finally { pendientes.remove(id); }
-        });
+        cola.execute(() -> procesarPendiente(id));
+    }
+
+    private void procesarPendiente(long id) {
+        // Una transferencia activa aplaza el trabajo: no perder la canción que se acaba de solicitar.
+        if (ocupado()) {
+            cola.schedule(() -> procesarPendiente(id), 2, TimeUnit.SECONDS);
+            return;
+        }
+        try { convertir(id); } finally { pendientes.remove(id); }
     }
 
     /** Convierte una canción. Devuelve true si quedó lista (o no hacía falta). */
@@ -232,6 +245,6 @@ public class AudioLigeroService {
                 }
             } catch (Exception ignored) { }
         }
-        return java.util.Map.of("listas", n, "megas", bytes / 1024 / 1024, "activo", activo && hayFfmpeg());
+        return java.util.Map.of("listas", n, "megas", bytes / 1024 / 1024, "activo", activo && hayFfmpeg(), "pendientes", pendientes.size());
     }
 }

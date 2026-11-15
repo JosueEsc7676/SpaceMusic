@@ -327,6 +327,10 @@ export const player = {
     this._scrobbled = false;
     this._lastTick = 0;
     this.buffering = true;
+    audio.dataset.inicioMs = String(performance.now());
+    delete audio.dataset.arranqueMs;
+    delete audio.dataset.avanceMs;
+    delete audio.dataset.metadataMs;
     if (urlEnUso) { URL.revokeObjectURL(urlEnUso); urlEnUso = null; }
     if (siguiente.id === s.id && siguiente.url) {
       // Ya estaba en memoria: arranca al instante aunque la pantalla esté apagada
@@ -335,7 +339,9 @@ export const player = {
       siguiente.id = null;
       audio.src = urlEnUso;
     } else {
-      if (siguiente.id !== null && siguiente.id !== s.id) soltarSiguiente();
+      // Una precarga todavía incompleta también se cancela si es la elegida:
+      // el reproductor la pide ahora por streaming y no necesita otra descarga entera.
+      if (siguiente.id !== null) soltarSiguiente();
       audio.src = audioUrl(s.id);
     }
     if (startAt > 0) {
@@ -427,11 +433,19 @@ export const player = {
 
 // ═══════════════════ Eventos del <audio> ═══════════════════
 
-audio.addEventListener('playing', () => { player.buffering = false; player._errors = 0; bus.emit('player:state'); });
+audio.addEventListener('playing', () => {
+  if (!audio.dataset.arranqueMs && audio.dataset.inicioMs) {
+    audio.dataset.arranqueMs = String(Math.round(performance.now() - Number(audio.dataset.inicioMs)));
+  }
+  player.buffering = false; player._errors = 0; bus.emit('player:state');
+});
 audio.addEventListener('pause', () => { bus.emit('player:state'); player._save(); });
 audio.addEventListener('waiting', () => { player.buffering = true; bus.emit('player:state'); });
 audio.addEventListener('canplay', () => { player.buffering = false; bus.emit('player:state'); });
-audio.addEventListener('loadedmetadata', () => { bus.emit('player:time'); comprobarAudio(); });
+audio.addEventListener('loadedmetadata', () => {
+  audio.dataset.metadataMs = String(Math.round(performance.now() - Number(audio.dataset.inicioMs)));
+  bus.emit('player:time'); comprobarAudio();
+});
 
 // Si el audio que llegó dura muy distinto de lo esperado, es otra canción (una copia equivocada en el
 // dispositivo): se borra esa copia y se vuelve a cargar del servidor, en el mismo punto.
@@ -463,6 +477,9 @@ audio.addEventListener('progress', () => bus.emit('player:buffer'));
 
 let lastSave = 0;
 audio.addEventListener('timeupdate', () => {
+  if (!audio.paused && audio.currentTime > 0 && !audio.dataset.avanceMs && audio.dataset.inicioMs) {
+    audio.dataset.avanceMs = String(Math.round(performance.now() - Number(audio.dataset.inicioMs)));
+  }
   player._tick();
   bus.emit('player:time');
   if (Date.now() - lastSave > 5000) { lastSave = Date.now(); player._save(); }
