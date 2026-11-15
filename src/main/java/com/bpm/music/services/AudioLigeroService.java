@@ -45,6 +45,16 @@ public class AudioLigeroService {
     /** Ya revisadas por la tarea de fondo (listas o sin necesidad): no se vuelven a consultar. */
     private final Set<Long> revisadas = ConcurrentHashMap.newKeySet();
     private volatile Boolean ffmpegDisponible;
+    private com.bpm.music.soporte.MonitorService monitor;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMonitor(com.bpm.music.soporte.MonitorService monitor) { this.monitor = monitor; }
+
+    private boolean ocupado() {
+        if (monitor != null && monitor.audiosActivos() > 0) return true;
+        var so = java.lang.management.ManagementFactory.getOperatingSystemMXBean();
+        return so instanceof com.sun.management.OperatingSystemMXBean cpu && cpu.getCpuLoad() > 0.70;
+    }
 
     public AudioLigeroService(@Value("${music.light-path:./ligero}") String carpeta,
                               @Value("${organizador.ffmpeg:ffmpeg}") String ffmpeg,
@@ -68,25 +78,44 @@ public class AudioLigeroService {
         return carpeta.resolve(id + "_" + original.length() + "_" + original.lastModified() + ".m4a");
     }
 
+    private Path destinoRapido(long id, File original) {
+        return carpeta.resolve("inicio").resolve(id + "_" + original.length() + "_" + original.lastModified()
+                + "." + MetadataService.extension(original.getName()).toLowerCase(java.util.Locale.ROOT));
+    }
+
+    /** Misma pista y calidad, sin imagen adjunta ni etiquetas grandes delante del sonido. */
+    public File archivoRapido(long id) {
+        return rapidoOOriginal(id, canciones.archivo(id));
+    }
+
+    private File rapidoOOriginal(long id, File original) {
+        if (original == null || !activo) return original;
+        String ext = MetadataService.extension(original.getName()).toLowerCase(java.util.Locale.ROOT);
+        if (!Set.of("mp3", "m4a", "mp4").contains(ext)) return original;
+        Path d = destinoRapido(id, original);
+        if (Files.isRegularFile(d)) return d.toFile();
+        encolar(id); // solo encola: nunca espera a ffmpeg en la petición de reproducción
+        return original;
+    }
+
     /**
      * Archivo para entregar en calidad ligera: la versión ligera si ya existe, si no el original
      * (y se pide prepararla en segundo plano).
      */
     public File archivo(long id) {
         File original = canciones.archivo(id);
-        revisadas.remove(id); // por si el archivo cambió
         if (original == null || !activo) return original;
         int dur = biblioteca.porId(id).map(CancionDTO::getDuracionSegundos).orElse(0);
-        if (!necesita(original.length(), dur)) return original;
+        if (!necesita(original.length(), dur)) return rapidoOOriginal(id, original);
         Path d = destino(id, original);
         if (Files.isRegularFile(d)) return d.toFile();
         encolar(id);
-        return original;
+        return rapidoOOriginal(id, original);
     }
 
     /** ¿Este archivo es una versión ligera (y no el original que se entrega mientras se prepara)? */
     public boolean esLigera(File f) {
-        return f != null && f.toPath().toAbsolutePath().normalize().startsWith(carpeta);
+        return f != null && carpeta.equals(f.toPath().toAbsolutePath().normalize().getParent());
     }
 
     private boolean hayFfmpeg() {
@@ -101,10 +130,10 @@ public class AudioLigeroService {
         return ffmpegDisponible;
     }
 
-    private void encolar(long id) {
-        if (!activo || !pendientes.add(id)) return;
+    private synchronized void encolar(long id) {
+        if (!activo || pendientes.size() >= 8 || !pendientes.add(id)) return;
         cola.submit(() -> {
-            try { convertir(id); } finally { pendientes.remove(id); }
+            try { if (!ocupado()) convertir(id); } finally { pendientes.remove(id); }
         });
     }
 
@@ -112,6 +141,9 @@ public class AudioLigeroService {
     boolean convertir(long id) {
         File original = canciones.archivo(id);
         if (original == null || !original.canRead() || !hayFfmpeg()) return false;
+        prepararOriginal(id, original);
+        int duracion = biblioteca.porId(id).map(CancionDTO::getDuracionSegundos).orElse(0);
+        if (!necesita(original.length(), duracion)) return true;
         Path d = destino(id, original);
         if (Files.isRegularFile(d)) return true;
         try {
@@ -120,7 +152,7 @@ public class AudioLigeroService {
             var cmd = new java.util.ArrayList<String>();
             if (new File("/usr/bin/nice").canExecute()) { cmd.add("/usr/bin/nice"); cmd.add("-n"); cmd.add("19"); }
             cmd.addAll(java.util.List.of(ffmpeg, "-nostdin", "-v", "error", "-y", "-i", original.getAbsolutePath(),
-                    "-map", "0:a:0", "-vn", "-c:a", "aac", "-b:a", KBPS_LIGERO + "k", "-ac", "2",
+                    "-threads", "1", "-map", "0:a:0", "-vn", "-c:a", "aac", "-b:a", KBPS_LIGERO + "k", "-ac", "2",
                     "-map_metadata", "-1", "-movflags", "+faststart", tmp.toString()));
             Process p = new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
             if (!p.waitFor(10, TimeUnit.MINUTES)) { p.destroyForcibly(); Files.deleteIfExists(tmp); return false; }
@@ -137,17 +169,51 @@ public class AudioLigeroService {
         }
     }
 
-    /** Poco a poco, en segundo plano: hasta 4 canciones cada 3 minutos (unas 1900 al día). */
-    @Scheduled(initialDelay = 5, fixedDelay = 3, timeUnit = TimeUnit.MINUTES)
+    /** Copia del flujo comprimido, sin recodificar ni modificar el archivo de la biblioteca. */
+    boolean prepararOriginal(long id, File original) {
+        String ext = MetadataService.extension(original.getName()).toLowerCase(java.util.Locale.ROOT);
+        if (!Set.of("mp3", "m4a", "mp4").contains(ext)) return false;
+        Path d = destinoRapido(id, original);
+        if (Files.isRegularFile(d)) return true;
+        Path tmp = d.resolveSibling("parcial-" + d.getFileName());
+        Process p = null;
+        try {
+            Files.createDirectories(d.getParent());
+            if (Files.getFileStore(d.getParent()).getUsableSpace() < Math.max(200L * 1024 * 1024, original.length() * 2)) return false;
+            var cmd = new java.util.ArrayList<String>();
+            if (new File("/usr/bin/nice").canExecute()) cmd.addAll(java.util.List.of("/usr/bin/nice", "-n", "19"));
+            cmd.addAll(java.util.List.of(ffmpeg, "-nostdin", "-v", "error", "-y", "-i", original.getAbsolutePath(),
+                    "-map", "0:a:0", "-vn", "-c:a", "copy", "-map_metadata", "-1", "-map_chapters", "-1"));
+            if (ext.equals("mp3")) cmd.addAll(java.util.List.of("-id3v2_version", "0", "-write_id3v1", "0"));
+            else cmd.addAll(java.util.List.of("-movflags", "+faststart"));
+            cmd.add(tmp.toString());
+            p = new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+            if (!p.waitFor(90, TimeUnit.SECONDS)) { p.destroyForcibly(); return false; }
+            if (p.exitValue() != 0 || !Files.isRegularFile(tmp) || Files.size(tmp) < 1024) return false;
+            Files.move(tmp, d, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            return true;
+        } catch (Exception e) {
+            log.debug("No se pudo preparar el inicio rápido de {}: {}", id, e.getMessage());
+            return false;
+        } finally {
+            if (p != null && p.isAlive()) p.destroyForcibly();
+            try { Files.deleteIfExists(tmp); } catch (Exception ignored) { }
+        }
+    }
+
+    /** Poco a poco: hasta 4 canciones por minuto, cediendo ante reproducción o CPU alta. */
+    @Scheduled(initialDelay = 1, fixedDelay = 1, timeUnit = TimeUnit.MINUTES)
     public void prepararPocoAPoco() {
-        if (!activo || !hayFfmpeg() || !pendientes.isEmpty()) return;
+        if (!activo || ocupado() || !hayFfmpeg() || !pendientes.isEmpty()) return;
         int n = 0;
         for (CancionDTO c : biblioteca.todas()) {
             if (n >= 4) break;
             if (revisadas.contains(c.getId())) continue;
             File f;
             try { f = canciones.archivo(c.getId()); } catch (RuntimeException e) { continue; }
-            if (f == null || !necesita(f.length(), c.getDuracionSegundos()) || Files.isRegularFile(destino(c.getId(), f))) {
+            boolean rapidaLista = f != null && (!Set.of("mp3", "m4a", "mp4").contains(MetadataService.extension(f.getName()).toLowerCase(java.util.Locale.ROOT))
+                    || Files.isRegularFile(destinoRapido(c.getId(), f)));
+            if (f == null || (rapidaLista && (!necesita(f.length(), c.getDuracionSegundos()) || Files.isRegularFile(destino(c.getId(), f))))) {
                 revisadas.add(c.getId());
                 continue;
             }

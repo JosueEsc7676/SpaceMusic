@@ -178,19 +178,23 @@ async function guardarInicio(url, bytes = 640 * 1024) {
 /** El principio guardado responde a la primera petición (bytes=0-); el reproductor pide el resto a la red. */
 async function inicioGuardado(req, clave) {
   const range = req.headers.get('range') || 'bytes=0-';
-  if (!/^bytes=0-/.test(range)) return null;
+  const pedido = /^bytes=0-(\d*)$/.exec(range);
+  if (!pedido) return null;
   const r = await (await caches.open(INICIO)).match(clave);
   if (!r) return null;
   const ligera = new URL(req.url).searchParams.get('calidad') === 'ligera';
   // De otra calidad o de hace más de un día (el archivo pudo cambiar): no se usa
   if (r.headers.get('X-SM-Ligera') !== String(ligera) || Date.now() - Number(r.headers.get('X-SM-Fecha') || 0) > 86400000) return null;
+  if (req.headers.has('if-range') && req.headers.get('if-range') !== r.headers.get('X-SM-Validador')) return null;
   const total = Number(r.headers.get('X-SM-Total'));
   const blob = await r.blob();
   if (!total || !blob.size) return null;
-  return new Response(blob, { status: 206, headers: {
+  const fin = pedido[1] ? Math.min(Number(pedido[1]), blob.size - 1) : blob.size - 1;
+  if (!Number.isSafeInteger(fin) || fin < 0) return null;
+  return new Response(blob.slice(0, fin + 1), { status: 206, headers: {
     'Content-Type': r.headers.get('Content-Type') || 'audio/mpeg',
-    'Content-Range': `bytes 0-${blob.size - 1}/${total}`,
-    'Content-Length': String(blob.size),
+    'Content-Range': `bytes 0-${fin}/${total}`,
+    'Content-Length': String(fin + 1),
     'Accept-Ranges': 'bytes',
   } });
 }
@@ -269,15 +273,46 @@ async function audioGuardado(req, clave) {
   if (!r) return null;
   const range = req.headers.get('range');
   if (!range) return r;
+  // No leer la canción entera antes de responder: CacheStorage entrega un flujo.
+  // Las copias antiguas sin tamaño se migran al leerlas, conservando compatibilidad offline.
+  const declarado = r.headers.get('Content-Length');
+  if (declarado !== null && Number.isSafeInteger(Number(declarado)) && Number(declarado) >= 0 && r.body) {
+    return rangoGuardado(r, range, Number(declarado));
+  }
   const blob = await r.blob();
-  const m = /bytes=(\d*)-(\d*)/.exec(range) || [];
-  const total = blob.size;
-  let inicio = m[1] ? Number(m[1]) : 0;
-  let fin = m[2] ? Number(m[2]) : total - 1;
-  if (!m[1] && m[2]) { inicio = Math.max(0, total - Number(m[2])); fin = total - 1; }
-  fin = Math.min(fin, total - 1);
-  if (inicio > fin) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${total}` } });
-  return new Response(blob.slice(inicio, fin + 1), {
+  return rangoGuardado(new Response(blob, { headers: r.headers }), range, blob.size);
+}
+
+/** Un rango del flujo guardado: entrega el primer bloque sin esperar al final del archivo. */
+function rangoGuardado(r, range, total) {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(range);
+  if (!m || (!m[1] && !m[2])) return null; // rangos múltiples: los resuelve el servidor
+  let inicio = m[1] ? Number(m[1]) : Math.max(0, total - Number(m[2]));
+  let fin = m[1] && m[2] ? Math.min(Number(m[2]), total - 1) : total - 1;
+  if (!Number.isSafeInteger(inicio) || !Number.isSafeInteger(fin) || inicio > fin || inicio >= total) {
+    r.body?.cancel().catch(() => {});
+    return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${total}` } });
+  }
+  const lector = r.body.getReader();
+  let posicion = 0;
+  const flujo = new ReadableStream({
+    async pull(c) {
+      try {
+        for (;;) {
+          const { done, value } = await lector.read();
+          if (done) { c.error(new Error('Copia de audio incompleta')); return; }
+          const desde = Math.max(0, inicio - posicion);
+          const hasta = Math.min(value.byteLength, fin + 1 - posicion);
+          posicion += value.byteLength;
+          if (hasta > desde) c.enqueue(value.subarray(desde, hasta));
+          if (posicion > fin) { c.close(); await lector.cancel(); return; }
+          if (hasta > desde) return;
+        }
+      } catch (e) { c.error(e); }
+    },
+    cancel(motivo) { return lector.cancel(motivo); },
+  });
+  return new Response(flujo, {
     status: 206,
     headers: {
       'Content-Type': r.headers.get('Content-Type') || 'audio/mpeg',

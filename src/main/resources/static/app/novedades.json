@@ -1,16 +1,25 @@
 {
-  "version": "3.6",
-  "titulo": "Novedades: SyncPlay, Dispositivos y letra a pantalla completa",
+  "version": "3.6.1",
+  "titulo": "Audio que empieza más rápido",
   "puntos": [
-    "SyncPlay (antes «Escuchar juntos»): crea una sala, comparte su enlace o invita a un amigo. La invitación llega como mensaje con una tarjeta para abrir la sala y unirse.",
-    "Botón Dispositivos en el reproductor (antes del corazón): muestra dónde suena la música y permite cambiar la salida. En la app de Android 2.0 abre el selector de salida del sistema (teléfono, audífonos, Bluetooth).",
-    "Mensajes: accesos a SyncPlay, Coincidimos y Dedicatorias. En una conversación, el botón de auriculares inicia SyncPlay y el «+» envía o dedica la canción que suena, o inicia Coincidimos con esa persona.",
-    "Menú de canciones más ordenado: Me gusta y Agregar a playlist a mano; el resto en Cola y radio, Compartir y Más acciones. Nuevo: Enviar a un amigo y Compartir enlace.",
-    "Letra a pantalla completa renovada: fondo con la portada, cabecera compacta, letra grande y estable (sin saltos) y controles abajo. Respeta «reducir movimiento».",
-    "Las canciones empiezan antes: la canción que eliges tiene prioridad sobre las descargas de fondo, con datos móviles se precarga solo el principio de la siguiente y con red lenta se usa la versión ligera.",
-    "Administración: el registro de descargas aparece plegado (con su propio desplazamiento) y las claves de Spotify están arriba; al tocar un usuario se abre su ficha al instante."
+    "Reproducción más ágil: las canciones guardadas empiezan sin leer el archivo completo antes de sonar.",
+    "Copias preparadas en segundo plano para que el sonido llegue antes, conservando la calidad del audio y los archivos originales.",
+    "Iniciar radio ya reproduce la canción elegida mientras llegan las recomendaciones."
   ],
   "anteriores": [
+    {
+      "version": "3.6",
+      "titulo": "Novedades: SyncPlay, Dispositivos y letra a pantalla completa",
+      "puntos": [
+        "SyncPlay (antes «Escuchar juntos»): crea una sala, comparte su enlace o invita a un amigo. La invitación llega como mensaje con una tarjeta para abrir la sala y unirse.",
+        "Botón Dispositivos en el reproductor (antes del corazón): muestra dónde suena la música y permite cambiar la salida. En la app de Android 2.0 abre el selector de salida del sistema (teléfono, audífonos, Bluetooth).",
+        "Mensajes: accesos a SyncPlay, Coincidimos y Dedicatorias. En una conversación, el botón de auriculares inicia SyncPlay y el «+» envía o dedica la canción que suena, o inicia Coincidimos con esa persona.",
+        "Menú de canciones más ordenado: Me gusta y Agregar a playlist a mano; el resto en Cola y radio, Compartir y Más acciones. Nuevo: Enviar a un amigo y Compartir enlace.",
+        "Letra a pantalla completa renovada: fondo con la portada, cabecera compacta, letra grande y estable (sin saltos) y controles abajo. Respeta «reducir movimiento».",
+        "Las canciones empiezan antes: la canción que eliges tiene prioridad sobre las descargas de fondo, con datos móviles se precarga solo el principio de la siguiente y con red lenta se usa la versión ligera.",
+        "Administración: el registro de descargas aparece plegado (con su propio desplazamiento) y las claves de Spotify están arriba; al tocar un usuario se abre su ficha al instante."
+      ]
+    },
     {
       "version": "3.5",
       "titulo": "Novedades: escuchar juntos, despertador y más",

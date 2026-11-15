@@ -114,10 +114,16 @@ public class CancionController {
      * Spring sirve solo el trozo pedido, así se puede adelantar la canción.
      */
     @GetMapping("/{id}/audio")
-    public ResponseEntity<Resource> audio(@PathVariable Long id, @RequestParam(required = false) String calidad) {
+    public ResponseEntity<Resource> audio(@PathVariable Long id, @RequestParam(required = false) String calidad,
+                                          @RequestHeader(value = HttpHeaders.IF_RANGE, required = false) String ifRange) {
         // calidad=ligera: versión AAC 128 kbps para datos móviles (si todavía no está lista, el original)
         boolean pidioLigera = "ligera".equals(calidad) && ligero != null;
-        File f = pidioLigera ? ligero.archivo(id) : canciones.archivo(id);
+        File f = pidioLigera ? ligero.archivo(id) : ligero != null ? ligero.archivoRapido(id) : canciones.archivo(id);
+        // Si el cliente continúa el original, conservar su representación aunque ya exista la copia preparada.
+        if (ifRange != null && f != null && !ifRange.equals(etagAudio(f, pidioLigera && ligero.esLigera(f)))) {
+            File original = canciones.archivo(id);
+            if (original != null && ifRange.equals(etagAudio(original, false))) f = original;
+        }
         if (f == null || !f.canRead()) return ResponseEntity.notFound().build();
         boolean ligera = pidioLigera && ligero.esLigera(f);
         return ResponseEntity.ok()

@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "music.path=${java.io.tmpdir}/sm-test-music", "music.playlist-images-path=${java.io.tmpdir}/sm-test-uploads",
         "music.light-path=${java.io.tmpdir}/sm-test-ligero",
         "soporte.respaldos.ruta=${java.io.tmpdir}/sm-test-respaldos", "music.scan-interval-minutes=100000",
-        "app.require-email-verification=false", "ytmusic.python=/no/existe", "ytmusic.script=/no/existe", "organizador.ffmpeg=/no/existe"
+        "app.require-email-verification=false", "app.allow-downloads=true", "ytmusic.python=/no/existe", "ytmusic.script=/no/existe", "organizador.ffmpeg=/no/existe"
 })
 @AutoConfigureMockMvc
 class AudioStreamingTest {
@@ -108,6 +108,37 @@ class AudioStreamingTest {
     void sinSesionNoSeEntregaAudio() throws Exception {
         int estado = mvc.perform(get("/api/canciones/" + id + "/audio").header("Range", "bytes=0-1023")).andReturn().getResponse().getStatus();
         assertTrue(estado == 401 || estado == 403, "estado " + estado);
+    }
+
+    @Test
+    void copiaRapidaMantieneCalidadRangosYOriginalIntacto() throws Exception {
+        Path original = Path.of(canciones.findRutaById(id).orElseThrow());
+        byte[] antes = Files.readAllBytes(original);
+        Path preparada = Path.of(System.getProperty("java.io.tmpdir"), "sm-test-ligero", "inicio",
+                id + "_" + Files.size(original) + "_" + original.toFile().lastModified() + ".mp3");
+        Files.createDirectories(preparada.getParent());
+        Files.write(preparada, new byte[]{10, 11, 12, 13, 14});
+        try {
+            var r = mvc.perform(get("/api/canciones/" + id + "/audio").header("Authorization", token).header("Range", "bytes=0-1"))
+                    .andExpect(status().isPartialContent())
+                    .andExpect(header().string("Content-Range", "bytes 0-1/5"))
+                    .andExpect(header().string("X-SM-Calidad", "original"))
+                    .andReturn();
+            assertArrayEquals(new byte[]{10, 11}, r.getResponse().getContentAsByteArray());
+            assertArrayEquals(antes, Files.readAllBytes(original));
+            var continuacion = mvc.perform(get("/api/canciones/" + id + "/audio").header("Authorization", token)
+                            .header("Range", "bytes=2-3")
+                            .header("If-Range", com.bpm.music.controllers.CancionController.etagAudio(original.toFile(), false)))
+                    .andExpect(status().isPartialContent())
+                    .andExpect(header().string("Content-Range", "bytes 2-3/" + TAMANO)).andReturn();
+            assertArrayEquals(new byte[]{antes[2], antes[3]}, continuacion.getResponse().getContentAsByteArray());
+            // La descarga sigue entregando el archivo de biblioteca con sus etiquetas originales.
+            var descarga = mvc.perform(get("/api/canciones/" + id + "/descargar").header("Authorization", token).header("Range", "bytes=0-1"))
+                    .andExpect(status().isPartialContent()).andReturn();
+            assertArrayEquals(new byte[]{antes[0], antes[1]}, descarga.getResponse().getContentAsByteArray());
+        } finally {
+            Files.deleteIfExists(preparada);
+        }
     }
 
     @Test

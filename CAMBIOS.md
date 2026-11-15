@@ -1,5 +1,12 @@
 # Registro de cambios
 
+## Versión 3.6.1
+- Inicio de audio: copias sin imágenes ni etiquetas incrustadas con ffmpeg `-c:a copy` y `+faststart` para M4A/MP4. Originales intactos; `/descargar` conserva el original; `/audio` usa la copia preparada o vuelve al original sin esperar.
+- Se reutiliza AudioLigeroService: una sola cola, máximo 8 pendientes, menor prioridad, una conversión a la vez, un hilo para AAC, espera ante transferencias de audio o CPU >70 %. Preparación gradual de 4 canciones/minuto y bajo demanda; espacio mínimo de 200 MB.
+- Service worker: rangos de las copias completas por ReadableStream; evita leer la canción entera con blob(). Compatibilidad con copias antiguas y fallos explícitos ante truncamiento. Precarga respeta bytes=0-1 e If-Range.
+- Prioridad antes de asignar src; se detiene el precargador anterior. Iniciar radio reproduce inmediatamente y descarta respuestas de recomendaciones si cambió la canción.
+- Evidencias: `pruebas/audio-cache.test.mjs`, `pruebas/audio-comparar.mjs`, `pruebas/resultados/audio-3.6.1.json` y `pruebas/INFORME-AUDIO-3.6.1.md`.
+
 ## Versión 3.6 (web y app Android 2.0, código 11)
 Paridad con los cambios de iPhone (`app-ios` 65241aa y 597d344), reutilizando las API existentes.
 

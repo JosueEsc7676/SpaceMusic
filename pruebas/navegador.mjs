@@ -154,6 +154,29 @@ await prueba('Medición: tiempo hasta ver el inicio y los resultados de búsqued
   return `inicio visible ${med('inicio')} ms (DOM listo ${med('dcl')} ms) · búsqueda en pantalla ${med('busqueda')} ms (mediana de 5)`;
 });
 
+await prueba('Iniciar radio no espera recomendaciones y no cambia una nueva selección', async () => {
+  const r = await js(`${MODULOS}
+    const originalFetch = window.fetch;
+    const radioAntes = P.prefs.autoRadio;
+    P.prefs.autoRadio = false;
+    let responder;
+    try {
+      window.fetch = (url, opts) => String(url).startsWith('/api/radio/')
+        ? new Promise(resolve => { responder = resolve; }) : originalFetch(url, opts);
+      const radio = P.player.startRadio(${JSON.stringify(todas[0])});
+      const seleccionInicial = P.player.current?.id;
+      const fuenteAsignada = !!P.player.audio.src;
+      P.player.play([${JSON.stringify(todas[1])}], 0, { type: 'prueba', label: 'Otra selección' });
+      responder(new Response(JSON.stringify([${JSON.stringify(todas[2])}]), { headers: { 'Content-Type': 'application/json' } }));
+      await radio;
+      return { seleccionInicial, fuenteAsignada, actual: P.player.current?.id, cantidad: P.player.items.length };
+    } finally { window.fetch = originalFetch; P.prefs.autoRadio = radioAntes; P.player.pause(); }
+  `);
+  afirmar(r.seleccionInicial === todas[0].id && r.fuenteAsignada, 'La canción esperó la respuesta de recomendaciones');
+  afirmar(r.actual === todas[1].id && r.cantidad === 1, 'La radio anterior alteró la nueva selección');
+  return 'el audio arranca antes de recibir recomendaciones; las respuestas antiguas no alteran la cola';
+});
+
 await prueba('Agregar una canción recomendada a una playlist (sin que empiece a sonar)', async () => {
   const pl = await apiNode('/api/playlists', { method: 'POST', body: JSON.stringify({ nombre: 'Prueba automática' }) });
   await apiNode(`/api/playlists/${pl.id}/canciones`, { method: 'POST', body: JSON.stringify({ ids: [todas[0].id] }) });

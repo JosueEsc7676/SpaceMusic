@@ -392,11 +392,11 @@ export function iniciarOffline({ toast }) {
       bus.emit('descargas');
     }
   });
+  bus.on('audio:prioridad', () => sw()?.postMessage({ tipo: 'prioridad', hasta: 8000 }));
   bus.on('player:song', () => {
     programada = player.current?.id ?? null;
     precargada = null;
     // La canción nueva tiene prioridad: el service worker cancela lo de fondo hasta que empiece a sonar
-    sw()?.postMessage({ tipo: 'prioridad', id: programada, hasta: 8000 });
   });
   player.audio.addEventListener('playing', () => {
     // Ya suena: lo de fondo puede seguir en cuanto haya margen (se revisa en cada avance)

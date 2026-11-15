@@ -274,12 +274,14 @@ export const player = {
   /** Agrega canciones parecidas al final de la cola (radio). */
   async _extendWithRadio(advance = false) {
     if (this._radioLoading || !this.current) return;
+    const uid = this.current._uid;
     this._radioLoading = true;
     try {
       const excluir = this.items.slice(-60).map((s) => s.id).join(',');
       // La radio sigue el estilo de las últimas canciones (no solo de la actual)
       const anteriores = this.items.slice(Math.max(0, this.index - 3), this.index).map((x) => x.id).join(',');
       const more = await api(`/api/radio/${this.current.id}?cantidad=20&excluir=${excluir}${anteriores ? '&anteriores=' + anteriores : ''}`);
+      if (this.current?._uid !== uid) return; // el usuario eligió otra canción mientras llegaba la radio
       if (more?.length) {
         this._radioIntentos = 0;
         const wasEnd = this.index === this.items.length - 1;
@@ -304,9 +306,10 @@ export const player = {
   },
 
   /** Inicia una radio a partir de una canción. */
-  async startRadio(song) {
-    const lista = await api(`/api/radio/${song.id}?cantidad=30`);
-    this.play([song, ...lista], 0, { type: 'radio', label: 'Radio de ' + song.nombre }, { shuffle: false });
+  startRadio(song) {
+    // El toque debe arrancar el audio dentro del gesto del usuario; la radio se amplía después.
+    this.play([song], 0, { type: 'radio', label: 'Radio de ' + song.nombre }, { shuffle: false });
+    return this._extendWithRadio(false);
   },
 
   // ═══════════════════ Carga ═══════════════════
@@ -317,6 +320,9 @@ export const player = {
     this.index = i;
     const s = this.current;
     if (!s) return;
+    // Apartar las transferencias de fondo ANTES de asignar src (no después de play()).
+    bus.emit('audio:prioridad', s);
+    if (preloader.src) { preloader.pause(); preloader.removeAttribute('src'); preloader.load(); delete preloader.dataset.id; }
     this._listened = 0;
     this._scrobbled = false;
     this._lastTick = 0;
@@ -348,7 +354,8 @@ export const player = {
     this._save();
     // Si quedan pocas canciones y la radio está activa, prepararla
     if (prefs.autoRadio && this.repeat === 'off' && this.items.length - this.index <= 2 && this.context?.type !== 'cola' && this.context?.type !== 'juntos-oyente') {
-      setTimeout(() => this._extendWithRadio(false), 1500); // pronto, para que la siguiente ya se pueda precargar
+      const uid = s._uid;
+      setTimeout(() => { if (this.current?._uid === uid && this.items.length - this.index <= 2) this._extendWithRadio(false); }, 1500);
     }
   },
 

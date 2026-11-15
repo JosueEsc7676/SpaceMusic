@@ -1,0 +1,57 @@
+{
+  "condiciones": "Edge sin ventana, 1.6 Mbps y 120 ms de latencia, 5 muestras por caso; localhost",
+  "resultados": {
+    "antes": {
+      "frio": {
+        "p50": 5598,
+        "p95": 6245,
+        "muestras": [
+          6245,
+          5509,
+          5598,
+          5598,
+          5575
+        ],
+        "solicitudesAudioRed": 5
+      },
+      "guardada": {
+        "p50": 67,
+        "p95": 74,
+        "muestras": [
+          74,
+          67,
+          74,
+          48,
+          63
+        ],
+        "solicitudesAudioRed": 0
+      }
+    },
+    "despues": {
+      "frio": {
+        "p50": 422,
+        "p95": 711,
+        "muestras": [
+          711,
+          436,
+          422,
+          354,
+          342
+        ],
+        "solicitudesAudioRed": 5
+      },
+      "guardada": {
+        "p50": 74,
+        "p95": 121,
+        "muestras": [
+          63,
+          68,
+          74,
+          84,
+          121
+        ],
+        "solicitudesAudioRed": 0
+      }
+    }
+  }
+}
