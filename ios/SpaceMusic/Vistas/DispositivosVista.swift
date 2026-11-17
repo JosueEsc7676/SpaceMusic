@@ -51,7 +51,7 @@ struct DispositivosVista: View {
                             Image(systemName: "person.2.wave.2.fill").foregroundStyle(Tema.celeste)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("SyncPlay").font(.headline)
-                                Text(sync.sala == nil ? "Crea una sala o únete con tus amigos" : "Tu sala está activa").font(.caption).foregroundStyle(Tema.secundario)
+                                Text(sync.sala == nil ? "Inicia SyncPlay o únete con tus amigos" : "Tu SyncPlay está activo").font(.caption).foregroundStyle(Tema.secundario)
                             }
                         }
                         .padding(.vertical, 6)

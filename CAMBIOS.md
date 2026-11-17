@@ -1,5 +1,10 @@
 # Registro de cambios
 
+## iPhone: SyncPlay compartido y barra «Escuchando en…»
+- **SyncPlay con control compartido** (`EscuchaJuntos.swift`, `JuntosVista.swift`): sigue el estado del servidor (`ts`, `version`) con el reloj sincronizado; los botones del reproductor, la pantalla bloqueada y la pantalla de SyncPlay mandan la orden para todos (`/api/juntos/{id}/control`). Ajuste fino de velocidad (0,95–1,05) y salto si el desfase pasa de 0,6 s. Sin emojis y «SyncPlay» en vez de «Sala».
+- `Reproductor`: enganche `controlExterno` (SyncPlay), `sinControlExterno`, `ajustarVelocidad` y `inicioUsuario` (el control entre dispositivos da el turno solo ante un inicio de la persona).
+- **Barra «Escuchando en…»** (`MiniRemoto` en `Principal.swift`): si suena en otro dispositivo y aquí no, el mini reproductor lo controla (reproducir/pausar, siguiente, progreso) y abre el control completo. Dentro de SyncPlay el iPhone no compite por ser el dispositivo activo.
+
 ## iPhone: controlar otro dispositivo y accesos de Mensajes
 - **Controlar otro dispositivo de la cuenta** (`Reproductor/ControlRemoto.swift`, `Vistas/ControlRemotoVista.swift`): el iPhone se anuncia en `POST /api/control/presencia` (al cambiar canción, pausa, salto o volumen, y cada 30 s), recibe órdenes por la conexión en vivo (`control-orden`) y ve los demás dispositivos (`control-dispositivos`). En **Dispositivos → Tus otros dispositivos**: reproducir/pausar, anterior/siguiente, adelantar, volumen, «Escuchar aquí» y «Pasar mi música». Punto en el botón Dispositivos del mini reproductor cuando suena música en otro dispositivo. Nombre del dispositivo editable. Mismo contrato que la web y Android (servidor 3.7).
 - `Reproductor.fijarVolumen(_:)`: volumen propio de la app (iOS no permite mover el volumen del sistema).

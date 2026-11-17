@@ -1,6 +1,6 @@
 import Foundation
 
-/// Un enlace de sala enviado en un mensaje solo abre salas del servidor de la cuenta actual.
+/// Un enlace de SyncPlay enviado en un mensaje solo se abre si es del servidor de la cuenta actual.
 enum InvitacionSyncPlay {
     static func enlace(sala: Int, servidor: String) -> URL? {
         guard sala > 0, var partes = URLComponents(string: servidor), partes.host != nil else { return nil }

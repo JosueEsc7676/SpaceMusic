@@ -49,6 +49,12 @@ final class ControlRemoto {
     var otros: [DispositivoRemoto] { dispositivos.filter { $0.id != id } }
     /// Otro dispositivo donde está sonando música ahora.
     var sonandoEnOtro: DispositivoRemoto? { otros.first { $0.sonando } }
+    /// Como Spotify Connect: si aquí no suena nada y la música está en otro dispositivo, el mini reproductor lo controla.
+    var controlando: DispositivoRemoto? {
+        guard !Reproductor.compartido.sonando, !EscuchaJuntos.compartida.enSyncPlay else { return nil }
+        let candidato = otros.first { $0.id == activo } ?? otros.first { $0.sonando }
+        return candidato?.cancion == nil ? nil : candidato
+    }
 
     /// Identificador fijo de este iPhone (aleatorio, sin datos personales).
     let id: String = {
@@ -88,7 +94,8 @@ final class ControlRemoto {
 
     // MARK: Reloj
 
-    private var ahoraServidor: Double { Date().timeIntervalSince1970 * 1000 + desfase }
+    /// Hora del servidor en milisegundos (con el desfase medido por ping/pong); también la usa SyncPlay.
+    var ahoraServidor: Double { Date().timeIntervalSince1970 * 1000 + desfase }
 
     /// Segundo en que va otro dispositivo ahora mismo.
     func posicion(_ d: DispositivoRemoto) -> Double {
@@ -230,7 +237,9 @@ final class ControlRemoto {
         let r = Reproductor.compartido
         var e: [String: Any] = [
             "dispositivo": id, "nombre": nombre, "plataforma": "ios",
-            "segundo": r.tiempo, "duracion": r.duracion, "sonando": r.sonando, "volumen": r.volumen,
+            "segundo": r.tiempo, "duracion": r.duracion, "volumen": r.volumen, "inicio": r.inicioUsuario,
+            // En un SyncPlay la música la decide SyncPlay: no compite por ser «el activo» de la cuenta
+            "sonando": r.sonando && !EscuchaJuntos.compartida.enSyncPlay,
             "cola": r.siguientes.prefix(10).map(\.id),
         ]
         if let c = r.actual?.id { e["cancionId"] = c }
@@ -301,6 +310,11 @@ final class ControlRemoto {
 
     private func ejecutar(_ o: [String: Any], datos: Data, porWS: Bool) {
         guard o["para"] as? String == id else { return }
+        // La pausa automática del servidor (otro dispositivo empezó a sonar) no aplica dentro de SyncPlay
+        if o["de"] as? String == "servidor", EscuchaJuntos.compartida.enSyncPlay {
+            if porWS, let idOrden = o["id"] as? String { Task { await enviar(["tipo": "ack", "id": idOrden, "ok": true]) } }
+            return
+        }
         let r = Reproductor.compartido
         let numero = { (k: String) -> Double in (o[k] as? NSNumber)?.doubleValue ?? 0 }
         var ok = true

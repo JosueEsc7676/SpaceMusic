@@ -16,30 +16,42 @@ struct SalaJuntos: Decodable, Identifiable {
     var personas: [PersonaBreve]
     var invitados: [PersonaBreve]
     var cola: [Entrada]
-    var reacciones: [String]
+    /// Hora del servidor (ms) en la que vale «segundo».
+    var ts: Double?
+    var version: Int
+    var hayAnterior: Bool
+    /// Lo último que hizo alguien (para avisar «Ana pausó»).
+    var ultimaAccion: [String: String]?
     init(from decoder: Decoder) throws {
         let c = try decoder.campos()
         id = c.entero("id") ?? 0; dentro = c.bool("dentro") ?? false
         soyAnfitrion = c.bool("soyAnfitrion") ?? false; anfitrion = c.v("anfitrion"); cancion = c.v("cancion")
         segundo = c.numero("segundo") ?? 0; sonando = c.bool("sonando") ?? false
         personas = c.lista("personas"); invitados = c.lista("invitados"); cola = c.lista("cola")
-        reacciones = c.lista("reacciones")
+        ts = c.numero("ts"); version = c.entero("version") ?? -1; hayAnterior = c.bool("hayAnterior") ?? false
+        ultimaAccion = c.v("ultimaAccion")
     }
 }
 
-/// Comparte un único Reproductor con las salas; los eventos SSE corrigen a los oyentes.
+/// SyncPlay con el control compartido, igual que la web:
+/// - El servidor guarda el estado (canción, segundo con su hora, pausa, cola, versión) y todos lo siguen.
+/// - Cualquier participante controla: los botones del reproductor de la app (y los de la pantalla bloqueada) mandan
+///   la orden al SyncPlay (reproducir, pausar, siguiente, anterior, mover la posición o poner otra canción).
+/// - Sincronía fina con el reloj del servidor: desfases pequeños se corrigen con la velocidad (0,95–1,05),
+///   los grandes con un salto.
 @MainActor @Observable final class EscuchaJuntos {
     static let compartida = EscuchaJuntos()
     private(set) var sala: SalaJuntos?
     @ObservationIgnored private var revision: Task<Void, Never>?
-    @ObservationIgnored private var sincronizando: Task<Void, Never>?
-    @ObservationIgnored private var ultimo: (id: Int?, segundo: Double, sonando: Bool, fecha: Date)?
-    @ObservationIgnored private var agregadas: Set<Int> = []
-    var esOyente: Bool { sala?.dentro == true && sala?.soyAnfitrion == false }
+    @ObservationIgnored private var aplicandoTarea: Task<Void, Never>?
+    @ObservationIgnored private var version = -1
+    var enSyncPlay: Bool { sala?.dentro == true }
+
+    // MARK: Crear e invitar
 
     func crear() async throws -> SalaJuntos {
         if let sala, sala.dentro {
-            guard sala.soyAnfitrion else { throw ErrorAPI(mensaje: "Sal de la sala actual antes de iniciar otra.", estado: 0) }
+            guard sala.soyAnfitrion else { throw ErrorAPI(mensaje: "Sal del SyncPlay actual antes de iniciar otro.", estado: 0) }
             return sala
         }
         let nueva: SalaJuntos = try await API.enviar("POST", "/api/juntos", [:])
@@ -57,21 +69,24 @@ struct SalaJuntos: Decodable, Identifiable {
         }
         recibir(invitada)
         let mensaje: Mensaje = try await API.enviar("POST", "/api/mensajes/\(API.segmento(username))",
-            ["texto": "Te invito a escuchar conmigo en SyncPlay 🎧\n\(enlace.absoluteString)"])
+            ["texto": "Te invito a escuchar conmigo en SyncPlay\n\(enlace.absoluteString)"])
         return (invitada, mensaje)
     }
 
+    // MARK: Ciclo de vida
+
     func activar(_ s: SalaJuntos) {
         guard s.dentro else { return }
-        if sala?.id != s.id { agregadas = []; ultimo = nil }
+        if sala?.id != s.id { version = -1 }
+        Reproductor.compartido.controlExterno = { [weak self] a in self?.interceptar(a) ?? false }
         recibir(s)
         revision?.cancel()
         let cuenta = Sesion.compartida.usuario?.id
         revision = Task {
             var ciclos = 0
             while !Task.isCancelled, cuenta == Sesion.compartida.usuario?.id, sala?.id == s.id {
-                if sala?.soyAnfitrion == true { await enviarEstado() }
-                if ciclos % 10 == 0 {
+                afinar()
+                if ciclos % 30 == 29 { // respaldo cada 15 s por si se perdió un aviso
                     do {
                         let nueva: SalaJuntos = try await API.get("/api/juntos/\(s.id)")
                         guard !Task.isCancelled, cuenta == Sesion.compartida.usuario?.id else { return }
@@ -80,7 +95,7 @@ struct SalaJuntos: Decodable, Identifiable {
                     catch {}
                 }
                 ciclos += 1
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(for: .milliseconds(500))
             }
         }
     }
@@ -94,56 +109,8 @@ struct SalaJuntos: Decodable, Identifiable {
     func evento(_ tipo: String, datos: Data) {
         if tipo == "juntos", let s = try? JSONDecoder().decode(SalaJuntos.self, from: datos), sala?.id == s.id { recibir(s) }
         if tipo == "juntos-fin", let j = try? JSONSerialization.jsonObject(with: datos) as? [String: Any], j["sala"] as? Int == sala?.id {
-            detener(); Avisos.compartido.mostrar("La sala terminó")
+            detener(); Avisos.compartido.mostrar(j["motivo"] as? String ?? "Este SyncPlay terminó")
         }
-        if tipo == "juntos-reaccion", let j = try? JSONSerialization.jsonObject(with: datos) as? [String: Any],
-           j["sala"] as? Int == sala?.id, let emoji = j["emoji"] as? String {
-            Avisos.compartido.mostrar("\(j["nombre"] as? String ?? "") \(emoji)")
-        }
-    }
-
-    func recibir(_ s: SalaJuntos) {
-        guard s.dentro else { detener(); return }
-        sala = s
-        let r = Reproductor.compartido
-        if s.soyAnfitrion {
-            let nuevas = s.cola.compactMap(\.cancion).filter { !agregadas.contains($0.id) }
-            nuevas.forEach { agregadas.insert($0.id) }
-            if r.actual == nil, !nuevas.isEmpty { r.reproducir(nuevas, contexto: "juntos") }
-            else if !nuevas.isEmpty { r.agregarAlFinal(nuevas) }
-        } else {
-            sincronizando?.cancel()
-            let recibida = Date()
-            sincronizando = Task {
-                guard let c = s.cancion else { r.pausar(); return }
-                if r.actual?.id != c.id { r.reproducir([c], contexto: "juntos-oyente") }
-                // El seek se hace cuando AVFoundation tiene el archivo preparado, no antes de cargarlo.
-                for _ in 0..<200 {
-                    guard !Task.isCancelled, sala?.id == s.id else { return }
-                    if r.listaParaBuscar { break }
-                    try? await Task.sleep(for: .milliseconds(100))
-                }
-                guard !Task.isCancelled, sala?.id == s.id, r.actual?.id == c.id, r.listaParaBuscar else { return }
-                let objetivo = s.segundo + (s.sonando ? Date().timeIntervalSince(recibida) : 0) + 0.15
-                if abs(r.tiempoExacto - objetivo) > 2 { r.buscar(objetivo) }
-                if s.sonando { if !r.sonando { r.continuar() } } else { r.pausar() }
-            }
-        }
-    }
-
-    private func enviarEstado() async {
-        guard let s = sala, s.soyAnfitrion else { return }
-        let r = Reproductor.compartido, ahora = Date()
-        if let u = ultimo, u.id == r.actual?.id, u.sonando == r.sonando {
-            let esperado = u.segundo + (u.sonando ? ahora.timeIntervalSince(u.fecha) : 0)
-            if abs(esperado - r.tiempoExacto) < 3 { return }
-        }
-        var cuerpo: [String: Any] = ["segundo": r.tiempoExacto, "sonando": r.sonando]
-        cuerpo["cancionId"] = r.actual.map { $0.id as Any } ?? NSNull()
-        do {
-            try await API.hacer("POST", "/api/juntos/\(s.id)/estado", cuerpo)
-            ultimo = (r.actual?.id, r.tiempoExacto, r.sonando, ahora)
-        } catch {}
     }
 
     func salir() async throws {
@@ -151,10 +118,128 @@ struct SalaJuntos: Decodable, Identifiable {
         try await API.hacer("POST", "/api/juntos/\(s.id)/salir")
         detener()
     }
+
     func detener() {
-        let oyente = esOyente
-        revision?.cancel(); revision = nil; sincronizando?.cancel(); sincronizando = nil
-        sala = nil; agregadas = []; ultimo = nil
-        if oyente { Reproductor.compartido.pausar() }
+        revision?.cancel(); revision = nil; aplicandoTarea?.cancel(); aplicandoTarea = nil
+        sala = nil; version = -1
+        let r = Reproductor.compartido
+        r.controlExterno = nil
+        r.ajustarVelocidad(1)
+    }
+
+    // MARK: Seguir el estado del servidor
+
+    /// Posición del SyncPlay ahora mismo con el reloj del servidor.
+    func objetivo(_ s: SalaJuntos? = nil) -> Double {
+        guard let s = s ?? sala else { return 0 }
+        var t = s.segundo
+        if s.sonando, let ts = s.ts { t += max(0, ControlRemoto.compartido.ahoraServidor - ts) / 1000 }
+        if let d = s.cancion?.duracionSegundos, d > 0 { t = min(t, Double(d)) }
+        return t
+    }
+
+    func recibir(_ s: SalaJuntos) {
+        guard s.dentro else { detener(); return }
+        if s.version >= 0 && s.version < version { return } // llegó tarde: ya hay uno más nuevo
+        let anterior = sala
+        version = max(version, s.version)
+        sala = s
+        aplicar()
+        // Aviso de lo que hizo otra persona
+        if let u = s.ultimaAccion, let quien = u["username"], !quien.isEmpty, quien != Sesion.compartida.usuario?.username,
+           let a = anterior, a.version < s.version {
+            let que = ["play": "reanudó", "pause": "pausó", "seek": "movió la canción", "next": "pasó a la siguiente",
+                       "prev": "volvió a la anterior", "poner": "puso otra canción"][u["accion"] ?? ""]
+            if let que { Avisos.compartido.mostrar("\(u["nombre"] ?? "Alguien") \(que)") }
+        }
+    }
+
+    /// Pone el reproductor en el estado del SyncPlay (canción, pausa y posición).
+    private func aplicar() {
+        guard let s = sala else { return }
+        let r = Reproductor.compartido
+        guard let c = s.cancion else { r.sinControlExterno { r.pausar() }; return }
+        if r.actual?.id != c.id {
+            r.sinControlExterno { r.reproducir([c] + s.cola.compactMap(\.cancion), desde: 0, contexto: "juntos-oyente") }
+            aplicandoTarea?.cancel()
+            aplicandoTarea = Task {
+                // El salto se hace cuando AVFoundation tiene el archivo preparado
+                for _ in 0..<200 {
+                    guard !Task.isCancelled, sala?.cancion?.id == c.id else { return }
+                    if r.listaParaBuscar { break }
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                guard !Task.isCancelled, let actual = sala, actual.cancion?.id == c.id, r.listaParaBuscar else { return }
+                r.sinControlExterno {
+                    r.buscar(objetivo() + 0.05)
+                    if !actual.sonando { r.pausar() }
+                }
+            }
+            return
+        }
+        r.sinControlExterno {
+            if s.sonando, !r.sonando { r.continuar() }
+            else if !s.sonando, r.sonando { r.pausar() }
+            if r.listaParaBuscar, abs(r.tiempoExacto - objetivo()) > 0.6 { r.buscar(objetivo() + 0.05) }
+        }
+    }
+
+    /// Corrección fina cada medio segundo.
+    private func afinar() {
+        guard let s = sala, s.sonando, let c = s.cancion else { return }
+        let r = Reproductor.compartido
+        guard r.actual?.id == c.id, r.sonando, r.listaParaBuscar else { r.ajustarVelocidad(1); return }
+        let desfase = r.tiempoExacto - objetivo() // positivo: vamos adelantados
+        if abs(desfase) > 0.6 { r.sinControlExterno { r.buscar(objetivo() + 0.05) }; r.ajustarVelocidad(1); return }
+        if abs(desfase) < 0.04 { r.ajustarVelocidad(1); return }
+        r.ajustarVelocidad(Float(1 - desfase * 0.5))
+    }
+
+    // MARK: Control compartido
+
+    /// Los botones del reproductor, dentro de un SyncPlay, mandan la orden al SyncPlay (para todos).
+    private func interceptar(_ a: Reproductor.AccionExterna) -> Bool {
+        guard let s = sala, s.dentro else { return false }
+        switch a {
+        case .poner(let canciones, let desde, _):
+            guard canciones.indices.contains(desde) else { return true }
+            let siguientes = canciones.dropFirst(desde + 1).prefix(20).map(\.id)
+            control("poner", ["cancionId": canciones[desde].id, "cola": Array(siguientes)])
+        case .continuar: control("play")
+        case .pausar: control("pause")
+        case .alternar: control(s.sonando ? "pause" : "play")
+        case .siguiente:
+            var datos: [String: Any] = [:]
+            if let id = s.cancion?.id { datos["desde"] = id }
+            control("next", datos)
+        case .anterior: control("prev")
+        case .buscar(let t): control("seek", ["segundo": t])
+        }
+        return true
+    }
+
+    /// Envía la orden. Pausa, reproducir y posición se aplican aquí al instante (el servidor lo confirma).
+    func control(_ accion: String, _ datos: [String: Any] = [:]) {
+        guard var s = sala else { return }
+        if ["play", "pause", "seek"].contains(accion) {
+            s.segundo = accion == "seek" ? ((datos["segundo"] as? Double) ?? 0) : objetivo(s)
+            s.ts = ControlRemoto.compartido.ahoraServidor
+            if accion != "seek" { s.sonando = accion == "play" }
+            sala = s
+            aplicar()
+        }
+        var cuerpo = datos
+        cuerpo["accion"] = accion
+        let id = s.id
+        Task {
+            do {
+                let nueva: SalaJuntos = try await API.enviar("POST", "/api/juntos/\(id)/control", cuerpo)
+                recibir(nueva)
+            } catch let e as ErrorAPI where e.estado == 404 {
+                detener(); Avisos.compartido.mostrar("Este SyncPlay terminó")
+            } catch {
+                Avisos.compartido.mostrar(error.localizedDescription)
+            }
+        }
     }
 }

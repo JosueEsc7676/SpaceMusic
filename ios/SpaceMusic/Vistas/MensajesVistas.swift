@@ -141,7 +141,7 @@ struct ChatVista: View {
                 Menu {
                     Button { Task { await iniciarSyncPlay() } } label: { Label("Iniciar SyncPlay", systemImage: "person.2.wave.2") }
                         .disabled(creandoSyncPlay || chat?.puedeEscribir == false)
-                    NavigationLink { JuntosVista() } label: { Label("Mis salas SyncPlay", systemImage: "headphones") }
+                    NavigationLink { JuntosVista() } label: { Label("Mis SyncPlay", systemImage: "headphones") }
                 } label: {
                     if creandoSyncPlay { ProgressView() } else { Image(systemName: "headphones") }
                 }
@@ -330,14 +330,14 @@ struct Burbuja: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Label("SyncPlay", systemImage: "headphones").font(.headline)
                             Text(mensaje.mio ? "Invitaste a escuchar juntos" : "Te invitaron a escuchar juntos").font(.subheadline)
-                            Label("Abrir sala y unirme", systemImage: "arrow.up.right").font(.subheadline.weight(.bold))
+                            Label("Abrir SyncPlay y unirme", systemImage: "arrow.up.right").font(.subheadline.weight(.bold))
                         }
                         .foregroundStyle(Tema.texto)
                         .padding(16)
                         .background(RoundedRectangle(cornerRadius: 18).fill(Tema.celeste.opacity(0.18)))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityHint("Abre la invitación. La sala comprueba si puedes unirte.")
+                    .accessibilityHint("Abre la invitación. El servidor comprueba si puedes unirte.")
                 } else if !(mensaje.cancion != nil && mensaje.texto == "🎵") {
                     Text(mensaje.texto)
                         .padding(.horizontal, 14).padding(.vertical, 9)

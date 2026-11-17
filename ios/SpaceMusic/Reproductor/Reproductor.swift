@@ -116,6 +116,44 @@ final class Reproductor {
         }
     }
 
+    // MARK: - Control externo (SyncPlay)
+
+    /// Acciones del usuario que, dentro de un SyncPlay, se mandan al SyncPlay en vez de aplicarse solo aquí.
+    enum AccionExterna {
+        case poner(canciones: [Cancion], desde: Int, contexto: String)
+        case continuar, pausar, alternar, siguiente, anterior
+        case buscar(Double)
+    }
+
+    /// Si devuelve true, la acción la atiende otro (SyncPlay) y el reproductor no la aplica por su cuenta.
+    @ObservationIgnored var controlExterno: ((AccionExterna) -> Bool)?
+    /// Mientras SyncPlay aplica su estado, las acciones no se le devuelven como órdenes.
+    @ObservationIgnored var aplicandoExterno = false
+    /// Hora (ms) del último inicio hecho por la persona: reproducir, elegir canción, anterior/siguiente.
+    /// El control entre dispositivos da el turno de «activo» solo ante un inicio nuevo (no al pasar sola de canción).
+    @ObservationIgnored private(set) var inicioUsuario: Double = 0
+    private func marcarInicio() { inicioUsuario = Date().timeIntervalSince1970 * 1000 }
+
+    private func externo(_ a: AccionExterna) -> Bool {
+        guard !aplicandoExterno, let c = controlExterno else { return false }
+        return c(a)
+    }
+
+    /// Ejecuta acciones del reproductor sin que se conviertan en órdenes para el SyncPlay.
+    func sinControlExterno(_ fn: () -> Void) {
+        let antes = aplicandoExterno
+        aplicandoExterno = true
+        fn()
+        aplicandoExterno = antes
+    }
+
+    /// Ajuste fino de velocidad (0,95–1,05) para alinear con el SyncPlay sin saltos audibles.
+    func ajustarVelocidad(_ v: Float) {
+        guard jugador.timeControlStatus == .playing else { return }
+        let r = min(1.05, max(0.95, v))
+        if abs(jugador.rate - r) > 0.001 { jugador.rate = r }
+    }
+
     /// Volumen de la app (0 a 1). Lo cambia, por ejemplo, otro dispositivo de la cuenta (control remoto).
     /// iOS no deja a las apps mover el volumen del sistema: este es el volumen propio del reproductor.
     private(set) var volumen: Double = 1
@@ -164,6 +202,8 @@ final class Reproductor {
     /// Empieza una lista desde una canción. `contexto` se registra en el servidor (album, playlist, buscar…).
     func reproducir(_ canciones: [Cancion], desde i: Int = 0, contexto: String = "otro", mezclar: Bool = false) {
         guard !canciones.isEmpty else { return }
+        if contexto != "juntos-oyente", externo(.poner(canciones: canciones, desde: i, contexto: contexto)) { return }
+        marcarInicio()
         registrarEscucha()
         self.contexto = contexto
         versionCola = UUID()
@@ -192,6 +232,7 @@ final class Reproductor {
 
     func alternar() {
         guard actual != nil else { return }
+        if externo(.alternar) { return }
         if jugador.timeControlStatus != .paused { pausar() } else { continuar() }
     }
 
@@ -208,6 +249,7 @@ final class Reproductor {
     }
 
     func pausar() {
+        if externo(.pausar) { return }
         subidaVolumen?.cancel()
         intencionSonar = false
         jugador.pause()
@@ -216,6 +258,8 @@ final class Reproductor {
     }
 
     func continuar() {
+        if externo(.continuar) { return }
+        marcarInicio()
         intencionSonar = true
         if jugador.currentItem == nil, actual != nil {
             cargarActual(reproducir: true)
@@ -228,6 +272,8 @@ final class Reproductor {
 
     func siguiente() {
         guard actual != nil else { return }
+        if externo(.siguiente) { return }
+        marcarInicio()
         if itemSiguiente != nil, repetir != .una, jugador.items().count > 1 {
             jugador.advanceToNextItem()
         } else if let j = calcularSiguiente(manual: true) {
@@ -251,6 +297,8 @@ final class Reproductor {
 
     func anterior() {
         guard actual != nil else { return }
+        if externo(.anterior) { return }
+        marcarInicio()
         if tiempo > 3 || indice == 0 {
             buscar(0)
             return
@@ -264,6 +312,7 @@ final class Reproductor {
 
     func buscar(_ segundos: Double) {
         guard segundos.isFinite else { return }
+        if externo(.buscar(segundos)) { return }
         let destino = max(0, duracion > 0 ? min(segundos, duracion) : segundos)
         let t = CMTime(seconds: destino, preferredTimescale: 600)
         jugador.seek(to: t, toleranceBefore: .zero, toleranceAfter: .zero)
