@@ -15,34 +15,52 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Escuchar juntos en vivo: quien crea la sala (anfitrión) controla la música y todos escuchan la misma canción
- * en el mismo segundo. Cualquiera en la sala puede sumar canciones a la cola y reaccionar.
- * Las salas viven en memoria (se pierden al reiniciar el servidor) y se cierran solas tras 30 min sin actividad.
- * Los cambios llegan al instante por la conexión en vivo (/api/eventos, evento "juntos").
+ * SyncPlay: escuchar juntos en vivo, con el control compartido.
+ *
+ * <ul>
+ *   <li>El <b>servidor guarda el estado</b> de cada SyncPlay (canción, segundo con la hora del servidor, pausa, cola,
+ *       historial y versión). Todos los participantes lo siguen: nadie depende del reproductor de otro.</li>
+ *   <li><b>Todos controlan</b>: reproducir, pausar, poner otra canción, anterior/siguiente y mover la posición
+ *       ({@link #control}). «Siguiente» con la canción de origen es idempotente: si dos personas lo tocan a la vez,
+ *       se avanza una sola vez.</li>
+ *   <li>El <b>servidor pasa de canción solo</b> cuando termina la actual (sigue con la cola).</li>
+ *   <li>Cada aviso lleva {@code ts} (hora del servidor en la que vale {@code segundo}) y {@code version}: las apps
+ *       calculan la posición exacta con su reloj sincronizado y descartan avisos atrasados.</li>
+ * </ul>
+ *
+ * Quien lo inicia (anfitrión) invita y puede cerrarlo. Vive en memoria y se cierra tras 30 min sin actividad.
+ * Los avisos van por la conexión en vivo (evento «juntos»). Las apps anteriores siguen funcionando con {@link #estado}.
  */
 @Service
 public class JuntosService {
 
     static final int MAX_PERSONAS = 8;
     private static final long INACTIVA_MS = 30 * 60_000L;
+    private static final int MAX_COLA = 50, MAX_HISTORIAL = 50;
+    /** Reacciones de las apps anteriores (la interfaz nueva ya no las muestra). */
     private static final Set<String> REACCIONES = Set.of("❤️", "🔥", "😂", "😮", "😢", "👏", "🎶", "💃");
+    static final Set<String> ACCIONES = Set.of("play", "pause", "seek", "next", "prev", "poner");
 
     static final class Sala {
         final long id;
         final long anfitrion;
         final Set<Long> dentro = ConcurrentHashMap.newKeySet();
         final Set<Long> invitados = ConcurrentHashMap.newKeySet();
-        final List<long[]> cola = Collections.synchronizedList(new ArrayList<>()); // [cancionId, quién]
-        volatile Long cancionId;
-        volatile double segundo;
-        volatile boolean sonando;
-        volatile long marca = System.currentTimeMillis(); // cuándo se fijó "segundo"
+        final List<long[]> cola = new ArrayList<>(); // [cancionId, quién]
+        final Deque<Long> historial = new ArrayDeque<>();
+        final AtomicLong version = new AtomicLong();
+        Long cancionId;
+        double segundo, duracion;
+        boolean sonando;
+        long marca = System.currentTimeMillis(); // hora del servidor en la que vale «segundo»
         volatile long actividad = System.currentTimeMillis();
+        Map<String, Object> ultimaAccion;
         Sala(long id, long anfitrion) { this.id = id; this.anfitrion = anfitrion; dentro.add(anfitrion); }
 
-        /** Segundo actual según el último estado del anfitrión (si está sonando, avanza con el reloj). */
-        double segundoAhora() {
-            return sonando ? segundo + (System.currentTimeMillis() - marca) / 1000.0 : segundo;
+        /** Segundo actual (si está sonando, avanza con el reloj del servidor). */
+        synchronized double segundoAhora() {
+            double s = sonando ? segundo + (System.currentTimeMillis() - marca) / 1000.0 : segundo;
+            return duracion > 0 ? Math.min(s, duracion) : s;
         }
     }
 
@@ -65,18 +83,20 @@ public class JuntosService {
 
     private Sala sala(long id, long uid) {
         Sala s = salas.get(id);
-        if (s == null || (!s.dentro.contains(uid) && !s.invitados.contains(uid))) throw new NoSuchElementException("La sala ya terminó");
+        if (s == null || (!s.dentro.contains(uid) && !s.invitados.contains(uid))) throw new NoSuchElementException("Este SyncPlay ya terminó");
         return s;
     }
 
     private Sala dentro(long id, long uid) {
         Sala s = sala(id, uid);
-        if (!s.dentro.contains(uid)) throw new IllegalArgumentException("Primero únete a la sala");
+        if (!s.dentro.contains(uid)) throw new IllegalArgumentException("Primero únete a este SyncPlay");
         s.actividad = System.currentTimeMillis();
         return s;
     }
 
-    /** Crea una sala (o usa la que ya tiene abierta) e invita a alguien que te sigue. */
+    private String nombre(long uid) { return usuarios.findById(uid).map(Usuario::getNombreVisible).orElse("Alguien"); }
+
+    /** Crea un SyncPlay (o usa el que ya tiene abierto) e invita a alguien que te sigue. */
     public Map<String, Object> invitar(long uid, String username) {
         Usuario otro = usuarios.findByUsernameIgnoreCase(username == null ? "" : username.trim().replaceFirst("^@", ""))
                 .filter(Usuario::isActivo).orElseThrow(() -> new IllegalArgumentException("No encontramos a esa persona"));
@@ -85,19 +105,18 @@ public class JuntosService {
             throw new IllegalArgumentException("Solo puedes invitar a personas que te siguen");
         Sala s = salas.values().stream().filter(x -> x.anfitrion == uid).findFirst().orElse(null);
         if (s == null) {
-            if (salas.size() > 200) throw new IllegalStateException("Hay demasiadas salas abiertas; inténtalo en un rato");
+            if (salas.size() > 200) throw new IllegalStateException("Hay demasiados SyncPlay abiertos; inténtalo en un rato");
             s = new Sala(secuencia.incrementAndGet(), uid);
             salas.put(s.id, s);
         }
-        if (s.dentro.size() + s.invitados.size() >= MAX_PERSONAS) throw new IllegalArgumentException("La sala está llena (máximo " + MAX_PERSONAS + ")");
+        if (s.dentro.size() + s.invitados.size() >= MAX_PERSONAS) throw new IllegalArgumentException("Este SyncPlay está lleno (máximo " + MAX_PERSONAS + ")");
         if (!s.dentro.contains(otro.getId())) s.invitados.add(otro.getId());
-        String quien = usuarios.findById(uid).map(Usuario::getNombreVisible).orElse("Alguien");
-        notificaciones.crear(otro.getId(), "JUNTOS", uid, quien + " te invita a SyncPlay: escuchar música juntos, en vivo", "#/juntos/" + s.id);
+        notificaciones.crear(otro.getId(), "JUNTOS", uid, nombre(uid) + " te invita a SyncPlay: escuchar música juntos, en vivo", "#/juntos/" + s.id);
         avisar(s);
         return ver(s.id, uid);
     }
 
-    /** Sala propia nueva sin invitar a nadie todavía. */
+    /** SyncPlay propio nuevo sin invitar a nadie todavía. */
     public Map<String, Object> abrir(long uid) {
         Sala s = salas.values().stream().filter(x -> x.anfitrion == uid).findFirst().orElse(null);
         if (s == null) { s = new Sala(secuencia.incrementAndGet(), uid); salas.put(s.id, s); }
@@ -106,7 +125,7 @@ public class JuntosService {
 
     public Map<String, Object> unirse(long id, long uid) {
         Sala s = sala(id, uid);
-        if (s.dentro.size() >= MAX_PERSONAS && !s.dentro.contains(uid)) throw new IllegalArgumentException("La sala está llena");
+        if (s.dentro.size() >= MAX_PERSONAS && !s.dentro.contains(uid)) throw new IllegalArgumentException("Este SyncPlay está lleno");
         s.invitados.remove(uid);
         s.dentro.add(uid);
         s.actividad = System.currentTimeMillis();
@@ -117,64 +136,188 @@ public class JuntosService {
     public void salir(long id, long uid) {
         Sala s = salas.get(id);
         if (s == null) return;
-        if (s.anfitrion == uid) { cerrar(s, "El anfitrión cerró la sala"); return; }
+        if (s.anfitrion == uid) { cerrar(s, "Quien inició el SyncPlay lo cerró"); return; }
         s.dentro.remove(uid);
         s.invitados.remove(uid);
         avisar(s);
     }
 
-    /** Solo el anfitrión: qué suena, en qué segundo y si está en pausa. */
-    public void estado(long id, long uid, Long cancionId, double segundo, boolean sonando) {
-        Sala s = dentro(id, uid);
-        if (s.anfitrion != uid) throw new IllegalArgumentException("Solo quien abrió la sala controla la música");
-        if (cancionId != null && biblioteca.porId(cancionId).isEmpty()) throw new NoSuchElementException("Canción no encontrada");
-        // Si la canción que empieza estaba en la cola, se quita de ahí
-        if (cancionId != null && !cancionId.equals(s.cancionId)) synchronized (s.cola) { s.cola.removeIf(c -> c[0] == cancionId); }
+    // ═══════════════════ Control compartido ═══════════════════
+
+    private void ponerCancion(Sala s, long cancionId, double segundo, boolean guardarHistorial) {
+        CancionDTO c = biblioteca.porId(cancionId).orElseThrow(() -> new NoSuchElementException("Canción no encontrada"));
+        if (guardarHistorial && s.cancionId != null && s.cancionId != cancionId) {
+            s.historial.push(s.cancionId);
+            while (s.historial.size() > MAX_HISTORIAL) s.historial.removeLast();
+        }
+        s.cola.removeIf(x -> x[0] == cancionId); // si estaba en la cola, sale de ahí
         s.cancionId = cancionId;
-        s.segundo = Math.max(0, segundo);
-        s.sonando = sonando && cancionId != null;
+        s.duracion = Math.max(0, c.getDuracionSegundos());
+        s.segundo = Math.max(0, s.duracion > 0 ? Math.min(segundo, s.duracion) : segundo);
+        s.sonando = true;
         s.marca = System.currentTimeMillis();
-        avisar(s);
     }
 
-    public void sumarACola(long id, long uid, long cancionId) {
+    /** Pasa a la siguiente de la cola; sin cola, se detiene al final de la canción. */
+    private void avanzar(Sala s) {
+        if (!s.cola.isEmpty()) {
+            ponerCancion(s, s.cola.get(0)[0], 0, true);
+        } else {
+            s.segundo = s.duracion;
+            s.sonando = false;
+            s.marca = System.currentTimeMillis();
+        }
+    }
+
+    /**
+     * Cualquier participante controla la música.
+     * play · pause · seek {segundo} · next {desde: id de la canción que estaba sonando} · prev · poner {cancionId, segundo, cola: [ids]}
+     */
+    public Map<String, Object> control(long id, long uid, String accion, Map<String, Object> datos) {
+        if (!ACCIONES.contains(accion)) throw new IllegalArgumentException("Orden no válida");
         Sala s = dentro(id, uid);
-        if (biblioteca.porId(cancionId).isEmpty()) throw new NoSuchElementException("Canción no encontrada");
-        synchronized (s.cola) {
-            if (s.cola.size() >= 50) throw new IllegalArgumentException("La cola está llena");
-            if (s.cola.stream().noneMatch(c -> c[0] == cancionId)) s.cola.add(new long[]{cancionId, uid});
+        synchronized (s) {
+            switch (accion) {
+                case "play" -> {
+                    if (s.cancionId == null) {
+                        if (s.cola.isEmpty()) throw new IllegalArgumentException("Primero elige una canción");
+                        ponerCancion(s, s.cola.get(0)[0], 0, true);
+                    } else {
+                        if (s.duracion > 0 && s.segundoAhora() >= s.duracion - 0.5) s.segundo = 0; // terminó: empieza de nuevo
+                        else s.segundo = s.segundoAhora();
+                        s.sonando = true;
+                        s.marca = System.currentTimeMillis();
+                    }
+                }
+                case "pause" -> { s.segundo = s.segundoAhora(); s.sonando = false; s.marca = System.currentTimeMillis(); }
+                case "seek" -> {
+                    if (s.cancionId == null) throw new IllegalArgumentException("No hay canción");
+                    double seg = numero(datos.get("segundo"));
+                    s.segundo = Math.max(0, s.duracion > 0 ? Math.min(seg, s.duracion) : seg);
+                    s.marca = System.currentTimeMillis();
+                }
+                case "next" -> {
+                    Long desde = id(datos.get("desde"));
+                    if (desde != null && !desde.equals(s.cancionId)) return ver(id, uid); // ya avanzó otra persona
+                    avanzar(s);
+                }
+                case "prev" -> {
+                    if (s.segundoAhora() > 3 || s.historial.isEmpty()) { s.segundo = 0; s.marca = System.currentTimeMillis(); }
+                    else ponerCancion(s, s.historial.pop(), 0, false);
+                }
+                case "poner" -> {
+                    Long c = id(datos.get("cancionId"));
+                    if (c == null) throw new IllegalArgumentException("Elige una canción");
+                    ponerCancion(s, c, numero(datos.get("segundo")), true);
+                    if (datos.get("cola") instanceof List<?> l) {
+                        for (Object x : l) {
+                            Long y = id(x);
+                            if (y == null || s.cola.size() >= MAX_COLA || y.equals(s.cancionId) || s.cola.stream().anyMatch(q -> q[0] == y)) continue;
+                            if (biblioteca.porId(y).isPresent()) s.cola.add(new long[]{y, uid});
+                        }
+                    }
+                }
+                default -> { }
+            }
+            s.ultimaAccion = Map.of("accion", accion, "nombre", nombre(uid), "username",
+                    usuarios.findById(uid).map(Usuario::getUsername).orElse(""));
+            s.version.incrementAndGet();
+        }
+        avisar(s);
+        return ver(id, uid);
+    }
+
+    /** Apps anteriores: el anfitrión informaba su reproductor. Ahora lo puede informar cualquier participante. */
+    public void estado(long id, long uid, Long cancionId, double segundo, boolean sonando) {
+        Sala s = dentro(id, uid);
+        synchronized (s) {
+            if (cancionId != null && !cancionId.equals(s.cancionId)) ponerCancion(s, cancionId, segundo, true);
+            else if (cancionId == null) { s.cancionId = null; s.duracion = 0; s.segundo = 0; }
+            else s.segundo = Math.max(0, segundo);
+            s.sonando = sonando && s.cancionId != null;
+            s.marca = System.currentTimeMillis();
+            s.version.incrementAndGet();
         }
         avisar(s);
     }
 
-    public void quitarDeCola(long id, long uid, long cancionId) {
+    private static double numero(Object o) {
+        if (o instanceof Number n) return n.doubleValue();
+        try { return o == null ? 0 : Double.parseDouble(String.valueOf(o)); } catch (NumberFormatException e) { return 0; }
+    }
+
+    private static Long id(Object o) {
+        if (o instanceof Number n) return n.longValue();
+        try { return o == null || String.valueOf(o).isBlank() ? null : Long.valueOf(String.valueOf(o)); } catch (NumberFormatException e) { return null; }
+    }
+
+    /** Cada medio segundo: los SyncPlay cuya canción terminó pasan a la siguiente de la cola. */
+    @Scheduled(fixedDelay = 500)
+    public void avanzarTerminadas() {
+        for (Sala s : salas.values()) {
+            boolean cambio = false;
+            synchronized (s) {
+                if (s.sonando && s.cancionId != null && s.duracion > 0 && s.segundoAhora() >= s.duracion - 0.25) {
+                    avanzar(s);
+                    s.ultimaAccion = Map.of("accion", "fin", "nombre", "", "username", "");
+                    s.version.incrementAndGet();
+                    cambio = true;
+                }
+            }
+            if (cambio) avisar(s);
+        }
+    }
+
+    // ═══════════════════ Cola ═══════════════════
+
+    public void sumarACola(long id, long uid, long cancionId) {
         Sala s = dentro(id, uid);
-        synchronized (s.cola) { s.cola.removeIf(c -> c[0] == cancionId && (c[1] == uid || s.anfitrion == uid)); }
+        if (biblioteca.porId(cancionId).isEmpty()) throw new NoSuchElementException("Canción no encontrada");
+        synchronized (s) {
+            if (s.cola.size() >= MAX_COLA) throw new IllegalArgumentException("La cola está llena");
+            if (s.cola.stream().noneMatch(c -> c[0] == cancionId)) s.cola.add(new long[]{cancionId, uid});
+            s.version.incrementAndGet();
+        }
         avisar(s);
     }
 
+    /** Cualquier participante puede quitar canciones de la cola (el control es compartido). */
+    public void quitarDeCola(long id, long uid, long cancionId) {
+        Sala s = dentro(id, uid);
+        synchronized (s) { s.cola.removeIf(c -> c[0] == cancionId); s.version.incrementAndGet(); }
+        avisar(s);
+    }
+
+    /** Apps anteriores: reacciones (la interfaz nueva ya no las muestra). */
     public void reaccionar(long id, long uid, String emoji) {
         Sala s = dentro(id, uid);
         if (!REACCIONES.contains(emoji)) throw new IllegalArgumentException("Reacción no válida");
-        String nombre = usuarios.findById(uid).map(Usuario::getNombreVisible).orElse("");
+        String nombre = nombre(uid);
         for (Long p : s.dentro) eventos.enviar(p, "juntos-reaccion", Map.of("sala", s.id, "emoji", emoji, "nombre", nombre, "mia", p == uid));
     }
+
+    // ═══════════════════ Estado ═══════════════════
 
     public Map<String, Object> ver(long id, long uid) {
         Sala s = sala(id, uid);
         Map<String, Object> r = new LinkedHashMap<>();
-        r.put("id", s.id);
-        r.put("soyAnfitrion", s.anfitrion == uid);
-        r.put("dentro", s.dentro.contains(uid));
-        r.put("anfitrion", persona(s.anfitrion));
-        r.put("personas", s.dentro.stream().map(this::persona).filter(Objects::nonNull).toList());
-        r.put("invitados", s.invitados.stream().map(this::persona).filter(Objects::nonNull).toList());
-        r.put("cancion", s.cancionId == null ? null : biblioteca.porId(s.cancionId).orElse(null));
-        r.put("segundo", Math.round(s.segundoAhora() * 10) / 10.0);
-        r.put("sonando", s.sonando);
-        r.put("ahora", System.currentTimeMillis());
-        List<Map<String, Object>> cola = new ArrayList<>();
-        synchronized (s.cola) {
+        synchronized (s) {
+            long ahora = System.currentTimeMillis();
+            r.put("id", s.id);
+            r.put("version", s.version.get());
+            r.put("soyAnfitrion", s.anfitrion == uid);
+            r.put("dentro", s.dentro.contains(uid));
+            r.put("anfitrion", persona(s.anfitrion));
+            r.put("personas", s.dentro.stream().map(this::persona).filter(Objects::nonNull).toList());
+            r.put("invitados", s.invitados.stream().map(this::persona).filter(Objects::nonNull).toList());
+            r.put("cancion", s.cancionId == null ? null : biblioteca.porId(s.cancionId).orElse(null));
+            // «segundo» vale exactamente en «ts» (hora del servidor): la app suma lo transcurrido si está sonando
+            r.put("segundo", Math.round(s.segundoAhora() * 1000) / 1000.0);
+            r.put("ts", ahora);
+            r.put("ahora", ahora);
+            r.put("sonando", s.sonando);
+            r.put("hayAnterior", !s.historial.isEmpty());
+            List<Map<String, Object>> cola = new ArrayList<>();
             for (long[] c : s.cola) {
                 CancionDTO dto = biblioteca.porId(c[0]).orElse(null);
                 if (dto == null) continue;
@@ -183,13 +326,13 @@ public class JuntosService {
                 m.put("de", persona(c[1]));
                 cola.add(m);
             }
+            r.put("cola", cola);
+            if (s.ultimaAccion != null) r.put("ultimaAccion", s.ultimaAccion);
         }
-        r.put("cola", cola);
-        r.put("reacciones", REACCIONES.stream().sorted().toList());
         return r;
     }
 
-    /** Las salas en las que estás o a las que te invitaron. */
+    /** Los SyncPlay en los que estás o a los que te invitaron. */
     public List<Map<String, Object>> mias(long uid) {
         return salas.values().stream().filter(s -> s.dentro.contains(uid) || s.invitados.contains(uid))
                 .map(s -> ver(s.id, uid)).toList();
@@ -215,12 +358,12 @@ public class JuntosService {
         for (Long p : todos) eventos.enviar(p, "juntos-fin", Map.of("sala", s.id, "motivo", motivo));
     }
 
-    /** Salas sin actividad por 30 minutos: se cierran. */
+    /** SyncPlay sin actividad por 30 minutos: se cierran. */
     @Scheduled(fixedDelay = 60_000)
     public void limpiar() {
         long limite = System.currentTimeMillis() - INACTIVA_MS;
         for (Sala s : List.copyOf(salas.values())) {
-            if (s.actividad < limite) cerrar(s, "La sala se cerró por inactividad");
+            if (s.actividad < limite && !s.sonando) cerrar(s, "El SyncPlay se cerró por inactividad");
         }
     }
 

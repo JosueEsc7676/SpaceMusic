@@ -29,7 +29,7 @@ const B = A; // la misma cuenta en otro dispositivo
 
 const perfil = mkdtempSync(join(tmpdir(), 'sm-remoto-'));
 const proc = spawn(NAVEGADOR, ['--headless=new', `--remote-debugging-port=${PUERTO}`, `--user-data-dir=${perfil}`,
-  '--autoplay-policy=no-user-gesture-required', '--no-first-run', 'about:blank'], { stdio: 'ignore' });
+  '--autoplay-policy=no-user-gesture-required', '--disable-features=AudioFocusEnforcement,MediaSessionService,HardwareMediaKeyHandling', '--no-first-run', 'about:blank'], { stdio: 'ignore' });
 let info;
 for (let i = 0; i < 60 && !info; i++) { try { info = await (await fetch(`http://127.0.0.1:${PUERTO}/json/version`)).json(); } catch { await espera(250); } }
 const ws = new WebSocket(info.webSocketDebuggerUrl);
@@ -71,7 +71,7 @@ async function navegador(login) {
   /** Espera a que la condición (código que devuelve un valor) sea verdadera. */
   const hasta = async (codigo, ms = 15000) => {
     const t0 = Date.now();
-    for (;;) { const v = await js(codigo).catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error('No se cumplió: ' + codigo.slice(0, 90)); await espera(300); }
+    for (;;) { const v = await js(codigo).catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error('No se cumplió: …' + codigo.slice(-110)); await espera(300); }
   };
   return { js, ir, captura, hasta };
 }
@@ -162,10 +162,23 @@ await prueba('«Pasar mi música» de A a B', async () => {
 
 await prueba('Un solo dispositivo suena a la vez: al poner música en A, B se pausa solo', async () => {
   await b.hasta(`${MOD} return P.player.playing;`, 5000);
+  await espera(2000); // como una persona: B ya está sonando de forma estable antes de reclamar la música en A
+  // Registro de lo que hace el audio de B (para entender cualquier falla)
+  await b.js(`${MOD} window.__reg = []; const t0 = performance.now(); const au = P.player.audio;
+    for (const ev of ['play', 'playing', 'pause', 'ended', 'loadstart']) au.addEventListener(ev, () => window.__reg.push(Math.round(performance.now() - t0) + ' ' + ev + ' ' + Math.round(au.currentTime * 10) / 10));
+    const orig = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { window.__reg.push(Math.round(performance.now() - t0) + ' play() ' + String(new Error().stack).replace(/\s+/g, ' ').slice(30, 260)); return orig.apply(this, arguments); };
+    return 1;`);
   await a.js(`${MOD} P.player.play([${JSON.stringify(cancion)}], 0, { type: 'prueba' }); return 1;`);
   await a.hasta(`${MOD} return P.player.playing;`, 8000);
-  await b.hasta(`${MOD} return !P.player.playing;`, 5000);
-  const act = await a.hasta(`${MOD} await R.cargarDispositivos(); return R.dispositivoActivo() === R.miDispositivo() && R.dispositivoActivo();`, 5000);
+  await b.hasta(`${MOD} return !P.player.playing;`, 5000).catch(async (e) => {
+    const reg = await b.js(`${MOD} return JSON.stringify([R.miDispositivo().slice(0, 6), P.player.playing, window.__reg]);`) + ' A=' + idA.slice(0, 6);
+    throw new Error('B no se pausó · ' + reg);
+  });
+  const act = await a.hasta(`${MOD} await R.cargarDispositivos(); return R.dispositivoActivo() === R.miDispositivo() && R.dispositivoActivo();`, 5000).catch(async (e) => {
+    const diag = await a.js(`${MOD} return JSON.stringify({ activo: R.dispositivoActivo(), yo: R.miDispositivo(), b: ${JSON.stringify(idB)}, aSuena: P.player.playing,
+      lista: R.otrosDispositivos().map((d) => d.id.slice(0, 6) + ':' + (d.sonando ? 'suena' : 'pausa') + (d.activo ? ':activo' : '')) });`);
+    throw new Error(e.message.slice(-60) + ' · ' + diag);
+  });
   return 'A quedó como dispositivo activo y B en pausa';
 });
 
@@ -175,6 +188,33 @@ await prueba('Orden confirmada por el dispositivo (ack) y error si no existe', a
   const e = await a.js(`${MOD} try { await R.ordenar('no-existe-123', 'pause'); return 'sin error'; } catch (e) { return e.message; }`);
   afirmar(e !== 'sin error', 'una orden a un dispositivo inexistente debería fallar');
   return `confirmada en ${r.ms.toFixed(0)} ms · inexistente: «${e}»`;
+});
+
+await prueba('Como Spotify Connect: la barra de A muestra «Escuchando en B» y controla B', async () => {
+  // B suena; A deja de sonar: la barra de A pasa a controlar B
+  await b.js(`${MOD} P.player.play([${JSON.stringify(cancion)}], 0, { type: 'prueba' }); return 1;`);
+  await b.hasta(`${MOD} return P.player.playing;`, 8000);
+  await a.hasta(`${MOD} await R.cargarDispositivos(); return R.dispositivoActivo() === ${JSON.stringify(idB)};`, 6000).catch(async (e) => {
+    const diag = await a.js(`${MOD} return JSON.stringify({ activo: R.dispositivoActivo(), yo: R.miDispositivo(), b: ${JSON.stringify(idB)}, aSuena: P.player.playing,
+      lista: R.otrosDispositivos().map((d) => d.id.slice(0, 6) + ':' + (d.sonando ? 'suena' : 'pausa') + (d.activo ? ':activo' : '')) });`);
+    throw new Error('B empezó a sonar pero no pasó a ser el activo · ' + diag);
+  });
+  await a.js(`${MOD} P.player.pause(); return 1;`);
+  const txt = await a.hasta(`const pb = document.getElementById('playerBar'); return pb?.classList.contains('remoto') && document.querySelector('[data-br-donde]')?.textContent;`, 8000);
+  await a.captura('remoto-04-barra-escuchando-en');
+  // Pausar desde la barra de A pausa B
+  await a.js(`document.querySelector('[data-br="toggle"]').click(); return 1;`);
+  await b.hasta(`${MOD} return !P.player.playing;`, 5000);
+  // Reanudar desde la barra de A reanuda B
+  await a.hasta(`return document.querySelector('[data-br-donde]')?.textContent.startsWith('En pausa');`, 5000).catch(async (e) => {
+    const diag = await a.js(`${MOD} return JSON.stringify({ barra: document.querySelector('[data-br-donde]')?.textContent, remoto: document.getElementById('playerBar').className,
+      activo: R.dispositivoActivo(), yo: R.miDispositivo(), b: ${JSON.stringify(idB)}, aSuena: P.player.playing,
+      lista: R.otrosDispositivos().map((d) => d.id.slice(0, 6) + ':' + (d.sonando ? 'suena' : 'pausa') + (d.activo ? ':activo' : '')) });`);
+    throw new Error(e.message.slice(0, 60) + ' · ' + diag);
+  });
+  await a.js(`document.querySelector('[data-br="toggle"]').click(); return 1;`);
+  await b.hasta(`${MOD} return P.player.playing;`, 5000);
+  return `«${txt}»: pausa y reanuda B desde la barra de A`;
 });
 
 await prueba('Al cerrar sesión en B, deja de aparecer en A', async () => {

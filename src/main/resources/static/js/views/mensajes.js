@@ -31,7 +31,7 @@ function filaConversacion(c, activa) {
   return `<a class="conv ${activa ? 'active' : ''} ${c.noLeidos ? 'unread' : ''}" href="#/mensajes/${encodeURIComponent(u.username)}">
     ${avatarPersona(u)}
     <span class="conv-tt"><b class="ellipsis">${esc(u.nombre)}</b>
-      <span class="ellipsis">${m.mio ? 'Tú: ' : ''}${m.cancion ? '🎵 ' + esc(m.cancion.nombre) : salaDeInvitacion(m.texto) ? '🎧 Invitación a SyncPlay' : esc(m.texto)}</span></span>
+      <span class="ellipsis">${m.mio ? 'Tú: ' : ''}${m.cancion ? '🎵 ' + esc(m.cancion.nombre) : salaDeInvitacion(m.texto) ? 'Invitación a SyncPlay' : esc(m.texto)}</span></span>
     <span class="conv-end"><small>${esc(timeAgo(m.fecha))}</small>${c.noLeidos ? `<i class="conv-badge">${c.noLeidos}</i>` : ''}</span></a>`;
 }
 
@@ -42,11 +42,11 @@ function burbuja(m) {
     cancion = `<div class="msg-song" data-act="play-list" data-list="${lid}" data-i="0">${coverImg(m.cancion.portadaUrl, 160)}
       <span><b class="ellipsis">${esc(m.cancion.nombre)}</b><small class="ellipsis">${esc(m.cancion.artista)}</small></span>${icon('play', 'sm')}</div>`;
   }
-  // Invitación a SyncPlay: tarjeta para abrir la sala y unirse (solo enlaces de este servidor; la sala comprueba el acceso)
+  // Invitación a SyncPlay: tarjeta para abrirlo y unirse (solo enlaces de este servidor; el servidor comprueba el acceso)
   const sala = salaDeInvitacion(m.texto);
-  const texto = sala ? `<a class="msg-sync" href="#/juntos/${sala}" aria-label="Abrir la sala de SyncPlay y unirme">
+  const texto = sala ? `<a class="msg-sync" href="#/juntos/${sala}" aria-label="Abrir SyncPlay y unirme">
       <b>${icon('headphones')} SyncPlay</b><span>${m.mio ? 'Invitaste a escuchar juntos' : 'Te invitaron a escuchar juntos'}</span>
-      <span class="ir">Abrir sala y unirme ${icon('right', 'sm')}</span></a>`
+      <span class="ir">Abrir SyncPlay y unirme ${icon('right', 'sm')}</span></a>`
     : m.cancion && m.texto === '🎵' ? '' : `<p>${esc(m.texto)}</p>`;
   return `<div class="bubble ${m.mio ? 'mine' : ''} ${sala ? 'sync' : ''}" data-id="${m.id}">${cancion}${texto}<time>${esc(hora(m.fecha))}${m.mio ? (m.leido ? ' · Visto' : '') : ''}</time></div>`;
 }
@@ -240,7 +240,7 @@ function pintarChat(box, d, isStale, copia) {
           toast('Invitación a SyncPlay enviada');
         } catch (err) { errorToast(err); } finally { enviando = false; }
       } },
-      { label: 'Mis salas', icon: 'list', fn: () => { location.hash = '#/juntos'; } },
+      { label: 'Mis SyncPlay', icon: 'list', fn: () => { location.hash = '#/juntos'; } },
     ]);
   });
 

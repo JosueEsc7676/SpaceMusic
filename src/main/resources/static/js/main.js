@@ -654,7 +654,7 @@ async function boot() {
   iniciarAlarma();
   // Control remoto entre tus dispositivos: este se anuncia y queda listo para recibir órdenes
   import('./remoto.js').then((m) => m.iniciarRemoto()).catch(() => { });
-  // SyncPlay: si estabas en una sala al cerrar la app, se retoma (el módulo solo se carga si hace falta)
+  // SyncPlay: si estabas en un SyncPlay al cerrar la app, se retoma (el módulo solo se carga si hace falta)
   setTimeout(() => {
     if (sinConexion()) return;
     api('/api/juntos').then((l) => { if (l?.some((x) => x.dentro)) import('./juntos.js').then((m) => m.retomarSala()); }).catch(() => { });

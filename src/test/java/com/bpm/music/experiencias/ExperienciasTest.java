@@ -252,9 +252,10 @@ class ExperienciasTest {
         assertEquals(false, juntos.ver(sala, beto.getId()).get("dentro"));
         assertThrows(IllegalArgumentException.class, () -> juntos.sumarACola(sala, beto.getId(), c2));
         juntos.unirse(sala, beto.getId());
-        // Solo el anfitrión controla la música
-        assertThrows(IllegalArgumentException.class, () -> juntos.estado(sala, beto.getId(), c1, 10, true));
-        juntos.estado(sala, carla.getId(), c1, 42, true);
+        // Control compartido: el invitado también pone la música (y alguien de fuera no)
+        assertThrows(NoSuchElementException.class, () -> juntos.control(sala, ana.getId(), "pause", Map.of()));
+        assertThrows(IllegalArgumentException.class, () -> juntos.control(sala, beto.getId(), "borrar", Map.of()));
+        juntos.control(sala, beto.getId(), "poner", Map.of("cancionId", c1, "segundo", 42));
         var v = juntos.ver(sala, beto.getId());
         assertEquals(c1, ((CancionDTO) v.get("cancion")).getId());
         assertTrue(((Number) v.get("segundo")).doubleValue() >= 42);
@@ -263,6 +264,21 @@ class ExperienciasTest {
         assertEquals(1, ((List<?>) juntos.ver(sala, carla.getId()).get("cola")).size());
         juntos.estado(sala, carla.getId(), c2, 0, true);
         assertEquals(0, ((List<?>) juntos.ver(sala, carla.getId()).get("cola")).size());
+        // Pausa y posición desde cualquier participante; la versión sube con cada cambio
+        long v0 = ((Number) juntos.ver(sala, beto.getId()).get("version")).longValue();
+        juntos.control(sala, beto.getId(), "pause", Map.of());
+        assertEquals(false, juntos.ver(sala, carla.getId()).get("sonando"));
+        juntos.control(sala, carla.getId(), "seek", Map.of("segundo", 30));
+        assertEquals(30.0, ((Number) juntos.ver(sala, beto.getId()).get("segundo")).doubleValue(), 0.001);
+        assertTrue(((Number) juntos.ver(sala, beto.getId()).get("version")).longValue() > v0);
+        // «Siguiente» desde la canción que sonaba: si dos lo tocan a la vez, se avanza una sola vez
+        juntos.sumarACola(sala, beto.getId(), c1);
+        juntos.control(sala, beto.getId(), "next", Map.of("desde", c2));
+        juntos.control(sala, carla.getId(), "next", Map.of("desde", c2));
+        assertEquals(c1, ((CancionDTO) juntos.ver(sala, beto.getId()).get("cancion")).getId());
+        // «Anterior» vuelve a la canción de antes
+        juntos.control(sala, carla.getId(), "prev", Map.of());
+        assertEquals(c2, ((CancionDTO) juntos.ver(sala, beto.getId()).get("cancion")).getId());
         assertThrows(IllegalArgumentException.class, () -> juntos.reaccionar(sala, beto.getId(), "no-es-emoji"));
         juntos.reaccionar(sala, beto.getId(), "🔥");
         // El anfitrión cierra: la sala deja de existir

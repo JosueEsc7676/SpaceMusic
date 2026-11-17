@@ -19,6 +19,7 @@ class AudioPreparacionTest {
   when(monitor.audiosActivos()).thenReturn(1);
   var servicio = new AudioLigeroService(dir.resolve("copias").toString(), "/no/existe/ffmpeg", true, canciones, biblioteca);
   servicio.setMonitor(monitor);
+  servicio.cpuMaxima = 2; // solo cuenta la reproducción en curso, no la carga del equipo durante las pruebas
   assertEquals(original, servicio.archivoRapido(1L));
   Thread.sleep(2300);
   assertEquals(1, servicio.estado().get("pendientes"), "la reproducción debe aplazar, no descartar, la preparación");

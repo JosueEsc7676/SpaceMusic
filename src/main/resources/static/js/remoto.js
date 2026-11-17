@@ -103,11 +103,30 @@ function enviar(m) {
 // ═══════════════════ Estado de este dispositivo ═══════════════════
 
 let seq = Date.now(), ultimoEnvio = 0, pendiente = null, ultimo = null;
+/** En un SyncPlay la música la decide SyncPlay: este dispositivo no compite por ser «el activo» de la cuenta. */
+const enSyncPlay = () => document.documentElement.classList.contains('en-sala');
+
+// Hora del último inicio hecho por la persona (o por una orden de otro dispositivo). El servidor da el turno de
+// «dispositivo activo» solo ante un inicio nuevo: el paso automático a la siguiente canción no cuenta.
+let inicioUsuario = 0;
+function marcarInicios() {
+  if (player.__inicios) return;
+  player.__inicios = true;
+  for (const k of ['play', 'resume', 'toggle', 'next', 'prev']) {
+    const orig = player[k].bind(player);
+    player[k] = function (...args) {
+      const automatico = k === 'next' && args[0] === true;
+      const reanuda = k === 'toggle' ? !player.playing : true;
+      if (!automatico && reanuda) inicioUsuario = Date.now();
+      return orig(...args);
+    };
+  }
+}
 function estado() {
   return {
     dispositivo: miDispositivo(), nombre: miNombre(), plataforma: plataforma(),
     cancionId: player.current?.id ?? null, segundo: player.audio.currentTime || 0,
-    duracion: player.duration() || 0, sonando: !!player.playing, volumen: player.volume,
+    duracion: player.duration() || 0, sonando: !!player.playing && !enSyncPlay(), volumen: player.volume, inicio: inicioUsuario,
     cola: player.items.slice(player.index + 1, player.index + 11).map((c) => c.id),
   };
 }
@@ -182,13 +201,30 @@ function ponerCanciones(o) {
 }
 
 /** Ejecuta una orden para este dispositivo y la confirma (por WebSocket; las de la vía anterior no se confirman). */
+let quitarGuardaPausa = null;
+
 function ejecutar(o, porWs) {
   if (!o || o.para !== miDispositivo()) return;
+  if (o.accion !== 'pause') quitarGuardaPausa?.(); // otra orden (reproducir, siguiente…) anula la protección de la pausa
+  // La pausa automática del servidor (otro dispositivo empezó a sonar) no aplica dentro de SyncPlay
+  if (o.de === 'servidor' && enSyncPlay()) { if (porWs && o.id) enviar({ tipo: 'ack', id: o.id, ok: true }); return; }
   let ok = true, error = null;
   try {
     switch (o.accion) {
       case 'play': if (player.current) player.resume(); else { ok = false; error = 'No hay nada para reproducir'; } break;
-      case 'pause': player.pause(); break;
+      case 'pause': {
+        // Si la canción todavía estaba cargando, al terminar arrancaría sola y anularía la pausa: la pausa gana
+        const cargando = player.audio.readyState < 3 && !!player.current;
+        player._pausaRemota = Date.now(); // el avance automático de los próximos segundos no la anula
+        player.pause();
+        if (cargando) {
+          const otraVez = () => player.pause();
+          player.audio.addEventListener('playing', otraVez, { once: true });
+          quitarGuardaPausa = () => { player.audio.removeEventListener('playing', otraVez); quitarGuardaPausa = null; };
+          setTimeout(() => quitarGuardaPausa?.(), 2500);
+        }
+        break;
+      }
       case 'toggle': player.toggle(); break;
       case 'next': player.next(); break;
       case 'prev': player.prev(); break;
@@ -272,6 +308,89 @@ export async function pasarA(d) {
 }
 
 // ═══════════════════ Pantallas ═══════════════════
+
+// ═══════════════════ Barra «Escuchando en…» (como Spotify Connect) ═══════════════════
+// Cuando la música suena en otro de tus dispositivos y aquí no, la barra del reproductor de este dispositivo pasa a
+// controlar aquel: muestra su canción y su tiempo, y reproducir/pausar, anterior/siguiente y la barra de tiempo
+// le mandan las órdenes. Funciona igual en cualquier dirección (teléfono ↔ laptop ↔ tablet).
+
+let barra = null, relojBarra = null;
+
+/** El dispositivo que se está controlando desde la barra (o null si suena aquí o en ninguno). */
+export function controlandoA() {
+  if (player.playing) return null;
+  const yo = miDispositivo();
+  const act = dispositivos.find((d) => d.id === activo && d.id !== yo) || dispositivos.find((d) => d.id !== yo && d.sonando);
+  return act && act.cancion ? act : null;
+}
+
+function crearBarra() {
+  const pb = document.getElementById('playerBar');
+  if (!pb || barra) return;
+  barra = document.createElement('div');
+  barra.className = 'barra-remota';
+  barra.innerHTML = `<button class="br-info" data-br-abrir aria-label="Controlar el otro dispositivo">
+      <span class="br-cover" data-br-cover></span>
+      <span class="br-tt"><b class="ellipsis" data-br-nombre></b><small class="ellipsis" data-br-artista></small>
+        <small class="br-donde ellipsis">${icon('devices', 'sm')} <span data-br-donde></span></small></span></button>
+    <div class="br-ctrls">
+      <button class="icon-btn hide-m" data-br="prev" aria-label="Anterior">${icon('prev')}</button>
+      <button class="br-play" data-br="toggle" aria-label="Reproducir o pausar"></button>
+      <button class="icon-btn" data-br="next" aria-label="Siguiente">${icon('next')}</button>
+    </div>
+    <input type="range" class="br-seek" data-br-seek min="0" max="1" step="1" value="0" aria-label="Posición en el otro dispositivo">`;
+  pb.prepend(barra);
+  barra.addEventListener('click', async (e) => {
+    const d = controlandoA();
+    if (!d) return;
+    const b = e.target.closest('[data-br], [data-br-abrir]');
+    if (!b) return;
+    if (b.matches('[data-br-abrir]')) { controlar(d.id); return; }
+    try { await ordenar(d.id, b.dataset.br); } catch (err) { errorToast(err); }
+  });
+  barra.querySelector('[data-br-seek]').addEventListener('change', (e) => {
+    const d = controlandoA();
+    if (d) ordenar(d.id, 'seek', { segundo: Number(e.target.value) }).catch(errorToast);
+  });
+}
+
+/** Pinta la barra con el dispositivo activo (o la oculta y vuelve el reproductor normal). */
+function pintarBarra() {
+  const pb = document.getElementById('playerBar');
+  if (!pb) return;
+  const d = controlandoA();
+  // Dentro de un SyncPlay manda SyncPlay: la barra normal sigue igual
+  const enSyncPlay = document.documentElement.classList.contains('en-sala');
+  if (!d || enSyncPlay) {
+    pb.classList.remove('remoto');
+    if (barra) barra.hidden = true;
+    clearInterval(relojBarra); relojBarra = null;
+    return;
+  }
+  crearBarra();
+  barra.hidden = false;
+  pb.classList.add('remoto');
+  const c = d.cancion;
+  barra.querySelector('[data-br-cover]').innerHTML = coverImg(c.portadaUrl, 96);
+  barra.querySelector('[data-br-nombre]').textContent = c.nombre;
+  barra.querySelector('[data-br-artista]').textContent = c.artista;
+  barra.querySelector('[data-br-donde]').textContent = `${d.sonando ? 'Escuchando' : 'En pausa'} en ${d.nombre}`;
+  const play = barra.querySelector('[data-br="toggle"]');
+  play.innerHTML = icon(d.sonando ? 'pause' : 'play');
+  play.setAttribute('aria-label', d.sonando ? 'Pausar en ' + d.nombre : 'Reproducir en ' + d.nombre);
+  const s = barra.querySelector('[data-br-seek]');
+  s.max = Math.max(1, Math.round(d.duracion || 0));
+  if (document.activeElement !== s) s.value = Math.round(posicion(d));
+  if (!relojBarra) relojBarra = setInterval(() => {
+    const x = controlandoA();
+    if (!x) { pintarBarra(); return; }
+    if (document.activeElement !== s) s.value = Math.round(posicion(x));
+  }, 1000);
+}
+
+bus.on('remoto:lista', () => pintarBarra());
+bus.on('player:state', () => pintarBarra());
+bus.on('player:song', () => pintarBarra());
 
 /** Botón «Dispositivos»: un punto cuando suena música en otro de tus dispositivos. */
 function marcarBoton() {
@@ -385,6 +504,7 @@ export async function renombrar() {
 
 export function iniciarRemoto() {
   if (!session.token) return;
+  marcarInicios();
   conectar();
   informar(true);
   cargarDispositivos();

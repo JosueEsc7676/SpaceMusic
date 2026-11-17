@@ -27,7 +27,9 @@ public class Mensaje {
     @Column(name = "para_id", nullable = false)
     private Long paraId;
 
-    @Column(nullable = false, length = 1000)
+    /** Se guarda cifrado (AES-256-GCM): en la base de datos no se puede leer. Hasta 1000 caracteres de texto. */
+    @Convert(converter = com.bpm.music.security.TextoCifrado.class)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String texto;
 
     /** Canción compartida en el mensaje (opcional). */

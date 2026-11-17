@@ -56,12 +56,12 @@ async function htmlSyncPlay() {
   const sala = j.salaActiva();
   return `<button class="disp-sync" data-ir="${sala ? '#/juntos/' + sala.id : '#/juntos'}">
       <span class="disp-sync-ico">${icon('headphones')}</span>
-      <span class="ellipsis"><b>SyncPlay</b><small class="muted">${sala ? (sala.anfitrion ? 'Tu sala está activa' : 'Estás en una sala') : 'Crea una sala o únete con tus amigos'}</small></span>${icon('right', 'sm')}</button>
+      <span class="ellipsis"><b>SyncPlay</b><small class="muted">${sala ? (sala.anfitrion ? 'Tu SyncPlay está activo' : 'Estás en un SyncPlay') : 'Inicia SyncPlay o únete con tus amigos'}</small></span>${icon('right', 'sm')}</button>
     <div class="row wrap disp-sync-acc">
-      ${!sala || sala.anfitrion ? `<button class="btn sm" data-sync-crear>${icon('plus', 'sm')} ${sala ? 'Abrir mi sala' : 'Iniciar SyncPlay'}</button>
+      ${!sala || sala.anfitrion ? `<button class="btn sm" data-sync-crear>${icon('plus', 'sm')} ${sala ? 'Abrir mi SyncPlay' : 'Iniciar SyncPlay'}</button>
       <button class="btn sm" data-sync-invitar>${icon('send', 'sm')} Invitar a un amigo</button>` : ''}
       ${sala ? `<button class="btn sm" data-sync-compartir>${icon('share', 'sm')} Compartir enlace</button>` : ''}
-      <a class="btn sm ghost" href="#/juntos" data-cerrar-ir>Mis salas</a></div>`;
+      <a class="btn sm ghost" href="#/juntos" data-cerrar-ir>Mis SyncPlay</a></div>`;
 }
 
 export async function abrirDispositivos() {
@@ -92,7 +92,10 @@ export async function abrirDispositivos() {
         try {
           if (b.matches('[data-remoto]')) {
             cerrar(null);
-            remoto.controlar(b.dataset.remoto);
+            // Como Spotify Connect: si aquí suena música, se pasa a ese dispositivo y sigues controlándola desde aquí
+            const d = remoto.otrosDispositivos().find((x) => x.id === b.dataset.remoto);
+            if (d && player.playing) await remoto.pasarA(d);
+            else remoto.controlar(b.dataset.remoto);
           } else if (b.matches('[data-renombrar]')) {
             await remoto.renombrar();
             pintarOtros(await remoto.cargarDispositivos());

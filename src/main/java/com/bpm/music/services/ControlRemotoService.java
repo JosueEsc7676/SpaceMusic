@@ -52,6 +52,8 @@ public class ControlRemotoService {
         /** Hora del servidor en que se fijó «segundo». */
         volatile long marca = System.currentTimeMillis(), visto = System.currentTimeMillis();
         volatile long seq = -1;
+        /** Último inicio de reproducción hecho por la persona (lo informa la app); 0 = ninguno todavía. */
+        volatile long inicio;
         volatile List<Long> cola = List.of();
         volatile Canal canal;
         Dispositivo(String id) { this.id = id; }
@@ -71,6 +73,7 @@ public class ControlRemotoService {
         final Map<String, String[]> pendientes = new ConcurrentHashMap<>();
     }
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ControlRemotoService.class);
     private final Map<Long, Cuenta> cuentas = new ConcurrentHashMap<>();
     private final EventosService eventos;
     private final BibliotecaService biblioteca;
@@ -137,6 +140,7 @@ public class ControlRemotoService {
                 if (n.longValue() <= d.seq) return;
                 d.seq = n.longValue();
             }
+            boolean sonabaAntes = d.sonando;
             d.nombre = texto(b.get("nombre"), d.nombre == null ? "Dispositivo" : d.nombre, 60);
             d.plataforma = texto(b.get("plataforma"), d.plataforma == null ? "web" : d.plataforma, 20);
             Long cancion = idCancion(b.get("cancionId"));
@@ -149,8 +153,21 @@ public class ControlRemotoService {
             if (b.get("cola") instanceof List<?> l) for (Object x : l) { Long y = idCancion(x); if (y != null) cola.add(y); if (cola.size() >= MAX_COLA) break; }
             d.cola = List.copyOf(cola);
             d.marca = d.visto = System.currentTimeMillis();
-            // Un solo dispositivo suena a la vez (como Spotify Connect): el que empieza a sonar pasa a ser el activo
-            if (d.sonando && !id.equals(c.activo)) {
+            // Un solo dispositivo suena a la vez (como Spotify Connect): el que la PERSONA pone a sonar pasa a ser el activo.
+            // La app informa «inicio» (hora de su último reproducir, elegir canción, anterior/siguiente u orden recibida);
+            // el paso automático a la siguiente canción, los cortes al cargar y los informes atrasados no lo cambian.
+            // Apps anteriores (sin «inicio»): cuenta pasar de pausa a sonando.
+            boolean empezo;
+            if (b.get("inicio") instanceof Number n) {
+                long ini = n.longValue();
+                // Se toma cuando ya suena (el primer informe tras tocar reproducir puede llegar mientras aún carga)
+                empezo = d.sonando && ini > d.inicio;
+                if (d.sonando) d.inicio = Math.max(d.inicio, ini);
+            } else {
+                empezo = d.sonando && !sonabaAntes;
+            }
+            if (log.isDebugEnabled()) log.debug("estado {} sonando {}->{} inicio={} empezo={} activo={}", id, sonabaAntes, d.sonando, b.get("inicio"), empezo, c.activo);
+            if (empezo && !id.equals(c.activo)) {
                 Dispositivo anterior = c.activo == null ? null : c.dispositivos.get(c.activo);
                 if (anterior != null && anterior.sonando && anterior.vigente()) pausarAnterior = anterior.id;
                 c.activo = id;
@@ -336,6 +353,11 @@ public class ControlRemotoService {
         if (d == null || d.canal != canal) return;
         d.canal = null;
         d.visto = Math.min(d.visto, System.currentTimeMillis() - (VIGENCIA_MS - GRACIA_CIERRE_MS));
+        // Se cortó: deja de contar como «sonando» al instante (si solo recargó, lo vuelve a informar al reconectarse)
+        if (d.sonando) {
+            synchronized (c) { d.segundo = d.segundoAhora(); d.sonando = false; d.marca = System.currentTimeMillis(); c.version.incrementAndGet(); }
+            difundir(uid);
+        }
     }
 
     /** Mensajes del dispositivo: estado, orden, ack y ping. */

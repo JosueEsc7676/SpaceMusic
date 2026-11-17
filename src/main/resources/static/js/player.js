@@ -178,7 +178,7 @@ export const player = {
     audio.play().catch((e) => this._playError(e));
   },
 
-  pause() { audio.pause(); },
+  pause() { this._pausaPedida = Date.now(); audio.pause(); },
 
   /** ¿Se puede escuchar ahora? (sin conexión, solo lo que está en el dispositivo; lo define offline.js) */
   disponible: () => true,
@@ -190,6 +190,8 @@ export const player = {
     // Sin conexión se saltan las canciones que no están descargadas
     let j = this.index + 1;
     while (j < this.items.length && !this.disponible(this.items[j])) j++;
+    // Avance automático justo después de una pausa pedida desde otro dispositivo: la siguiente queda lista, sin sonar
+    if (auto && Date.now() - (this._pausaRemota || 0) < 3000) { if (j < this.items.length) this._load(j, false); return; }
     if (j < this.items.length) return this._load(j, true);
     // Quizá solo se cortaron las peticiones en segundo plano: si el sistema dice que hay red, se intenta
     if (auto && this.index < this.items.length - 1 && navigator.onLine !== false) return this._load(this.index + 1, true);
@@ -275,6 +277,7 @@ export const player = {
   async _extendWithRadio(advance = false) {
     if (this._radioLoading || !this.current) return;
     const uid = this.current._uid;
+    const pedida = Date.now(); // si alguien pausa mientras llega la radio, la siguiente se carga sin arrancar
     this._radioLoading = true;
     try {
       const excluir = this.items.slice(-60).map((s) => s.id).join(',');
@@ -290,7 +293,7 @@ export const player = {
           this.context = { ...(this.context || {}), radio: true };
         }
         bus.emit('player:queue');
-        if (advance && wasEnd) this._load(this.index + 1, true);
+        if (advance && wasEnd) this._load(this.index + 1, !(this._pausaPedida > pedida));
       } else if (advance) {
         audio.pause();
       }

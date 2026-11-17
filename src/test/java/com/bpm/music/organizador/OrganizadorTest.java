@@ -50,6 +50,7 @@ class OrganizadorTest {
     @Autowired UsuarioRepository usuarios;
     @Autowired JwtUtil jwt;
     @Autowired MockMvc mvc;
+    @Autowired com.bpm.music.soporte.ConfigSoporteService config;
 
     private Cancion cancion(String nombre, String artista, int dur, boolean conLetra) {
         Cancion c = new Cancion();
@@ -139,6 +140,11 @@ class OrganizadorTest {
     @Test
     void unaEjecucionALaVezPausaReanudaYCancela() throws Exception {
         trabajos.deleteAll();
+        // La prueba mide la lógica, no la carga del equipo: con todas las pruebas corriendo la CPU pasa del 70 %
+        // y el organizador esperaría (a propósito) en vez de trabajar
+        var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(1L, null, java.util.List.of());
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+        try { config.cambiar("org.cpuMax", 100); } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
         cancion("Lista cuatro", "Prueba", 200, true);
         // Sin internet en la prueba: todas las canciones con letra y portada (otras pruebas dejan algunas sin letra)
         for (Cancion x : canciones.findAll()) { if (x.getLetra() == null || x.getLetra().isBlank()) { x.setLetra("x"); canciones.save(x); } }

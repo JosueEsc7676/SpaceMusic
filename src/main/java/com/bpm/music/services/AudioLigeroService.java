@@ -50,10 +50,13 @@ public class AudioLigeroService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setMonitor(com.bpm.music.soporte.MonitorService monitor) { this.monitor = monitor; }
 
+    /** CPU del sistema (0 a 1) por encima de la cual la preparación espera (las pruebas lo suben para no depender de la carga). */
+    volatile double cpuMaxima = 0.70;
+
     private boolean ocupado() {
         if (monitor != null && monitor.audiosActivos() > 0) return true;
         var so = java.lang.management.ManagementFactory.getOperatingSystemMXBean();
-        return so instanceof com.sun.management.OperatingSystemMXBean cpu && cpu.getCpuLoad() > 0.70;
+        return so instanceof com.sun.management.OperatingSystemMXBean cpu && cpu.getCpuLoad() > cpuMaxima;
     }
 
     public AudioLigeroService(@Value("${music.light-path:./ligero}") String carpeta,

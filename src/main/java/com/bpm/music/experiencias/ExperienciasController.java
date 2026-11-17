@@ -197,6 +197,12 @@ public class ExperienciasController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Control compartido: play · pause · seek {segundo} · next {desde} · prev · poner {cancionId, segundo, cola}. */
+    @PostMapping("/juntos/{id}/control")
+    public Map<String, Object> controlSala(@PathVariable Long id, @RequestBody Map<String, Object> b) {
+        return juntos.control(id, CurrentUser.id(), Objects.toString(b.get("accion"), ""), b);
+    }
+
     @PostMapping("/juntos/{id}/cola")
     public ResponseEntity<Void> colaSala(@PathVariable Long id, @RequestBody Map<String, Object> b) {
         Long c = id(b.get("cancionId"));

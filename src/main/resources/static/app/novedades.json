@@ -1,12 +1,23 @@
 {
-  "version": "3.7.1",
-  "titulo": "Control entre dispositivos al estilo Spotify Connect",
+  "version": "3.8",
+  "titulo": "Novedades: SyncPlay compartido, control como Spotify Connect y mensajes cifrados",
   "puntos": [
-    "El control entre tus dispositivos ahora funciona como Spotify Connect: conexión permanente con el servidor, cada orden se confirma y verás si el otro dispositivo no respondió.",
-    "Un solo dispositivo suena a la vez: si pones música en uno, el que estaba sonando se pausa solo. El que suena aparece como «Activo».",
-    "La posición del otro dispositivo se calcula con la hora del servidor, y ves lo que sigue en su cola."
+    "SyncPlay: ahora todos controlan la música. Cualquiera puede reproducir, pausar, cambiar de canción y mover la posición, y suena igual para todos con una sincronía mucho más precisa.",
+    "SyncPlay renovado: sin emojis y con el nombre «SyncPlay» en toda la app.",
+    "Como Spotify Connect: si la música suena en otro de tus dispositivos, tu reproductor muestra «Escuchando en…» y lo controla desde ahí. En Dispositivos, tocar otro dispositivo pasa la música allá y sigues teniendo el control.",
+    "Tus mensajes se guardan cifrados: en la base de datos no se pueden leer.",
+    "Organización con IA en línea (opcional, para administración): clasifica estilos y contextos usando el plan gratuito de Groq de forma eficiente."
   ],
   "anteriores": [
+    {
+      "version": "3.7.1",
+      "titulo": "Control entre dispositivos al estilo Spotify Connect",
+      "puntos": [
+        "El control entre tus dispositivos ahora funciona como Spotify Connect: conexión permanente con el servidor, cada orden se confirma y verás si el otro dispositivo no respondió.",
+        "Un solo dispositivo suena a la vez: si pones música en uno, el que estaba sonando se pausa solo. El que suena aparece como «Activo».",
+        "La posición del otro dispositivo se calcula con la hora del servidor, y ves lo que sigue en su cola."
+      ]
+    },
     {
       "version": "3.7",
       "titulo": "Novedades: controla la música de tus otros dispositivos",

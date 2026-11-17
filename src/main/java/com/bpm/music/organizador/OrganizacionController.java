@@ -29,6 +29,10 @@ public class OrganizacionController {
     private final SenalesExternasService senales;
     private final AudioAnalisisService audio;
     private final IaLocalService ia;
+    private IaEnLineaService enLinea;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setEnLinea(IaEnLineaService enLinea) { this.enLinea = enLinea; }
     private final Proveedores proveedores;
     private final MonitorService monitor;
     private final ConfigSoporteService config;
@@ -66,6 +70,9 @@ public class OrganizacionController {
     public Map<String, Object> resumen() {
         Map<String, Object> r = new LinkedHashMap<>(organizador.estado());
         r.put("ia", ia.estado());
+        r.put("iaEnLinea", organizador.estadoIaEnLinea());
+        r.put("iaProveedorEnLinea", organizador.iaEnLinea());
+        r.put("modeloActivo", organizador.modeloActivo());
         r.put("proveedores", proveedores.resumen());
         r.put("vinculos", senales.resumen());
         r.put("metadatos", completado.resumen());
@@ -99,7 +106,7 @@ public class OrganizacionController {
         if (!clave.startsWith("org.")) throw new IllegalArgumentException("Ajuste no válido");
         if (clave.equals("org.iaActiva") && String.valueOf(b.get("valor")).startsWith("1")) {
             var ev = organizador.ultimaEvaluacion();
-            if (ev == null || !Boolean.TRUE.equals(ev.get("apta")) || !organizador.modelo().equals(ev.get("modelo")))
+            if (ev == null || !Boolean.TRUE.equals(ev.get("apta")) || !organizador.modeloActivo().equals(ev.get("modelo")))
                 throw new IllegalArgumentException("Primero evalúa el modelo: necesita al menos 80 % de aciertos");
         }
         return config.cambiar(clave, b.get("valor"));
@@ -109,6 +116,19 @@ public class OrganizacionController {
     public Map<String, Object> modelo(@RequestBody Map<String, String> b) {
         organizador.cambiarModelo(b.get("nombre"), quien());
         return Map.of("modelo", organizador.modelo());
+    }
+
+    /** Clave de la IA en línea: se guarda en un archivo del servidor (nunca se devuelve ni va a la base de datos). */
+    @PutMapping("/ia-clave")
+    public Map<String, Object> claveIa(@RequestBody Map<String, String> b) {
+        enLinea.guardarClave(b.get("clave"));
+        return Map.of("configurada", true);
+    }
+
+    @DeleteMapping("/ia-clave")
+    public Map<String, Object> borrarClaveIa() {
+        enLinea.borrarClave();
+        return Map.of("configurada", enLinea.configurada());
     }
 
     @PostMapping("/evaluar")

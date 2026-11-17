@@ -90,21 +90,43 @@ export async function organizacionTab(el) {
   const pintarIa = (r) => {
     const ia = r.ia || {}, ev = r.evaluacion, aj = r.ajustes || {};
     const activa = (aj['org.iaActiva']?.valor ?? 0) >= 1;
-    $('[data-ia]').innerHTML = `<h3>${icon('sparkles')} IA local (Ollama)</h3>
-      <p style="margin-top:0">${ia.disponible ? chip('ok', 'Ollama ' + (ia.version || '')) : chip('bad', 'Ollama no responde')}
-        ${activa ? chip('warn', 'Etiquetas IA encendidas') : chip('gray', 'Etiquetas IA apagadas')}</p>
+    const enLinea = !!r.iaProveedorEnLinea, el = r.iaEnLinea || {};
+    const hora = (ms) => new Date(ms).toLocaleTimeString('es', { hour: 'numeric', minute: '2-digit' });
+    $('[data-ia]').innerHTML = `<h3>${icon('sparkles')} IA para organizar</h3>
+      <div class="row wrap" style="gap:8px;margin-bottom:10px" role="radiogroup" aria-label="Qué IA se usa">
+        <button class="btn sm ${!enLinea ? 'primary' : 'ghost'}" data-proveedor="0" aria-pressed="${!enLinea}">IA local (Ollama)</button>
+        <button class="btn sm ${enLinea ? 'primary' : 'ghost'}" data-proveedor="1" aria-pressed="${enLinea}">IA en línea (${esc(el.proveedor || 'Groq')})</button>
+        ${activa ? chip('warn', 'Etiquetas IA encendidas') : chip('gray', 'Etiquetas IA apagadas')}</div>
+      ${enLinea ? `<p style="margin-top:0">${el.configurada ? chip('ok', 'Clave guardada') : chip('bad', 'Falta la clave')}
+          ${el.pausadoHasta ? chip('warn', 'En pausa hasta ' + hora(el.pausadoHasta)) : ''}${el.error ? chip('bad', el.error) : ''}</p>
+        <p class="muted" style="font-size:13px">Modelo: <b>${esc(el.modelo || '')}</b> · Hoy: <b>${el.peticionesHoy ?? 0}</b> de ${el.limiteDia ?? '—'} peticiones (${el.cancionesPorPeticion || 25} canciones cada una) · ${Number(el.tokensHoy || 0).toLocaleString('es')} tokens
+          <br>Plan gratuito de Groq (sin tarjeta): unas 1000 peticiones y 200 000 tokens al día. Solo se envían artista y título; nunca datos de usuarios.</p>
+        <div class="row wrap" style="gap:8px">
+          <button class="btn sm" data-clave-ia>${icon('edit', 'sm')} ${el.configurada ? 'Cambiar clave' : 'Poner clave'}</button>
+          ${el.configurada ? `<button class="btn sm ghost" data-quitar-clave-ia>Quitar clave</button>` : ''}
+          <a class="btn sm ghost" href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Obtener una clave gratis</a></div>`
+      : `<p style="margin-top:0">${ia.disponible ? chip('ok', 'Ollama ' + (ia.version || '')) : chip('bad', 'Ollama no responde')}</p>
       <p class="muted" style="font-size:13px">Modelo: <b>${esc(r.modelo)}</b> · En memoria: ${(ia.cargados || []).length ? esc(ia.cargados.map((x) => `${x.nombre} (${x.memoriaMb} MB)`).join(', ')) : 'ninguno (se descarga al terminar)'}
-        <br>Instalados: ${esc((ia.modelos || []).map((x) => `${x.nombre} (${x.tamanoMb} MB)`).join(', ') || '—')}</p>
+        <br>Instalados: ${esc((ia.modelos || []).map((x) => `${x.nombre} (${x.tamanoMb} MB)`).join(', ') || '—')}</p>`}
       ${ev ? `<p>Última evaluación (${esc(ev.fecha)} · ${esc(ev.modelo || '')}): <b>${Math.round(ev.precision * 100)} %</b> de aciertos en la muestra revisada${ev.segundosPorCancion ? `, ${ev.segundosPorCancion} s por canción` : ''}
         ${ev.apta ? chip('ok', 'Apta') : chip('bad', 'No apta (se necesita 80 %)')}</p>` : '<p class="muted">El modelo todavía no se ha evaluado.</p>'}
       ${r.evaluando ? `<p role="status">${icon('clock', 'sm')} Evaluando… (unas 20 canciones; tarda varios minutos)</p>` : ''}
       ${r.evaluacionDetalle?.errores?.length ? `<details><summary class="muted">Errores de la última evaluación</summary><ul class="org-errores">${r.evaluacionDetalle.errores.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}
       <div class="row wrap" style="gap:8px;margin-top:10px">
         <button class="btn sm" data-evaluar ${r.evaluando || r.corriendo ? 'disabled' : ''}>${icon('checkCircle', 'sm')} Evaluar modelo</button>
-        <button class="btn sm ghost" data-modelo>${icon('edit', 'sm')} Cambiar modelo</button>
+        ${!enLinea ? `<button class="btn sm ghost" data-modelo>${icon('edit', 'sm')} Cambiar modelo</button>` : ''}
       </div>
       <p class="muted" style="font-size:12px;margin-bottom:0">Un modelo de texto no escucha canciones: solo propone etiquetas a partir del título y el artista, y siempre quedan para revisión. Si la IA está apagada, todo lo demás funciona igual.</p>`;
     $('[data-evaluar]')?.addEventListener('click', () => accion('/api/admin/organizacion/evaluar', 'Evaluación en marcha'));
+    document.querySelectorAll('[data-proveedor]').forEach((b) => b.addEventListener('click', () =>
+      accion('/api/admin/organizacion/ajustes', b.dataset.proveedor === '1' ? 'Se usará la IA en línea: evalúala antes de encender las etiquetas' : 'Se usará la IA local',
+        'PUT', { clave: 'org.iaProveedor', valor: Number(b.dataset.proveedor) })));
+    $('[data-clave-ia]')?.addEventListener('click', async () => {
+      const { promptDialog } = await import('../ui.js');
+      const clave = await promptDialog('Clave de la IA en línea', { label: 'Pega la clave (por ejemplo gsk_…). Se guarda solo en el servidor y no se vuelve a mostrar.', ok: 'Guardar' });
+      if (clave) accion('/api/admin/organizacion/ia-clave', 'Clave guardada: ahora evalúa el modelo', 'PUT', { clave: clave.trim() });
+    });
+    $('[data-quitar-clave-ia]')?.addEventListener('click', () => accion('/api/admin/organizacion/ia-clave', 'Clave quitada', 'DELETE'));
     $('[data-modelo]')?.addEventListener('click', async () => {
       const { promptDialog } = await import('../ui.js');
       const nombre = await promptDialog('Modelo de Ollama', { label: 'Nombre del modelo ya instalado (por ejemplo qwen3:1.7b)', value: r.modelo, ok: 'Guardar' });

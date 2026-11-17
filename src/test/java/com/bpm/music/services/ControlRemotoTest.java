@@ -139,4 +139,49 @@ class ControlRemotoTest {
         control.desconectar(uid, "telefono-dani-1", telefono);
         assertTrue(control.lista(uid, null).stream().anyMatch(d -> d.get("id").equals("telefono-dani-1") && d.get("enVivo").equals(false)));
     }
+
+    @Test
+    void unInformeAtrasadoDeQueSigueSonandoNoLeQuitaElTurnoAlNuevoActivo() {
+        long uid = 5005L;
+        CanalPrueba a = new CanalPrueba(), b = new CanalPrueba();
+        control.conectar(uid, "dispo-a-0001", new HashMap<>(Map.of("nombre", "A")), a);
+        control.conectar(uid, "dispo-b-0001", new HashMap<>(Map.of("nombre", "B")), b);
+        Map<String, Object> ea = new HashMap<>(estado("dispo-a-0001", c1, true)); ea.put("tipo", "estado"); ea.put("seq", 1);
+        control.mensaje(uid, "dispo-a-0001", ea, a);
+        Map<String, Object> eb = new HashMap<>(estado("dispo-b-0001", c2, true)); eb.put("tipo", "estado"); eb.put("seq", 1);
+        control.mensaje(uid, "dispo-b-0001", eb, b);
+        assertEquals("dispo-b-0001", control.cluster(uid).get("activo"));
+        // A todavía no procesó la pausa y manda otro informe de que «sigue sonando»: B sigue siendo el activo
+        Map<String, Object> ea2 = new HashMap<>(estado("dispo-a-0001", c1, true)); ea2.put("tipo", "estado"); ea2.put("seq", 2);
+        control.mensaje(uid, "dispo-a-0001", ea2, a);
+        assertEquals("dispo-b-0001", control.cluster(uid).get("activo"), "un informe atrasado no le quita el turno al que empezó a sonar");
+        assertFalse(b.tiene("\"accion\":\"pause\""), "B no recibe una pausa por ese informe atrasado");
+    }
+
+    @Test
+    void soloUnInicioDeLaPersonaDaElTurnoNoElPasoAutomaticoDeCancion() {
+        long uid = 6006L;
+        CanalPrueba a = new CanalPrueba(), b = new CanalPrueba();
+        control.conectar(uid, "dispo-c-0001", new HashMap<>(Map.of("nombre", "A")), a);
+        control.conectar(uid, "dispo-d-0001", new HashMap<>(Map.of("nombre", "B")), b);
+        Map<String, Object> ea = new HashMap<>(estado("dispo-c-0001", c1, true)); ea.put("tipo", "estado"); ea.put("seq", 1); ea.put("inicio", 1000);
+        control.mensaje(uid, "dispo-c-0001", ea, a);
+        Map<String, Object> eb = new HashMap<>(estado("dispo-d-0001", c1, true)); eb.put("tipo", "estado"); eb.put("seq", 1); eb.put("inicio", 2000);
+        control.mensaje(uid, "dispo-d-0001", eb, b);
+        assertEquals("dispo-d-0001", control.cluster(uid).get("activo"), "B lo puso a sonar la persona: es el activo");
+        // A pasa sola a la siguiente canción (mismo «inicio», cortes de carga incluidos): no le quita el turno a B
+        Map<String, Object> pausaCarga = new HashMap<>(estado("dispo-c-0001", c2, false)); pausaCarga.put("tipo", "estado"); pausaCarga.put("seq", 2); pausaCarga.put("inicio", 1000);
+        control.mensaje(uid, "dispo-c-0001", pausaCarga, a);
+        Map<String, Object> sigue = new HashMap<>(estado("dispo-c-0001", c2, true)); sigue.put("tipo", "estado"); sigue.put("seq", 3); sigue.put("inicio", 1000);
+        control.mensaje(uid, "dispo-c-0001", sigue, a);
+        assertEquals("dispo-d-0001", control.cluster(uid).get("activo"));
+        // La persona toca reproducir en A: el primer informe llega mientras carga (sin sonar) y no gasta el inicio
+        Map<String, Object> cargando = new HashMap<>(estado("dispo-c-0001", c2, false)); cargando.put("tipo", "estado"); cargando.put("seq", 4); cargando.put("inicio", 3000);
+        control.mensaje(uid, "dispo-c-0001", cargando, a);
+        // …ya sonando con ese mismo inicio: A pasa a ser el activo
+        Map<String, Object> toca = new HashMap<>(estado("dispo-c-0001", c2, true)); toca.put("tipo", "estado"); toca.put("seq", 5); toca.put("inicio", 3000);
+        control.mensaje(uid, "dispo-c-0001", toca, a);
+        assertEquals("dispo-c-0001", control.cluster(uid).get("activo"));
+        assertTrue(b.tiene("\"accion\":\"pause\""), "B se pausa");
+    }
 }

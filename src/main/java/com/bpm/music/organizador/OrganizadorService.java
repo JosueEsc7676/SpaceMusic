@@ -43,7 +43,7 @@ public class OrganizadorService {
             new Etapa("portadas", "Completar portadas y año (MusicBrainz + Cover Art Archive)"),
             new Etapa("audio", "Analizar el sonido (ffmpeg)"),
             new Etapa("revision", "Buscar duplicados e inconsistencias"),
-            new Etapa("ia", "Etiquetas con IA local (opcional)"));
+            new Etapa("ia", "Etiquetas con IA (local o en línea, opcional)"));
 
     private final TrabajoOrganizadorRepository trabajos;
     private final ConfigSoporteService config;
@@ -54,6 +54,7 @@ public class OrganizadorService {
     private final AudioAnalisisService audio;
     private final RevisionCatalogoService revision;
     private final IaLocalService ia;
+    private IaEnLineaService enLinea;
     private final EtiquetaCancionRepository etiquetas;
     private final BibliotecaService biblioteca;
     private final ObjectMapper json = new ObjectMapper();
@@ -77,6 +78,19 @@ public class OrganizadorService {
         this.ia = ia;
         this.etiquetas = etiquetas;
         this.biblioteca = biblioteca;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setEnLinea(IaEnLineaService enLinea) { this.enLinea = enLinea; }
+
+    /** ¿Se usa la IA en línea (Groq u otra compatible con OpenAI) en vez de la local? */
+    public boolean iaEnLinea() { return enLinea != null && config.valor("org.iaProveedor") >= 1; }
+
+    /** Proveedor y modelo en uso: la evaluación aprobada vale solo para esta combinación. */
+    public String modeloActivo() { return iaEnLinea() ? enLinea.nombreModelo() : modelo(); }
+
+    public Map<String, Object> estadoIaEnLinea() {
+        return enLinea == null ? null : enLinea.estado((int) config.valor("org.iaEnLineaMaxDia"));
     }
 
     // ═══════════════════ Programación ═══════════════════
@@ -234,7 +248,7 @@ public class OrganizadorService {
             case "portadas" -> completado.portadasLote(Math.max(5, lote / 2), seguir);
             case "audio" -> audio.lote(lote, seguir);
             case "revision" -> revision.revisar();
-            case "ia" -> etiquetarConIa(Math.max(5, lote / 4), seguir, avance);
+            case "ia" -> etiquetarConIa(iaEnLinea() ? IaEnLineaService.LOTE * 2 : Math.max(5, lote / 4), seguir, avance);
             default -> 0;
         };
     }
@@ -312,10 +326,10 @@ public class OrganizadorService {
 
     public Map<String, Object> evaluar(String quien) {
         if (corriendo.get()) throw new IllegalStateException("Espera a que termine el trabajo en curso");
-        Map<String, Object> r = ia.evaluar(modelo(), (int) config.valor("org.iaHilos"));
+        Map<String, Object> r = iaEnLinea() ? enLinea.evaluar() : ia.evaluar(modelo(), (int) config.valor("org.iaHilos"));
         ConfigSoporte c = configRepo.findById("org.evaluacion").orElseGet(ConfigSoporte::new);
         c.setClave("org.evaluacion");
-        String v = r.get("precision") + "|" + Objects.toString(r.get("segundosPorCancion"), "") + "|" + LocalDate.now() + "|" + modelo();
+        String v = r.get("precision") + "|" + Objects.toString(r.get("segundosPorCancion"), "") + "|" + LocalDate.now() + "|" + modeloActivo();
         c.setValor(v.length() > 120 ? v.substring(0, 120) : v);
         c.setActualizada(LocalDateTime.now());
         c.setActualizadaPor(quien);
@@ -337,10 +351,11 @@ public class OrganizadorService {
     int etiquetarConIa(int n, BooleanSupplier seguir, Map<String, Object> avance) {
         Map<String, Object> ev = ultimaEvaluacion();
         if (config.valor("org.iaActiva") < 1) { avance.put("ia", "apagada"); return 0; }
-        if (ev == null || !Boolean.TRUE.equals(ev.get("apta")) || !modelo().equals(ev.get("modelo"))) {
-            avance.put("ia", "sin evaluación aprobada para " + modelo());
+        if (ev == null || !Boolean.TRUE.equals(ev.get("apta")) || !modeloActivo().equals(ev.get("modelo"))) {
+            avance.put("ia", "sin evaluación aprobada para " + modeloActivo());
             return 0;
         }
+        if (iaEnLinea()) return etiquetarEnLinea(n, seguir, avance);
         Set<Long> hechas = new HashSet<>(etiquetas.conEtiquetaDe("ia"));
         int hilos = (int) config.valor("org.iaHilos"), k = 0;
         for (CancionDTO c : biblioteca.todas()) {
@@ -366,6 +381,45 @@ public class OrganizadorService {
             k++;
         }
         ia.descargar(modelo());
+        return k;
+    }
+
+    /**
+     * IA en línea: canciones sin etiqueta de IA, por lotes de 25 en una sola petición cada uno, respetando el presupuesto
+     * diario y una pausa entre lotes (tokens por minuto del plan gratuito). Si el proveedor pide esperar, se sigue otro día.
+     */
+    private int etiquetarEnLinea(int n, BooleanSupplier seguir, Map<String, Object> avance) {
+        int maxDia = (int) config.valor("org.iaEnLineaMaxDia");
+        Set<Long> hechas = new HashSet<>(etiquetas.conEtiquetaDe("ia"));
+        List<CancionDTO> pendientes = biblioteca.todas().stream().filter(c -> !hechas.contains(c.getId())).limit(n).toList();
+        int k = 0;
+        for (int i = 0; i < pendientes.size() && seguir.getAsBoolean(); i += IaEnLineaService.LOTE) {
+            if (!enLinea.puedePedir(maxDia)) { avance.put("ia", "límite diario de la IA en línea: se sigue mañana"); break; }
+            List<CancionDTO> lote = pendientes.subList(i, Math.min(pendientes.size(), i + IaEnLineaService.LOTE));
+            try {
+                List<Map<String, String>> r = enLinea.clasificarLote(lote.stream().map(c -> new String[]{c.getArtista(), c.getNombre()}).toList());
+                for (int j = 0; j < lote.size(); j++) {
+                    Map<String, String> x = r.get(j);
+                    if (x == null) continue;
+                    for (String tipo : List.of("estilo", "contexto")) {
+                        EtiquetaCancion e = new EtiquetaCancion();
+                        e.setCancionId(lote.get(j).getId());
+                        e.setTipo(tipo);
+                        e.setValor(x.get(tipo));
+                        e.setOrigen("ia");
+                        e.setModelo(modeloActivo());
+                        e.setEstado(EtiquetaCancion.Estado.PROPUESTA); // nunca se aplica sola
+                        etiquetas.save(e);
+                    }
+                }
+                k += lote.size();
+            } catch (Exception e) {
+                avance.put("ia", Objects.toString(e.getMessage(), "IA en línea no disponible"));
+                break;
+            }
+            // Pausa entre lotes: el plan gratuito limita los tokens por minuto
+            try { Thread.sleep(12_000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
+        }
         return k;
     }
 

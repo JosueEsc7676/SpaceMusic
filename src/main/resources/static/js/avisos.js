@@ -170,7 +170,7 @@ function conectarEnVivo() {
     resumen.mensajes = (resumen.mensajes || 0) + 1;
     pintarContadores();
     const texto = d.mensaje.cancion && d.mensaje.texto === '🎵' ? 'Te compartió una canción'
-      : salaDeInvitacion(d.mensaje.texto) ? 'Te invitó a escuchar juntos en SyncPlay 🎧' : d.mensaje.texto;
+      : salaDeInvitacion(d.mensaje.texto) ? 'Te invitó a escuchar juntos en SyncPlay' : d.mensaje.texto;
     toast(`${d.nombre}: ${texto}`, { ms: 6000, action: { label: 'Ver', fn: () => { location.hash = ruta; } } });
     avisoSistema(d.nombre, texto, ruta);
   });
@@ -179,7 +179,7 @@ function conectarEnVivo() {
   fuente.addEventListener('visto', (e) => { try { bus.emit('dm:visto', JSON.parse(e.data)); } catch { } });
   fuente.addEventListener('notificacion', () => consultar());
   fuente.addEventListener('actividad', (e) => { try { bus.emit('amigo:actividad', JSON.parse(e.data)); } catch { } });
-  // SyncPlay: estado de la sala, reacciones y cierre
+  // SyncPlay: estado y cierre
   // Control remoto entre tus dispositivos: órdenes y lista de dispositivos
   for (const ev of ['juntos', 'juntos-reaccion', 'juntos-fin', 'control-orden', 'control-dispositivos', 'control-ack']) {
     fuente.addEventListener(ev, (e) => { try { bus.emit(ev, JSON.parse(e.data)); } catch { } });

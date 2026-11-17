@@ -40,7 +40,9 @@ public class ConfigSoporteService {
         AJUSTES.put("org.maxMinutos", new Object[]{120.0, 10.0, 600.0, "Minutos máximos por ejecución"});
         AJUSTES.put("org.cpuMax", new Object[]{70.0, 20.0, 100.0, "CPU del sistema (%) por encima de la cual el trabajo espera"});
         AJUSTES.put("org.pausaSiReproduce", new Object[]{1.0, 0.0, 1.0, "Esperar mientras alguien escucha música (1 = sí)"});
-        AJUSTES.put("org.iaActiva", new Object[]{0.0, 0.0, 1.0, "Etiquetas con IA local (solo si la última evaluación llega al 80 %)"});
+        AJUSTES.put("org.iaActiva", new Object[]{0.0, 0.0, 1.0, "Etiquetas con IA (solo si la última evaluación del modelo en uso llega al 80 %)"});
+        AJUSTES.put("org.iaProveedor", new Object[]{0.0, 0.0, 1.0, "IA para etiquetas: 0 = local (Ollama), 1 = en línea (Groq u otra compatible con OpenAI)"});
+        AJUSTES.put("org.iaEnLineaMaxDia", new Object[]{300.0, 10.0, 1000.0, "Peticiones diarias máximas a la IA en línea (cada una clasifica hasta 25 canciones)"});
         AJUSTES.put("org.iaHilos", new Object[]{1.0, 1.0, 4.0, "Núcleos de CPU que puede usar la IA local"});
     }
 

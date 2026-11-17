@@ -61,3 +61,7 @@ data-perf/
 
 # Instaladores copiados al disco por el servidor (AppsController)
 /app/
+
+# Claves que nunca van al repositorio (cifrado de mensajes)
+config/*.key
+*.key
