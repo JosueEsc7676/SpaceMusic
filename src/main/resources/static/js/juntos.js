@@ -15,10 +15,11 @@ import { toast, errorToast, emptyState, modal } from './ui.js';
 import { avatarPersona } from './views/people.js';
 import { enlaceSala, textoInvitacion } from './syncplay-enlace.js';
 import { ahoraServidor } from './remoto.js';
+import { crearAjuste, decidir } from './syncplay-ajuste.js';
 
 // ═══════════════════ Motor de sincronía ═══════════════════
 
-const motor = { sala: null, anfitrion: false, estado: null, version: -1, reloj: null, revisar: null };
+const motor = { sala: null, anfitrion: false, estado: null, version: -1, reloj: null, revisar: null, ajuste: crearAjuste(), aplicada: -1 };
 const CTX = (id) => ({ type: 'juntos-oyente', label: 'SyncPlay', route: '#/juntos/' + id });
 const original = {};
 let aplicando = false;
@@ -87,14 +88,24 @@ function aplicarAudio() {
   if (player.current?.id !== e.cancion.id) {
     sinEco(() => original.play([e.cancion, ...(e.cola || []).map((x) => x.cancion)], 0, CTX(motor.sala)));
     player.audio.addEventListener('loadedmetadata', () => {
-      sinEco(() => original.seek(objetivo() + 0.05));
+      // Se apunta un poco adelante (lo que tarda en empezar a sonar) y se mide para aprenderlo
+      const st = motor.ajuste;
+      st.midiendo = true; st.esperaHasta = Date.now() + 2500;
+      sinEco(() => original.seek(objetivo() + (motor.estado?.sonando ? st.adelanto : 0)));
       if (!motor.estado?.sonando) sinEco(() => original.pause());
     }, { once: true });
     return;
   }
   if (e.sonando && !player.playing) sinEco(() => original.resume());
   else if (!e.sonando && player.playing) sinEco(() => original.pause());
-  if (Math.abs((player.audio.currentTime || 0) - objetivo()) > 0.6) sinEco(() => original.seek(objetivo() + 0.05));
+  // Un estado nuevo (alguien movió o reanudó) se sigue enseguida; el resto lo corrige afinar() sin saltar en bucle
+  const nuevo = e.version == null || e.version !== motor.aplicada;
+  motor.aplicada = e.version ?? -1;
+  const desfase = (player.audio.currentTime || 0) - objetivo();
+  if (!e.sonando) { if (Math.abs(desfase) > 0.3) sinEco(() => original.seek(objetivo())); return; }
+  if (!nuevo || player.audio.readyState < 2) return;
+  const r = decidir(motor.ajuste, desfase, Date.now(), { forzar: true });
+  if (r.saltar != null) sinEco(() => original.seek(objetivo() + r.saltar));
 }
 
 /** Corrección fina cada medio segundo: velocidad 0,95–1,05 para desfases pequeños; salto si es grande. */
@@ -105,9 +116,9 @@ function afinar() {
     return;
   }
   const desfase = (a.currentTime || 0) - objetivo(); // positivo: vamos adelantados
-  if (Math.abs(desfase) > 0.6) { sinEco(() => original.seek(objetivo() + 0.05)); a.playbackRate = 1; return; }
-  if (Math.abs(desfase) < 0.04) { if (a.playbackRate !== 1) a.playbackRate = 1; return; }
-  a.playbackRate = Math.max(0.95, Math.min(1.05, 1 - desfase * 0.5));
+  const r = decidir(motor.ajuste, desfase, Date.now());
+  if (a.playbackRate !== r.velocidad) a.playbackRate = r.velocidad;
+  if (r.saltar != null) sinEco(() => original.seek(objetivo() + r.saltar));
 }
 
 function recibir(d) {
@@ -129,7 +140,7 @@ function recibir(d) {
 
 function activar(d) {
   if (!d?.dentro) return;
-  if (motor.sala !== d.id) { motor.version = -1; motor.estado = null; }
+  if (motor.sala !== d.id) { motor.version = -1; motor.estado = null; motor.ajuste = crearAjuste(); motor.aplicada = -1; }
   motor.sala = d.id;
   motor.anfitrion = !!d.soyAnfitrion;
   document.documentElement.classList.add('en-sala');

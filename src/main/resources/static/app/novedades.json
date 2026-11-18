@@ -1,14 +1,23 @@
 {
-  "version": "3.8",
-  "titulo": "Novedades: SyncPlay compartido, control como Spotify Connect y mensajes cifrados",
+  "version": "3.8.1",
+  "titulo": "Novedades: SyncPlay sin cortes",
   "puntos": [
-    "SyncPlay: ahora todos controlan la música. Cualquiera puede reproducir, pausar, cambiar de canción y mover la posición, y suena igual para todos con una sincronía mucho más precisa.",
-    "SyncPlay renovado: sin emojis y con el nombre «SyncPlay» en toda la app.",
-    "Como Spotify Connect: si la música suena en otro de tus dispositivos, tu reproductor muestra «Escuchando en…» y lo controla desde ahí. En Dispositivos, tocar otro dispositivo pasa la música allá y sigues teniendo el control.",
-    "Tus mensajes se guardan cifrados: en la base de datos no se pueden leer.",
-    "Organización con IA en línea (opcional, para administración): clasifica estilos y contextos usando el plan gratuito de Groq de forma eficiente."
+    "SyncPlay ya no se corta para quien se une: con una conexión lenta, el audio se mantenía saltando para alcanzar a los demás. Ahora se pone al día sin cortes.",
+    "Si alguien en el SyncPlay recibe una llamada o desconecta sus audífonos, solo se pausa su música, no la de todos (iPhone).",
+    "iPhone: inicio de sesión nuevo en blanco y negro y logo animado al abrir la app."
   ],
   "anteriores": [
+    {
+      "version": "3.8",
+      "titulo": "Novedades: SyncPlay compartido, control como Spotify Connect y mensajes cifrados",
+      "puntos": [
+        "SyncPlay: ahora todos controlan la música. Cualquiera puede reproducir, pausar, cambiar de canción y mover la posición, y suena igual para todos con una sincronía mucho más precisa.",
+        "SyncPlay renovado: sin emojis y con el nombre «SyncPlay» en toda la app.",
+        "Como Spotify Connect: si la música suena en otro de tus dispositivos, tu reproductor muestra «Escuchando en…» y lo controla desde ahí. En Dispositivos, tocar otro dispositivo pasa la música allá y sigues teniendo el control.",
+        "Tus mensajes se guardan cifrados: en la base de datos no se pueden leer.",
+        "Organización con IA en línea (opcional, para administración): clasifica estilos y contextos usando el plan gratuito de Groq de forma eficiente."
+      ]
+    },
     {
       "version": "3.7.1",
       "titulo": "Control entre dispositivos al estilo Spotify Connect",

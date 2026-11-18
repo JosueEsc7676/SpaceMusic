@@ -73,7 +73,7 @@ async function navegador(login) {
     const t0 = Date.now();
     for (;;) { const v = await js(codigo).catch(() => null); if (v) return v; if (Date.now() - t0 > ms) throw new Error('No se cumplió: ' + codigo.slice(0, 90)); await espera(300); }
   };
-  return { js, ir, captura, hasta };
+  return { js, ir, captura, hasta, p };
 }
 
 const resultados = [];
@@ -149,6 +149,32 @@ await prueba('«Anterior» desde A vuelve a la canción de antes en los dos', as
   await b.hasta(`${MOD} return P.player.current?.id === ${canciones[0].id};`, 10000);
   await a.hasta(`${MOD} return P.player.current?.id === ${canciones[0].id};`, 10000);
   return 'volvieron a la primera';
+});
+
+await prueba('Con la red lenta, el que se une no se corta (sin saltos en bucle)', async () => {
+  const larga = await a.js(`const r = await fetch('/api/canciones/top?limite=60', { headers: { Authorization: 'Bearer ' + ${JSON.stringify(T)} } });
+    const b = await fetch('/api/buscar?q=' + encodeURIComponent('Cuatro minutos'), { headers: { Authorization: 'Bearer ' + ${JSON.stringify(T)} } });
+    const todas = [...(await r.json()), ...((await b.json()).canciones || [])];
+    return todas.filter((c) => c.duracionSegundos > 200).sort((x, y) => y.duracionSegundos - x.duracionSegundos)[0];`);
+  afirmar(larga, 'no hay una canción de más de 200 s para probar (en desarrollo: data/music/Prueba Larga)');
+  await a.js(`${MOD} P.player.play([${JSON.stringify(larga)}], 0, { type: 'prueba' }); return 1;`);
+  await b.hasta(`${MOD} return P.player.playing && P.player.current?.id === ${larga.id};`, 10000);
+  await espera(2000);
+  await b.p('Network.enable');
+  await b.p('Network.emulateNetworkConditions', { offline: false, latency: 1500, downloadThroughput: 90 * 1024, uploadThroughput: 64 * 1024 });
+  await b.js(`${MOD} const a = P.player.audio; window.__sm = { saltos: 0, esperas: 0 };
+    a.addEventListener('seeking', () => window.__sm.saltos++); a.addEventListener('waiting', () => window.__sm.esperas++); return 1;`);
+  // A mueve a una parte que B todavía no ha bajado: B tiene que pedirla por la red lenta
+  await a.js(`${MOD} P.player.seek(${Math.floor(larga.duracionSegundos * 0.6)}); return 1;`);
+  await espera(22000);
+  const r = await b.js(`${MOD} return { ...window.__sm, sonando: P.player.playing };`);
+  const muestras = [];
+  for (let i = 0; i < 3; i++) { const [ta, tb] = await Promise.all([desfase(a), desfase(b)]); muestras.push(Math.abs(ta - tb)); await espera(500); }
+  await b.p('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+  const med = muestras.sort((x, y) => x - y)[1];
+  afirmar(r.saltos <= 3, `${r.saltos} saltos y ${r.esperas} cortes en 22 s (desfase ${med.toFixed(2)} s)`);
+  afirmar(r.sonando && med < 0.6, `al final: sonando=${r.sonando}, desfase ${med.toFixed(2)} s`);
+  return `${r.saltos} saltos, ${r.esperas} cortes · desfase final ${(med * 1000).toFixed(0)} ms`;
 });
 
 await prueba('Sin emojis ni «sala» en la pantalla de SyncPlay', async () => {

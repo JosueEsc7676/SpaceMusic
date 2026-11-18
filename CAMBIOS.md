@@ -1,6 +1,10 @@
 # Registro de cambios
 
 
+## Versión 3.8.1
+- **SyncPlay sin cortes para quien se une** (`js/syncplay-ajuste.js`, `js/juntos.js`): antes, con una conexión lenta, cada salto para alcanzar a los demás tardaba en volver a sonar, quedaba otra vez atrasado y volvía a saltar. Ahora el salto apunta un poco adelante (aprendido midiendo cuánto tardó en volver a sonar), tras un salto se espera antes de corregir otra vez (más si se repiten) y los desfases de hasta 0,8 s se corrigen solo con la velocidad. Solo un estado nuevo del servidor provoca un salto inmediato. Pruebas: `pruebas/syncplay-ajuste.test.mjs` (simulación: el método anterior saltaba más de 15 veces por minuto con 1,5 s por salto; el nuevo, 3 como máximo) y `pruebas/syncplay-sincronia.mjs` (8/8, nueva prueba con la red del invitado a 1,5 s de demora; desfase mediano 24–40 ms).
+- iPhone (rama `app-ios`): la misma corrección, búfer de 30 s en SyncPlay, pausas locales (llamada, audífonos, temporizador), inicio de sesión en blanco y negro sin el enlace del servidor y logo animado al abrir.
+
 ## Versión 3.8
 - **Mensajes cifrados en la base de datos** (`CifradoMensajes`, `TextoCifrado`, `MigracionCifrado`): AES-256-GCM con nonce aleatorio por mensaje, formato `enc:v1:`; clave de 32 bytes en `MENSAJES_CLAVE` o `config/clave-mensajes.key` (se crea sola con permisos solo del dueño; nunca en git). Columna `mensaje.texto` a TEXT y cifrado por lotes de los mensajes existentes al arrancar. Las apps no cambian. Pruebas: `CifradoMensajesTest` (3).
 - **IA en línea para organizar** (`IaEnLineaService`): API compatible con OpenAI, por defecto Groq (`openai/gpt-oss-20b`, plan gratuito ~1000 peticiones y ~200 000 tokens al día). Lotes de 25 canciones por petición, solo artista y título, solo canciones sin etiqueta, presupuesto diario propio (`org.iaEnLineaMaxDia`), pausa de 12 s entre lotes, parada ante 429 y 401/403, misma evaluación del 80 % y etiquetas como propuestas. Proveedor en `org.iaProveedor`; clave en `IA_API_KEY` o `config/ia-clave.key` (se pone desde Administración → Organización). Pruebas: `IaEnLineaTest` (2).
