@@ -1,5 +1,12 @@
 # Registro de cambios
 
+## iPhone: SyncPlay sin cortes, inicio de sesión nuevo y logo animado
+- **SyncPlay sin cortes para quien se une** (`AjusteSincronia.swift`, `EscuchaJuntos.swift`): antes, con una conexión lenta, cada salto para alcanzar a los demás tardaba en volver a sonar, quedaba otra vez atrasado y volvía a saltar (el audio se cortaba a cada rato). Ahora el salto apunta un poco adelante (aprendido midiendo cuánto tarda en volver a sonar), después de un salto se espera antes de corregir otra vez (más si se repiten) y los desfases medianos se corrigen solo con la velocidad. Solo un estado nuevo del servidor provoca un salto inmediato. Misma lógica que la web (`js/syncplay-ajuste.js`). Pruebas: `SyncPlayTests` (simulación con 0,2–3 s por salto).
+- **Acelerar sin detenerse a cargar**: dentro de SyncPlay se guardan 30 s de audio por adelantado (antes 5 s) y solo se acelera (hasta 1,05) si hay audio de sobra cargado; antes AVPlayer podía pausarse a cargar al subir la velocidad.
+- **Pausas locales**: una llamada, Siri, desconectar los audífonos, el temporizador o un fallo al cargar pausan solo este iPhone, no a todo el SyncPlay. Al tocar reproducir (o al terminar la llamada) vuelve al punto de los demás.
+- **Inicio de sesión nuevo** (`Entrada.swift`): blanco y negro con el logo de la app, campos con ícono y borde al escribir, ver/ocultar contraseña, botón activo solo con los datos escritos, vibración y sacudida si algo falla. Se quitó el enlace del servidor: la app usa siempre el servidor de SpaceMusic.
+- **Logo animado al abrir** (`App/Logo.swift`): las corcheas del ícono se dibujan, aparecen las cabezas y el nombre, y se desvanece (versión corta con «Reducir movimiento»).
+
 ## iPhone: SyncPlay compartido y barra «Escuchando en…»
 - **SyncPlay con control compartido** (`EscuchaJuntos.swift`, `JuntosVista.swift`): sigue el estado del servidor (`ts`, `version`) con el reloj sincronizado; los botones del reproductor, la pantalla bloqueada y la pantalla de SyncPlay mandan la orden para todos (`/api/juntos/{id}/control`). Ajuste fino de velocidad (0,95–1,05) y salto si el desfase pasa de 0,6 s. Sin emojis y «SyncPlay» en vez de «Sala».
 - `Reproductor`: enganche `controlExterno` (SyncPlay), `sinControlExterno`, `ajustarVelocidad` y `inicioUsuario` (el control entre dispositivos da el turno solo ante un inicio de la persona).

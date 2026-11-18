@@ -45,6 +45,11 @@ struct SalaJuntos: Decodable, Identifiable {
     @ObservationIgnored private var revision: Task<Void, Never>?
     @ObservationIgnored private var aplicandoTarea: Task<Void, Never>?
     @ObservationIgnored private var version = -1
+    /// Corrección de la sincronía (aprende cuánto tarda en volver a sonar tras un salto; sin saltos en bucle).
+    @ObservationIgnored private var ajuste = AjusteSincronia()
+    /// Versión del estado ya aplicada: solo un estado nuevo (alguien movió, reanudó…) provoca un salto inmediato.
+    @ObservationIgnored private var aplicada = -1
+    private var reloj: Double { ProcessInfo.processInfo.systemUptime }
     var enSyncPlay: Bool { sala?.dentro == true }
 
     // MARK: Crear e invitar
@@ -77,8 +82,9 @@ struct SalaJuntos: Decodable, Identifiable {
 
     func activar(_ s: SalaJuntos) {
         guard s.dentro else { return }
-        if sala?.id != s.id { version = -1 }
+        if sala?.id != s.id { version = -1; aplicada = -1; ajuste = AjusteSincronia() }
         Reproductor.compartido.controlExterno = { [weak self] a in self?.interceptar(a) ?? false }
+        Reproductor.compartido.bufferAmplio = true
         recibir(s)
         revision?.cancel()
         let cuenta = Sesion.compartida.usuario?.id
@@ -124,6 +130,8 @@ struct SalaJuntos: Decodable, Identifiable {
         sala = nil; version = -1
         let r = Reproductor.compartido
         r.controlExterno = nil
+        r.bufferAmplio = false
+        r.quitarPausaLocal()
         r.ajustarVelocidad(1)
     }
 
@@ -155,10 +163,13 @@ struct SalaJuntos: Decodable, Identifiable {
     }
 
     /// Pone el reproductor en el estado del SyncPlay (canción, pausa y posición).
-    private func aplicar() {
+    /// `forzar`: el cambio lo hizo esta persona ahora mismo (se aplica aunque la versión sea la misma).
+    private func aplicar(forzar: Bool = false) {
         guard let s = sala else { return }
         let r = Reproductor.compartido
         guard let c = s.cancion else { r.sinControlExterno { r.pausar() }; return }
+        let nuevo = forzar || s.version < 0 || s.version != aplicada
+        aplicada = s.version
         if r.actual?.id != c.id {
             r.sinControlExterno { r.reproducir([c] + s.cola.compactMap(\.cancion), desde: 0, contexto: "juntos-oyente") }
             aplicandoTarea?.cancel()
@@ -170,29 +181,40 @@ struct SalaJuntos: Decodable, Identifiable {
                     try? await Task.sleep(for: .milliseconds(100))
                 }
                 guard !Task.isCancelled, let actual = sala, actual.cancion?.id == c.id, r.listaParaBuscar else { return }
+                // Se apunta un poco adelante (lo que tarda en empezar a sonar) y se mide para aprenderlo
+                ajuste.trasCargar(ahora: reloj)
                 r.sinControlExterno {
-                    r.buscar(objetivo() + 0.05)
-                    if !actual.sonando { r.pausar() }
+                    r.buscar(objetivo() + (actual.sonando ? ajuste.adelanto : 0))
+                    if !actual.sonando || r.pausaLocal { r.pausar() }
                 }
             }
             return
         }
         r.sinControlExterno {
-            if s.sonando, !r.sonando { r.continuar() }
+            if s.sonando, !r.sonando, !r.pausaLocal { r.continuar() }
             else if !s.sonando, r.sonando { r.pausar() }
-            if r.listaParaBuscar, abs(r.tiempoExacto - objetivo()) > 0.6 { r.buscar(objetivo() + 0.05) }
         }
+        guard r.listaParaBuscar else { return }
+        let desfase = r.tiempoExacto - objetivo()
+        if !s.sonando {
+            if abs(desfase) > 0.3 { r.sinControlExterno { r.buscar(objetivo()) } }
+            return
+        }
+        // Un estado nuevo se sigue enseguida; el resto lo corrige afinar() sin saltar en bucle
+        guard nuevo, r.sonando else { return }
+        let o = ajuste.decidir(desfase: desfase, ahora: reloj, forzar: true)
+        if let x = o.saltar { r.sinControlExterno { r.buscar(objetivo() + x) } }
     }
 
-    /// Corrección fina cada medio segundo.
+    /// Corrección fina cada medio segundo: velocidad para desfases medianos, salto (con espera) para los grandes.
     private func afinar() {
         guard let s = sala, s.sonando, let c = s.cancion else { return }
         let r = Reproductor.compartido
-        guard r.actual?.id == c.id, r.sonando, r.listaParaBuscar else { r.ajustarVelocidad(1); return }
-        let desfase = r.tiempoExacto - objetivo() // positivo: vamos adelantados
-        if abs(desfase) > 0.6 { r.sinControlExterno { r.buscar(objetivo() + 0.05) }; r.ajustarVelocidad(1); return }
-        if abs(desfase) < 0.04 { r.ajustarVelocidad(1); return }
-        r.ajustarVelocidad(Float(1 - desfase * 0.5))
+        guard !r.pausaLocal, r.actual?.id == c.id, r.sonando, r.listaParaBuscar else { r.ajustarVelocidad(1); return }
+        // Acelerar pide más datos: solo si hay audio de sobra cargado (si no, AVPlayer se detiene a cargar)
+        let o = ajuste.decidir(desfase: r.tiempoExacto - objetivo(), ahora: reloj, puedeAcelerar: r.bufferHolgado)
+        r.ajustarVelocidad(o.velocidad)
+        if let x = o.saltar { r.sinControlExterno { r.buscar(objetivo() + x) } }
     }
 
     // MARK: Control compartido
@@ -200,14 +222,20 @@ struct SalaJuntos: Decodable, Identifiable {
     /// Los botones del reproductor, dentro de un SyncPlay, mandan la orden al SyncPlay (para todos).
     private func interceptar(_ a: Reproductor.AccionExterna) -> Bool {
         guard let s = sala, s.dentro else { return false }
+        let r = Reproductor.compartido
         switch a {
         case .poner(let canciones, let desde, _):
             guard canciones.indices.contains(desde) else { return true }
             let siguientes = canciones.dropFirst(desde + 1).prefix(20).map(\.id)
             control("poner", ["cancionId": canciones[desde].id, "cola": Array(siguientes)])
-        case .continuar: control("play")
+        case .continuar:
+            if r.pausaLocal, s.sonando { r.quitarPausaLocal(); aplicar(forzar: true) } else { control("play") }
         case .pausar: control("pause")
-        case .alternar: control(s.sonando ? "pause" : "play")
+        case .alternar:
+            // En pausa solo aquí (llamada, audífonos…) mientras los demás siguen: vuelve a sonar al mismo punto
+            if r.pausaLocal, s.sonando { r.quitarPausaLocal(); aplicar(forzar: true) } else { control(s.sonando ? "pause" : "play") }
+        case .retomarLocal:
+            r.quitarPausaLocal(); aplicar(forzar: true)
         case .siguiente:
             var datos: [String: Any] = [:]
             if let id = s.cancion?.id { datos["desde"] = id }
@@ -226,7 +254,8 @@ struct SalaJuntos: Decodable, Identifiable {
             s.ts = ControlRemoto.compartido.ahoraServidor
             if accion != "seek" { s.sonando = accion == "play" }
             sala = s
-            aplicar()
+            Reproductor.compartido.quitarPausaLocal()
+            aplicar(forzar: true)
         }
         var cuerpo = datos
         cuerpo["accion"] = accion

@@ -24,7 +24,10 @@ final class Sesion {
     var puedeEditar: Bool { rol == "ADMIN" || rol == "COLABORADOR" }
 
     private init() {
-        servidor = UserDefaults.standard.string(forKey: "servidor") ?? Sesion.servidorPorDefecto
+        // La dirección ya no se cambia desde la app: siempre el servidor de SpaceMusic
+        // (una dirección vieja guardada dejaría la entrada sin forma de arreglarla).
+        servidor = Sesion.servidorPorDefecto
+        UserDefaults.standard.removeObject(forKey: "servidor")
         token = Llavero.leer("token")
         if let datos = UserDefaults.standard.data(forKey: "usuario") {
             usuario = try? JSONDecoder().decode(Usuario.self, from: datos)

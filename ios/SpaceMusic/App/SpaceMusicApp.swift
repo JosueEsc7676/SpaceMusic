@@ -6,14 +6,22 @@ struct SpaceMusicApp: App {
     @UIApplicationDelegateAdaptor(Delegado.self) private var delegado
     @Environment(\.scenePhase) private var fase
     @AppStorage("acento") private var acento = Tema.acentoPorDefecto
+    /// Animación del logo al abrir la app (solo al arrancar, no al volver de segundo plano).
+    @State private var bienvenida = true
 
     var body: some Scene {
         WindowGroup {
-            Raiz()
-                .preferredColorScheme(.dark)
-                .tint(Tema.celeste)
-                // Al cambiar el color de la app se redibuja todo con el nuevo acento.
-                .id(acento)
+            ZStack {
+                Raiz()
+                    .tint(Tema.celeste)
+                    // Al cambiar el color de la app se redibuja todo con el nuevo acento.
+                    .id(acento)
+                if bienvenida {
+                    Bienvenida { bienvenida = false }
+                        .zIndex(1)
+                }
+            }
+            .preferredColorScheme(.dark)
         }
         .onChange(of: fase) { _, nueva in
             if nueva != .active { Reproductor.compartido.guardarEstado() }

@@ -112,7 +112,7 @@ final class Reproductor {
                 try? await Task.sleep(for: .milliseconds(250))
             }
             guard !Task.isCancelled else { return }
-            pausar(); finTemporizador = nil; jugador.volume = 1
+            pausarLocal(); finTemporizador = nil; jugador.volume = 1
         }
     }
 
@@ -123,6 +123,8 @@ final class Reproductor {
         case poner(canciones: [Cancion], desde: Int, contexto: String)
         case continuar, pausar, alternar, siguiente, anterior
         case buscar(Double)
+        /// Terminó una pausa local (llamada, Siri…): SyncPlay decide si volver a sonar y dónde.
+        case retomarLocal
     }
 
     /// Si devuelve true, la acción la atiende otro (SyncPlay) y el reproductor no la aplica por su cuenta.
@@ -145,6 +147,31 @@ final class Reproductor {
         aplicandoExterno = true
         fn()
         aplicandoExterno = antes
+    }
+
+    /// Pausa solo en este iPhone (llamada, audífonos desconectados, temporizador, fallo al cargar).
+    /// Dentro de SyncPlay no pausa a todos: este iPhone se queda en pausa hasta que la persona toque reproducir.
+    @ObservationIgnored private(set) var pausaLocal = false
+    func pausarLocal() {
+        guard controlExterno != nil else { pausar(); return }
+        pausaLocal = true
+        sinControlExterno { pausar() }
+    }
+    func quitarPausaLocal() { pausaLocal = false }
+
+    /// Dentro de SyncPlay se guarda más audio por adelantado: los cortes de red no detienen la música.
+    @ObservationIgnored var bufferAmplio = false {
+        didSet { for item in jugador.items() { item.preferredForwardBufferDuration = bufferAmplio ? 30 : 5 } }
+    }
+
+    /// Hay audio de sobra cargado por delante: acelerar un poco no hará que se detenga a cargar.
+    var bufferHolgado: Bool {
+        guard let item = jugador.currentItem, item.isPlaybackLikelyToKeepUp else { return false }
+        let ahora = item.currentTime().seconds
+        guard ahora.isFinite else { return false }
+        let fin = item.loadedTimeRanges.map(\.timeRangeValue).filter { $0.start.seconds <= ahora + 0.5 }
+            .map { $0.end.seconds }.max() ?? 0
+        return fin - ahora >= 6 || (duracion > 0 && fin >= duracion - 1)
     }
 
     /// Ajuste fino de velocidad (0,95–1,05) para alinear con el SyncPlay sin saltos audibles.
@@ -259,6 +286,7 @@ final class Reproductor {
 
     func continuar() {
         if externo(.continuar) { return }
+        pausaLocal = false
         marcarInicio()
         intencionSonar = true
         if jugador.currentItem == nil, actual != nil {
@@ -419,7 +447,7 @@ final class Reproductor {
             return nil
         }
         let item = AVPlayerItem(asset: AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: false]))
-        item.preferredForwardBufferDuration = 5
+        item.preferredForwardBufferDuration = bufferAmplio ? 30 : 5
         return item
     }
 
@@ -654,7 +682,7 @@ final class Reproductor {
         centro.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] n in
             // Al desconectar audífonos se pausa (como en todas las apps de música)
             let razon = (n.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt).flatMap(AVAudioSession.RouteChangeReason.init)
-            if razon == .oldDeviceUnavailable { MainActor.assumeIsolated { self?.pausar() } }
+            if razon == .oldDeviceUnavailable { MainActor.assumeIsolated { self?.pausarLocal() } }
         }
         centro.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: nil, queue: .main) { [weak self] n in
             let item = n.object as? AVPlayerItem
@@ -692,7 +720,7 @@ final class Reproductor {
             indice = calcularSiguiente(manual: true)!
             cargarActual(reproducir: true)
         } else {
-            pausar()
+            pausarLocal()
             cargando = false
         }
     }
@@ -744,10 +772,11 @@ final class Reproductor {
               let tipo = AVAudioSession.InterruptionType(rawValue: raw) else { return }
         if tipo == .began {
             reanudarTrasInterrupcion = sonando || cargando
-            pausar()
+            pausarLocal()
         }
         if tipo == .ended, reanudarTrasInterrupcion, let o = info?[AVAudioSessionInterruptionOptionKey] as? UInt,
            AVAudioSession.InterruptionOptions(rawValue: o).contains(.shouldResume) {
+            if externo(.retomarLocal) { return }
             continuar()
         }
     }

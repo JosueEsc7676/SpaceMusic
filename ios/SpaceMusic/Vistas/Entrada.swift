@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Iniciar sesión, crear cuenta y recuperar contraseña.
+/// Iniciar sesión, crear cuenta y recuperar contraseña (en blanco y negro, con el logo de la app).
+/// El servidor es siempre el de SpaceMusic: ya no se muestra ni se cambia desde aquí.
 struct Entrada: View {
     /// Las mismas pantallas de la web: entrar, registro, olvidé, restablecer (enlace del correo),
     /// reenviar verificación e instalación del primer administrador (setup.html).
@@ -20,147 +21,145 @@ struct Entrada: View {
     @State private var cargando = false
     @State private var error: String?
     @State private var aviso: String?
-    @State private var editandoServidor = false
-    @State private var servidor = ""
+    @State private var verClave = false
+    @State private var sacudida: CGFloat = 0
+    @State private var aparecer = false
     @FocusState private var foco: Campo?
 
-    enum Campo { case usuario, correo, nombre, clave }
+    enum Campo { case usuario, correo, nombre, clave, clave2, extra }
 
     var body: some View {
         ZStack {
-            Tema.fondo.ignoresSafeArea()
-            Circle().fill(Tema.lila.opacity(0.25)).frame(width: 380).blur(radius: 120).offset(x: -120, y: -300)
-            Circle().fill(Tema.celeste.opacity(0.2)).frame(width: 340).blur(radius: 120).offset(x: 140, y: -180)
+            Color.black.ignoresSafeArea()
+            // Luz suave en blanco y negro detrás del logo
+            Circle().fill(Color.white.opacity(0.07)).frame(width: 420).blur(radius: 110).offset(y: -300)
 
             ScrollView {
-                VStack(spacing: 26) {
-                    VStack(spacing: 10) {
-                        Image(systemName: "waveform.circle.fill")
-                            .font(.system(size: 64))
-                            .foregroundStyle(Tema.aurora)
-                        Text("SpaceMusic").font(.system(size: 34, weight: .heavy, design: .rounded))
-                        Text(subtitulo).font(.subheadline).foregroundStyle(Tema.secundario).multilineTextAlignment(.center)
+                VStack(spacing: 28) {
+                    VStack(spacing: 14) {
+                        LogoSpaceMusic(tamano: 84)
+                            .shadow(color: .white.opacity(0.12), radius: 24)
+                            .scaleEffect(aparecer ? 1 : 0.85)
+                        Text("SpaceMusic")
+                            .font(.system(size: 32, weight: .heavy, design: .rounded))
+                            .foregroundStyle(.white)
+                        Text(subtitulo)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.6))
+                            .multilineTextAlignment(.center)
                     }
-                    .padding(.top, 60)
+                    .padding(.top, 56)
+                    .opacity(aparecer ? 1 : 0)
 
                     if let m = sesion.motivoSalida, modo == .entrar {
-                        Text(m).font(.subheadline).foregroundStyle(Tema.rosa).multilineTextAlignment(.center)
+                        mensaje(m, icono: "info.circle", color: .white.opacity(0.85))
                     }
 
                     VStack(spacing: 12) {
                         switch modo {
                         case .entrar:
-                            campo("Usuario o correo", texto: $usuario, campo: .usuario, tipo: .username)
+                            campo("Usuario o correo", icono: "person", texto: $usuario, campo: .usuario, tipo: .username)
                             campoClave
+                            HStack {
+                                Spacer()
+                                Button("¿Olvidaste tu contraseña?") { cambiar(.olvide) }
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
                         case .registrar:
-                            campo("Correo", texto: $correo, campo: .correo, tipo: .emailAddress)
-                            campo("Usuario", texto: $usuario, campo: .usuario, tipo: .username)
-                            campo("Tu nombre (opcional)", texto: $nombre, campo: .nombre, tipo: .name)
+                            campo("Correo", icono: "envelope", texto: $correo, campo: .correo, tipo: .emailAddress)
+                            campo("Usuario", icono: "person", texto: $usuario, campo: .usuario, tipo: .username)
+                            campo("Tu nombre (opcional)", icono: "person.text.rectangle", texto: $nombre, campo: .nombre, tipo: .name)
                             campoClave
-                            Text("Mínimo 8 caracteres. Un administrador aprobará tu cuenta.")
-                                .font(.caption).foregroundStyle(Tema.secundario)
+                            nota("Mínimo 8 caracteres. Un administrador aprobará tu cuenta.")
                         case .olvide, .verificar:
-                            campo("Correo de tu cuenta", texto: $correo, campo: .correo, tipo: .emailAddress)
+                            campo("Correo de tu cuenta", icono: "envelope", texto: $correo, campo: .correo, tipo: .emailAddress)
                         case .restablecer:
-                            campo("Enlace o código del correo", texto: $enlace, campo: .usuario, tipo: .oneTimeCode)
+                            campo("Enlace o código del correo", icono: "link", texto: $enlace, campo: .usuario, tipo: .oneTimeCode)
                             campoClave
-                            campoSegura("Repite la contraseña", texto: $clave2)
-                            Text("Pega el enlace completo que te llegó por correo para cambiar la contraseña.")
-                                .font(.caption).foregroundStyle(Tema.secundario)
+                            campoSegura("Repite la contraseña", texto: $clave2, campo: .clave2)
+                            nota("Pega el enlace completo que te llegó por correo para cambiar la contraseña.")
                         case .instalar:
-                            campo("Correo", texto: $correo, campo: .correo, tipo: .emailAddress)
-                            campo("Usuario", texto: $usuario, campo: .usuario, tipo: .username)
-                            campo("Tu nombre (opcional)", texto: $nombre, campo: .nombre, tipo: .name)
+                            campo("Correo", icono: "envelope", texto: $correo, campo: .correo, tipo: .emailAddress)
+                            campo("Usuario", icono: "person", texto: $usuario, campo: .usuario, tipo: .username)
+                            campo("Tu nombre (opcional)", icono: "person.text.rectangle", texto: $nombre, campo: .nombre, tipo: .name)
                             campoClave
                             if requiereClaveInstalacion {
-                                campoSegura("Clave de instalación (app.setup-key)", texto: $claveInstalacion)
+                                campoSegura("Clave de instalación", texto: $claveInstalacion, campo: .extra)
                             } else {
-                                Text("El servidor no tiene clave de instalación: solo puede crearse el administrador desde el propio servidor.")
-                                    .font(.caption).foregroundStyle(Tema.secundario)
+                                nota("Este servidor no tiene clave de instalación: el administrador solo puede crearse desde el propio servidor.")
                             }
                         }
                     }
+                    .modifier(Sacudir(veces: sacudida))
 
-                    if let error {
-                        Text(error).font(.subheadline).foregroundStyle(Tema.peligro).multilineTextAlignment(.center)
-                    }
-                    if let aviso {
-                        Text(aviso).font(.subheadline).foregroundStyle(Tema.celeste).multilineTextAlignment(.center)
-                    }
+                    if let error { mensaje(error, icono: "exclamationmark.circle", color: Tema.peligro) }
+                    if let aviso { mensaje(aviso, icono: "checkmark.circle", color: .white) }
 
                     Button(action: enviar) {
-                        Group {
-                            if cargando { ProgressView().tint(.black) } else { Text(textoBoton) }
+                        ZStack {
+                            Text(textoBoton).opacity(cargando ? 0 : 1)
+                            if cargando { ProgressView().tint(.black) }
                         }
                         .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
                     }
                     .buttonStyle(BotonPrincipal())
-                    .disabled(cargando)
+                    .disabled(cargando || !listo)
+                    .opacity(listo ? 1 : 0.45)
+                    .animation(.easeOut(duration: 0.15), value: listo)
 
-                    VStack(spacing: 14) {
+                    VStack(spacing: 16) {
                         switch modo {
                         case .entrar:
-                            Button("¿Olvidaste tu contraseña?") { cambiar(.olvide) }
-                            Button("Crear una cuenta") { cambiar(.registrar) }
+                            HStack(spacing: 4) {
+                                Text("¿No tienes cuenta?").foregroundStyle(.white.opacity(0.6))
+                                Button("Crear una") { cambiar(.registrar) }.foregroundStyle(.white)
+                            }
                             Button("Reenviar correo de verificación") { cambiar(.verificar) }
-                                .font(.footnote).foregroundStyle(Tema.secundario)
+                                .font(.footnote)
+                                .foregroundStyle(.white.opacity(0.5))
                             if necesitaAdmin {
                                 Button("Configurar el servidor: crear administrador") { cambiar(.instalar) }
-                                    .foregroundStyle(Tema.lila)
+                                    .foregroundStyle(.white)
                             }
                         case .olvide:
-                            Button("Ya tengo el enlace del correo") { cambiar(.restablecer) }
-                            Button("Ya tengo cuenta") { cambiar(.entrar) }
+                            Button("Ya tengo el enlace del correo") { cambiar(.restablecer) }.foregroundStyle(.white)
+                            botonVolver
                         case .registrar, .restablecer, .verificar, .instalar:
-                            Button("Ya tengo cuenta") { cambiar(.entrar) }
+                            botonVolver
                         }
                     }
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Tema.texto)
-
-                    Button {
-                        servidor = sesion.servidor
-                        editandoServidor = true
-                    } label: {
-                        Label(sesion.servidor.replacingOccurrences(of: "https://", with: ""), systemImage: "server.rack")
-                            .font(.caption)
-                            .foregroundStyle(Tema.secundario)
-                    }
-                    .padding(.top, 20)
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 40)
+                .frame(maxWidth: 460)
+                .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboard(.interactively)
         }
-        .task(id: sesion.servidor) { await consultarEstado() }
-        .alert("Servidor", isPresented: $editandoServidor) {
-            TextField("https://…", text: $servidor)
-                .textInputAutocapitalization(.never)
-                .keyboardType(.URL)
-                .autocorrectionDisabled()
-            Button("Guardar") { guardarServidor() }
-            Button("Usar el de siempre") { sesion.servidor = Sesion.servidorPorDefecto }
-            Button("Cancelar", role: .cancel) {}
-        } message: {
-            Text("Dirección de tu servidor de SpaceMusic. Ejemplo: \(Sesion.servidorPorDefecto)")
-        }
+        .task { await consultarEstado() }
+        .onAppear { withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.05)) { aparecer = true } }
+        .onChange(of: usuario) { error = nil }
+        .onChange(of: clave) { error = nil }
+        .onChange(of: correo) { error = nil }
     }
 
     private var subtitulo: String {
         switch modo {
-        case .entrar: return "Tu música, en tu servidor."
+        case .entrar: return "Inicia sesión para escuchar tu música."
         case .registrar: return "Crea tu cuenta"
         case .olvide: return "Te enviaremos un enlace para cambiar tu contraseña."
         case .restablecer: return "Elige una contraseña nueva."
         case .verificar: return "Te enviaremos otro correo para verificar tu cuenta."
-        case .instalar: return "Crea la primera cuenta de administrador de este servidor."
+        case .instalar: return "Crea la primera cuenta de administrador."
         }
     }
 
     private var textoBoton: String {
         switch modo {
-        case .entrar: return "Entrar"
+        case .entrar: return "Iniciar sesión"
         case .registrar: return "Crear cuenta"
         case .olvide: return "Enviar enlace"
         case .restablecer: return "Cambiar contraseña"
@@ -169,26 +168,106 @@ struct Entrada: View {
         }
     }
 
-    private func campo(_ titulo: String, texto: Binding<String>, campo: Campo, tipo: UITextContentType) -> some View {
-        TextField(titulo, text: texto)
-            .textContentType(tipo)
-            .keyboardType(tipo == .emailAddress ? .emailAddress : .default)
-            .textInputAutocapitalization(tipo == .name ? .words : .never)
-            .autocorrectionDisabled()
-            .focused($foco, equals: campo)
-            .submitLabel(.next)
-            .onSubmit { foco = .clave }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Tema.tarjeta))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Tema.linea))
+    /// El botón principal se activa cuando los datos mínimos están escritos.
+    private var listo: Bool {
+        let u = !usuario.trimmingCharacters(in: .whitespaces).isEmpty
+        let c = !correo.trimmingCharacters(in: .whitespaces).isEmpty
+        switch modo {
+        case .entrar: return u && !clave.isEmpty
+        case .registrar, .instalar: return u && c && !clave.isEmpty
+        case .olvide, .verificar: return c
+        case .restablecer: return !enlace.isEmpty && !clave.isEmpty && !clave2.isEmpty
+        }
     }
 
-    private func campoSegura(_ titulo: String, texto: Binding<String>) -> some View {
-        SecureField(titulo, text: texto)
-            .textContentType(.newPassword)
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Tema.tarjeta))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Tema.linea))
+    private var botonVolver: some View {
+        Button { cambiar(.entrar) } label: { Label("Volver a iniciar sesión", systemImage: "chevron.left") }
+            .foregroundStyle(.white.opacity(0.8))
+    }
+
+    private func mensaje(_ texto: String, icono: String, color: Color) -> some View {
+        Label(texto, systemImage: icono)
+            .font(.subheadline)
+            .foregroundStyle(color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.06)))
+            .transition(.opacity)
+    }
+
+    private func nota(_ texto: String) -> some View {
+        Text(texto)
+            .font(.caption)
+            .foregroundStyle(.white.opacity(0.55))
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Caja de un campo: ícono a la izquierda y borde blanco cuando está activo.
+    private func caja<Contenido: View>(_ icono: String, campo: Campo, @ViewBuilder _ contenido: () -> Contenido) -> some View {
+        let activo = foco == campo
+        return HStack(spacing: 12) {
+            Image(systemName: icono)
+                .font(.body)
+                .foregroundStyle(.white.opacity(activo ? 0.9 : 0.45))
+                .frame(width: 22)
+            contenido()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 15)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(activo ? 0.1 : 0.06)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .strokeBorder(Color.white.opacity(activo ? 0.55 : 0.1), lineWidth: 1))
+        .animation(.easeOut(duration: 0.15), value: activo)
+    }
+
+    private func campo(_ titulo: String, icono: String, texto: Binding<String>, campo: Campo, tipo: UITextContentType) -> some View {
+        caja(icono, campo: campo) {
+            TextField("", text: texto, prompt: Text(titulo).foregroundStyle(.white.opacity(0.4)))
+                .textContentType(tipo)
+                .keyboardType(tipo == .emailAddress ? .emailAddress : .default)
+                .textInputAutocapitalization(tipo == .name ? .words : .never)
+                .autocorrectionDisabled()
+                .focused($foco, equals: campo)
+                .submitLabel(.next)
+                .onSubmit { foco = .clave }
+                .foregroundStyle(.white)
+        }
+    }
+
+    private func campoSegura(_ titulo: String, texto: Binding<String>, campo: Campo) -> some View {
+        caja("lock", campo: campo) {
+            SecureField("", text: texto, prompt: Text(titulo).foregroundStyle(.white.opacity(0.4)))
+                .textContentType(.newPassword)
+                .focused($foco, equals: campo)
+                .foregroundStyle(.white)
+        }
+    }
+
+    private var campoClave: some View {
+        caja("lock", campo: .clave) {
+            Group {
+                if verClave {
+                    TextField("", text: $clave, prompt: Text("Contraseña").foregroundStyle(.white.opacity(0.4)))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } else {
+                    SecureField("", text: $clave, prompt: Text("Contraseña").foregroundStyle(.white.opacity(0.4)))
+                }
+            }
+            .textContentType([.registrar, .restablecer, .instalar].contains(modo) ? .newPassword : .password)
+            .focused($foco, equals: .clave)
+            .submitLabel(.go)
+            .onSubmit { if listo { enviar() } }
+            .foregroundStyle(.white)
+            Button {
+                verClave.toggle()
+                foco = .clave
+            } label: {
+                Image(systemName: verClave ? "eye.slash" : "eye")
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            .accessibilityLabel(verClave ? "Ocultar contraseña" : "Mostrar contraseña")
+        }
     }
 
     /// Token del enlace del correo (`…/reset-password.html?token=…`) o el código pegado tal cual.
@@ -215,31 +294,21 @@ struct Entrada: View {
         requiereClaveInstalacion = e.requiereClave
     }
 
-    private var campoClave: some View {
-        SecureField("Contraseña", text: $clave)
-            .textContentType([.registrar, .restablecer, .instalar].contains(modo) ? .newPassword : .password)
-            .focused($foco, equals: .clave)
-            .submitLabel(.go)
-            .onSubmit(enviar)
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Tema.tarjeta))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Tema.linea))
-    }
-
     private func cambiar(_ m: Modo) {
-        withAnimation { modo = m }
+        foco = nil
+        withAnimation(.easeInOut(duration: 0.25)) { modo = m }
         error = nil
         aviso = nil
     }
 
-    private func guardarServidor() {
-        var s = servidor.trimmingCharacters(in: .whitespacesAndNewlines)
-        while s.hasSuffix("/") { s.removeLast() }
-        if !s.isEmpty && !s.hasPrefix("http") { s = "https://" + s }
-        if URL(string: s) != nil, !s.isEmpty { sesion.servidor = s }
+    private func fallo(_ texto: String) {
+        withAnimation(.easeOut(duration: 0.2)) { error = texto }
+        withAnimation(.linear(duration: 0.4)) { sacudida += 1 }
+        UINotificationFeedbackGenerator().notificationOccurred(.error)
     }
 
     private func enviar() {
+        guard listo, !cargando else { return }
         error = nil
         aviso = nil
         foco = nil
@@ -254,6 +323,7 @@ struct Entrada: View {
                     guard let token = r.token, let u = r.usuario else { throw ErrorAPI(mensaje: "No se pudo entrar", estado: 0) }
                     clave = ""
                     sesion.motivoSalida = nil
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
                     sesion.guardar(token: token, usuario: u)
                 case .registrar:
                     let r: RespuestaOK = try await API.enviar("POST", "/api/auth/register", [
@@ -295,8 +365,20 @@ struct Entrada: View {
                     sesion.guardar(token: token, usuario: u)
                 }
             } catch {
-                self.error = error.localizedDescription
+                fallo(error.localizedDescription)
             }
         }
+    }
+}
+
+/// Sacude los campos de lado a lado cuando algo sale mal (como el código de desbloqueo del iPhone).
+private struct Sacudir: GeometryEffect {
+    var veces: CGFloat
+    var animatableData: CGFloat {
+        get { veces }
+        set { veces = newValue }
+    }
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        ProjectionTransform(CGAffineTransform(translationX: 8 * sin(veces * .pi * 4), y: 0))
     }
 }
