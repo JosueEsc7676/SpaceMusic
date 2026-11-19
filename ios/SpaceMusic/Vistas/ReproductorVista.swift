@@ -18,7 +18,6 @@ struct ReproductorVista: View {
     @State private var colores = ColoresPortada.neutros
     @State private var desplazamiento: CGFloat = 0
     @State private var altoControles: CGFloat = 340
-    @State private var compartirVersos = false
     @State private var dispositivos = false
     @State private var letraAmpliada = false
 
@@ -54,7 +53,6 @@ struct ReproductorVista: View {
         .task(id: r.actual?.portadaUrl) { await calcularColores() }
         .accessibilityAction(.escape) { cerrar() }
         .sheet(isPresented: $dispositivos) { DispositivosVista() }
-        .sheet(isPresented: $compartirVersos) { if let c = r.actual { CompartirVersosVista(cancion: c) } }
         .fullScreenCover(isPresented: $letraAmpliada) { if let c = r.actual { LetraAmpliadaVista(cancion: c) } }
         .hojasGlobales()
     }
@@ -271,8 +269,13 @@ struct ReproductorVista: View {
             }
             Menu {
             Button { letraAmpliada = true } label: { Label("Letra a pantalla completa", systemImage: "arrow.up.left.and.arrow.down.right") }
-            Button { compartirVersos = true } label: { Label("Compartir versos como imagen", systemImage: "square.and.arrow.up") }
+            // Los versos se eligen tocándolos en la letra (como en la web)
+            Button {
+                withAnimation(.spring(duration: 0.4)) { panel = .letra }
+                letras.seleccionando = true
+            } label: { Label("Compartir versos como imagen", systemImage: "square.and.arrow.up") }
             if letras.sincronizada {
+                Toggle(isOn: $r.letraEnBloqueo) { Label("Letra en la pantalla bloqueada", systemImage: "lock.iphone") }
                 Menu {
                     Button("Letra antes (−0,5 s)") { letras.ajustarDesfase(-0.5) }
                     Button("Letra antes (−0,1 s)") { letras.ajustarDesfase(-0.1) }
@@ -568,6 +571,8 @@ struct LetraBreve: View {
 /// - la activa se coloca en el primer cuarto de la pantalla con un desplazamiento suave;
 /// - al deslizar con el dedo todo se enfoca y la letra deja de seguir la canción unos segundos;
 /// - tocar una línea salta a ese momento; las pausas largas muestran tres puntos que se van llenando.
+/// Arriba: «Traducir» (traducción del iPhone debajo de cada línea) y «Versos» (se eligen tocándolos aquí mismo
+/// para crear la imagen, como en la web, sin abrir otra ventana).
 struct LetraCompleta: View {
     var ampliada = false
     @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
@@ -576,45 +581,185 @@ struct LetraCompleta: View {
     @State private var actual: Int?
     @State private var manual = false
     @State private var manualHasta = Date.distantPast
+    @State private var imagenVersos: ImagenVersos?
+    @State private var preparando = false
 
     var body: some View {
-        Group {
-            if letras.cargando {
-                ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if letras.sincronizada {
-                sincronizada
-            } else if !letras.textoPlano.isEmpty {
-                ScrollView(showsIndicators: false) {
-                    Text(letras.textoPlano)
-                        .font(.title2.weight(.bold))
-                        .lineSpacing(10)
-                        .foregroundStyle(.white.opacity(0.9))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 26)
-                        .padding(.vertical, 24)
+        VStack(spacing: 0) {
+            if letras.hayLetra && !letras.cargando { barra }
+            Group {
+                if letras.cargando {
+                    ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if letras.seleccionando && letras.hayLetra {
+                    listaSeleccion
+                } else if letras.sincronizada {
+                    sincronizada
+                } else if !letras.textoPlano.isEmpty {
+                    textoPlano
+                } else if let c = r.actual {
+                    VStack(spacing: 14) {
+                        Image(systemName: "quote.bubble").font(.largeTitle).foregroundStyle(.white.opacity(0.5))
+                        Text(letras.mensaje ?? "Esta canción no tiene letra todavía")
+                            .foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.center)
+                        Button("Buscar la letra") { Task { await letras.buscarEnInternet(c, forzar: letras.mensaje != nil) } }
+                            .buttonStyle(BotonSecundario())
+                    }
+                    .padding(.horizontal, 26)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-            } else if let c = r.actual {
-                VStack(spacing: 14) {
-                    Image(systemName: "quote.bubble").font(.largeTitle).foregroundStyle(.white.opacity(0.5))
-                    Text(letras.mensaje ?? "Esta canción no tiene letra todavía")
-                        .foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.center)
-                    Button("Buscar la letra") { Task { await letras.buscarEnInternet(c, forzar: letras.mensaje != nil) } }
-                        .buttonStyle(BotonSecundario())
+            }
+            .frame(maxHeight: .infinity)
+        }
+        .modifier(TraducirLetra())
+        .safeAreaInset(edge: .bottom) { if letras.seleccionando { barraSeleccion } }
+        .sheet(item: $imagenVersos, onDismiss: { letras.seleccionando = false }) { v in
+            VistaImagenVersos(imagen: v.imagen, nombre: r.actual?.nombre ?? "Versos")
+        }
+        .animation(.easeInOut(duration: 0.25), value: letras.seleccionando)
+    }
+
+    // MARK: Barra de arriba: traducir y elegir versos
+
+    private var barra: some View {
+        HStack(spacing: 8) {
+            if letras.traduciendo, let e = letras.errorTraduccion {
+                Text(e).font(.caption).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+            } else if letras.seleccionando {
+                Text("Toca los versos para tu imagen").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.7))
+            }
+            Spacer(minLength: 0)
+            if TraducirLetra.disponible && !letras.seleccionando {
+                chip(letras.traduciendo ? "Original" : "Traducir", icono: "translate", activo: letras.traduciendo) {
+                    letras.traduciendo.toggle()
                 }
-                .padding(.horizontal, 26)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            chip(letras.seleccionando ? "Listo" : "Versos", icono: letras.seleccionando ? "checkmark" : "text.quote", activo: letras.seleccionando) {
+                manual = false
+                letras.seleccionando.toggle()
             }
         }
+        .padding(.horizontal, 22)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
     }
+
+    private func chip(_ titulo: String, icono: String, activo: Bool, accion: @escaping () -> Void) -> some View {
+        Button(action: accion) {
+            Label(titulo, systemImage: icono)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(activo ? Color.white : Color.white.opacity(0.12)))
+                .foregroundStyle(activo ? Color.black : Color.white)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Elegir versos
+
+    private var listaSeleccion: some View {
+        ScrollView(showsIndicators: false) {
+            LazyVStack(alignment: .leading, spacing: 6) {
+                ForEach(letras.versos, id: \.id) { v in
+                    let elegido = letras.elegidas.contains(v.id)
+                    Button { withAnimation(.easeOut(duration: 0.15)) { letras.alternarVerso(v.id) } } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Image(systemName: elegido ? "checkmark.circle.fill" : "circle")
+                                .font(.body)
+                                .foregroundStyle(.white.opacity(elegido ? 1 : 0.35))
+                            Text(v.texto)
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white.opacity(elegido ? 1 : 0.55))
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 14)
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(elegido ? 0.14 : 0)))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(elegido ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+        }
+    }
+
+    private var barraSeleccion: some View {
+        HStack(spacing: 12) {
+            Button("Cancelar") { letras.seleccionando = false }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.8))
+            Spacer(minLength: 0)
+            Text("\(letras.elegidas.count) de \(Letras.maxVersos)")
+                .font(.footnote.monospacedDigit())
+                .foregroundStyle(.white.opacity(0.6))
+            Button {
+                Task { await crearImagen() }
+            } label: {
+                ZStack {
+                    Label("Crear imagen", systemImage: "photo").opacity(preparando ? 0 : 1)
+                    if preparando { ProgressView().tint(.black) }
+                }
+            }
+            .buttonStyle(BotonPrincipal())
+            .disabled(letras.elegidas.isEmpty || preparando)
+            .opacity(letras.elegidas.isEmpty ? 0.5 : 1)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private func crearImagen() async {
+        guard let c = r.actual, !letras.elegidas.isEmpty else { return }
+        preparando = true
+        defer { preparando = false }
+        if let img = await TarjetaDedicatoria.imagen(cancion: c, lineas: letras.textosElegidos, completa: false, de: nil, para: nil, mensaje: nil) {
+            imagenVersos = ImagenVersos(imagen: img)
+        } else {
+            Avisos.compartido.mostrar("No se pudo crear la imagen")
+        }
+    }
+
+    // MARK: Letra en texto (sin tiempos)
+
+    private var textoPlano: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(letras.versos, id: \.id) { v in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(v.texto)
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.88))
+                        if letras.traduciendo, let t = letras.traducciones[v.id] {
+                            Text(t).font(.system(size: 16, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.5))
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 26)
+            .padding(.vertical, 20)
+        }
+    }
+
+    // MARK: Letra sincronizada
 
     private var sincronizada: some View {
         GeometryReader { espacio in
           ScrollViewReader { lector in
             ScrollView(showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 30) {
+                LazyVStack(alignment: .leading, spacing: 22) {
                     ForEach(letras.lineas) { l in
                         LineaLetraVista(linea: l, activa: l.id == actual, pasada: (actual ?? -1) > l.id,
-                                        distancia: actual.map { abs(l.id - $0) } ?? 2, enfocada: manual, ampliada: ampliada)
+                                        distancia: actual.map { abs(l.id - $0) } ?? 2, enfocada: manual, ampliada: ampliada,
+                                        traduccion: letras.traduciendo ? letras.traducciones[l.id] : nil)
                             .id(l.id)
                             .contentShape(Rectangle())
                             .onTapGesture {
@@ -628,7 +773,7 @@ struct LetraCompleta: View {
                 }
                 // Sin margen aquí: cada línea lleva el suyo y ocupa todo el ancho, así desplazar hasta la línea
                 // activa nunca mueve la letra hacia los lados (antes quedaba pegada al borde izquierdo).
-                .padding(.top, 36)
+                .padding(.top, 24)
                 .padding(.bottom, max(140, espacio.size.height * 0.6))
             }
             .simultaneousGesture(DragGesture(minimumDistance: 6).onChanged { _ in
@@ -662,6 +807,57 @@ struct LetraCompleta: View {
     }
 }
 
+/// Imagen de versos lista para compartir o guardar.
+struct ImagenVersos: Identifiable {
+    let id = UUID()
+    let imagen: UIImage
+}
+
+struct VistaImagenVersos: View {
+    let imagen: UIImage
+    let nombre: String
+    @Environment(\.dismiss) private var cerrar
+    @State private var guardada = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 18) {
+                    Image(uiImage: imagen)
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .shadow(color: .black.opacity(0.5), radius: 20, y: 8)
+                        .padding(.horizontal, 28)
+                    HStack(spacing: 12) {
+                        ShareLink(item: Image(uiImage: imagen), preview: SharePreview(nombre, image: Image(uiImage: imagen))) {
+                            Label("Compartir", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(BotonPrincipal())
+                        Button {
+                            UIImageWriteToSavedPhotosAlbum(imagen, nil, nil, nil)
+                            guardada = true
+                            UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        } label: {
+                            Label(guardada ? "Guardada" : "Guardar en Fotos", systemImage: guardada ? "checkmark" : "arrow.down.to.line")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(BotonSecundario())
+                        .disabled(guardada)
+                    }
+                    .padding(.horizontal, 28)
+                }
+                .padding(.vertical, 20)
+            }
+            .background(Color.black.ignoresSafeArea())
+            .navigationTitle("Tus versos")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Listo") { cerrar() } } }
+        }
+        .presentationDetents([.large])
+    }
+}
+
 /// Una línea de la letra.
 struct LineaLetraVista: View {
     let linea: LineaLetra
@@ -671,26 +867,36 @@ struct LineaLetraVista: View {
     /// Mientras el usuario desliza, todas las líneas se ven nítidas (como en Apple Music).
     let enfocada: Bool
     var ampliada = false
+    /// Traducción de la línea (debajo, más pequeña).
+    var traduccion: String? = nil
     @State private var r = Reproductor.compartido
-    @ScaledMetric(relativeTo: .largeTitle) private var tamano: CGFloat = 31
+    // Un poco más pequeña que antes (31): la pantalla se veía muy llena
+    @ScaledMetric(relativeTo: .largeTitle) private var tamano: CGFloat = 27
 
     var body: some View {
-        Group {
-            if linea.interludio {
-                PuntosInterludio(linea: linea, activa: activa)
-            } else if activa {
-                TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in
-                    karaoke(Letras.compartido.tiempoLetra(r.tiempoExacto))
+        VStack(alignment: .leading, spacing: 6) {
+            Group {
+                if linea.interludio {
+                    PuntosInterludio(linea: linea, activa: activa)
+                } else if activa {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in
+                        karaoke(Letras.compartido.tiempoLetra(r.tiempoExacto))
+                    }
+                    .accessibilityLabel(linea.texto)
+                } else {
+                    // Mismo texto palabra por palabra que la línea activa: al activarse no cambia el corte de líneas
+                    // (antes la línea se recolocaba y parecía vibrar).
+                    karaoke(nil)
                 }
-                .accessibilityLabel(linea.texto)
-            } else {
-                // Mismo texto palabra por palabra que la línea activa: al activarse no cambia el corte de líneas
-                // (antes la línea se recolocaba y parecía vibrar).
-                karaoke(nil)
+            }
+            .font(.system(size: ampliada ? tamano * 1.1 : tamano, weight: .bold, design: .rounded))
+            .lineSpacing(ampliada ? 5 : 2)
+            if let traduccion, !linea.interludio {
+                Text(traduccion)
+                    .font(.system(size: (ampliada ? tamano * 1.1 : tamano) * 0.6, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(activa ? 0.72 : 0.38))
             }
         }
-        .font(.system(size: ampliada ? tamano * 1.08 : tamano, weight: .bold, design: .rounded))
-        .lineSpacing(ampliada ? 6 : 2)
         .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)

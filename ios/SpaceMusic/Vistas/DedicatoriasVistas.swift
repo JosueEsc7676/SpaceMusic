@@ -4,51 +4,116 @@ import SwiftUI
 // Dedicar en tres pasos (para quién, qué parte de la letra, mensaje) con una tarjeta para compartir.
 
 struct DedicatoriasVista: View {
+    enum Pestana: String, CaseIterable { case recibidas = "Recibidas", enviadas = "Enviadas" }
+
     @State private var lista: ListaDedicatorias?
     @State private var error: String?
     @State private var bloqueando = false
     @State private var usuario = ""
+    @AppStorage("dedicatoriasPestana") private var pestana: Pestana = .recibidas
+    @State private var confirmarVaciar = false
+
+    private var actuales: [Dedicatoria] {
+        guard let l = lista else { return [] }
+        return pestana == .recibidas ? l.recibidas : l.enviadas
+    }
+    /// Las que se pueden borrar con «Borrar todas» (las guardadas y las programadas se quedan).
+    private var borrables: Int {
+        actuales.filter { $0.programadaPara == nil && !($0.recibida && $0.guardada) }.count
+    }
 
     var body: some View {
         List {
             Section {
-                CabeceraExperiencia(icono: "heart.text.square.fill", titulo: "Dedicatorias",
-                                    texto: "Canciones para un momento. Dedica desde el menú de cualquier canción (… → Dedicar esta canción).")
-                    .listRowBackground(Color.clear)
+                Picker("Dedicatorias", selection: $pestana) {
+                    ForEach(Pestana.allCases, id: \.self) { p in
+                        Text(titulo(p)).tag(p)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
             }
             if let error { Section { Text(error).foregroundStyle(Tema.peligro) } }
             if let l = lista {
-                let guardadas = l.recibidas.filter { $0.guardada }.compactMap(\.cancion)
-                if !guardadas.isEmpty {
-                    Section {
-                        Button { Reproductor.compartido.reproducir(guardadas, contexto: "dedicadas") } label: { Label("Escuchar todas", systemImage: "play.fill") }
-                        ForEach(Array(guardadas.enumerated()), id: \.offset) { i, c in
-                            FilaCancion(cancion: c) { Reproductor.compartido.reproducir(guardadas, desde: i, contexto: "dedicadas") }
-                        }
-                    } header: { Text("Canciones que me dedicaron") }
-                }
-                Section("Recibidas") {
-                    if l.recibidas.isEmpty { Text("Aún no te han dedicado canciones.").foregroundStyle(Tema.secundario) }
-                    ForEach(l.recibidas) { FilaDedicatoria(d: $0) }
-                }
-                Section("Enviadas") {
-                    if l.enviadas.isEmpty { Text("Todavía no dedicas ninguna.").foregroundStyle(Tema.secundario) }
-                    ForEach(l.enviadas) { FilaDedicatoria(d: $0) }
+                if pestana == .recibidas {
+                    let guardadas = l.recibidas.filter { $0.guardada }.compactMap(\.cancion)
+                    if !guardadas.isEmpty {
+                        Section {
+                            Button { Reproductor.compartido.reproducir(guardadas, contexto: "dedicadas") } label: {
+                                Label("Escuchar las \(guardadas.count) que guardé", systemImage: "play.fill")
+                            }
+                        } header: { Text("Canciones que me dedicaron") }
+                    }
                 }
                 Section {
-                    ForEach(l.bloqueadas, id: \.self) { u in
-                        HStack { Text("@\(u)"); Spacer()
-                            Button("Volver a recibir") { Task { await bloquear(u, false) } }.font(.subheadline)
+                    if actuales.isEmpty {
+                        VStack(spacing: 10) {
+                            Image(systemName: pestana == .recibidas ? "heart" : "paperplane").font(.title).foregroundStyle(Tema.secundario)
+                            Text(pestana == .recibidas ? "Aún no te han dedicado canciones." : "Todavía no dedicas ninguna.")
+                                .font(.subheadline).foregroundStyle(Tema.secundario)
+                            if pestana == .enviadas {
+                                Text("Dedica desde el menú de cualquier canción (… → Dedicar esta canción).")
+                                    .font(.caption).foregroundStyle(Tema.secundario).multilineTextAlignment(.center)
+                            }
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 24)
+                        .listRowBackground(Color.clear)
                     }
-                    Button("Dejar de recibir de alguien") { bloqueando = true }
-                } header: { Text("Privacidad") } footer: {
-                    Text("Solo pueden dedicarte canciones las personas que tú sigues. Puedes dejar de recibir de alguien cuando quieras.")
+                    ForEach(actuales) { d in
+                        FilaDedicatoria(d: d)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                if d.programadaPara == nil {
+                                    Button(role: .destructive) { Task { await borrar(d) } } label: { Label("Borrar", systemImage: "trash") }
+                                }
+                            }
+                            .contextMenu {
+                                if d.programadaPara == nil {
+                                    Button(role: .destructive) { Task { await borrar(d) } } label: { Label("Borrar de mi lista", systemImage: "trash") }
+                                }
+                            }
+                    }
+                } footer: {
+                    if !actuales.isEmpty {
+                        Text("Desliza una dedicatoria hacia la izquierda para borrarla de tu lista. A la otra persona no le cambia nada.")
+                    }
+                }
+                if pestana == .recibidas {
+                    Section {
+                        ForEach(l.bloqueadas, id: \.self) { u in
+                            HStack { Text("@\(u)"); Spacer()
+                                Button("Volver a recibir") { Task { await bloquear(u, false) } }.font(.subheadline)
+                            }
+                        }
+                        Button("Dejar de recibir de alguien") { bloqueando = true }
+                    } header: { Text("Privacidad") } footer: {
+                        Text("Solo pueden dedicarte canciones las personas que tú sigues.")
+                    }
                 }
             } else if error == nil { ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear) }
         }
+        .animation(.easeInOut(duration: 0.2), value: pestana)
         .navigationTitle("Dedicatorias")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if borrables > 1 {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button(role: .destructive) { confirmarVaciar = true } label: {
+                            Label("Borrar todas las \(pestana.rawValue.lowercased())", systemImage: "trash")
+                        }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                }
+            }
+        }
+        .confirmationDialog("Borrar todas las \(pestana.rawValue.lowercased())", isPresented: $confirmarVaciar, titleVisibility: .visible) {
+            Button("Borrar \(borrables)", role: .destructive) { Task { await vaciar() } }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text(pestana == .recibidas ? "Las que guardaste en «Canciones que me dedicaron» se quedan."
+                                       : "Quien las recibió las sigue viendo.")
+        }
         .task { await cargar() }
         .refreshable { await cargar() }
         .alert("Dejar de recibir dedicatorias", isPresented: $bloqueando) {
@@ -58,10 +123,39 @@ struct DedicatoriasVista: View {
         }
     }
 
+    private func titulo(_ p: Pestana) -> String {
+        let n = p == .recibidas ? (lista?.recibidas.count ?? 0) : (lista?.enviadas.count ?? 0)
+        return n > 0 ? "\(p.rawValue) (\(n))" : p.rawValue
+    }
+
     private func cargar() async {
         do { lista = try await API.get("/api/dedicatorias"); error = nil }
         catch { if !Task.isCancelled { self.error = error.localizedDescription } }
     }
+
+    /// Quita una dedicatoria de tu lista (recibida o enviada).
+    private func borrar(_ d: Dedicatoria) async {
+        let antes = lista
+        withAnimation {
+            lista?.recibidas.removeAll { $0.id == d.id }
+            lista?.enviadas.removeAll { $0.id == d.id }
+        }
+        do { try await API.hacer("DELETE", "/api/dedicatorias/\(d.id)") }
+        catch { lista = antes; Avisos.compartido.error(error) }
+    }
+
+    private func vaciar() async {
+        do {
+            struct Respuesta: Decodable {
+                var borradas: Int
+                init(from decoder: Decoder) throws { borradas = try decoder.campos().entero("borradas") ?? 0 }
+            }
+            let r: Respuesta = try await API.enviar("DELETE", "/api/dedicatorias?tipo=\(pestana == .recibidas ? "recibidas" : "enviadas")")
+            Avisos.compartido.mostrar(r.borradas == 1 ? "1 dedicatoria borrada" : "\(r.borradas) dedicatorias borradas")
+            await cargar()
+        } catch { Avisos.compartido.error(error) }
+    }
+
     private func bloquear(_ u: String, _ b: Bool) async {
         let limpio = u.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "@", with: "")
         guard !limpio.isEmpty else { return }
@@ -74,30 +168,35 @@ struct FilaDedicatoria: View {
     let d: Dedicatoria
     var body: some View {
         NavigationLink(value: Destino.dedicatoria(d.id)) {
-            HStack(spacing: 12) {
-                Portada(ruta: d.cancion?.portadaUrl, tamano: 52, radio: 8)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(d.cancion?.nombre ?? "Canción eliminada").font(.body.weight(.semibold)).lineLimit(1)
+            HStack(spacing: 14) {
+                Portada(ruta: d.cancion?.portadaUrl, tamano: 56, radio: 10)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(d.cancion?.nombre ?? "Canción eliminada").font(.body.weight(.semibold)).lineLimit(1)
+                        if d.recibida && !d.vista && d.programadaPara == nil {
+                            Circle().fill(Color.white).frame(width: 7, height: 7).accessibilityLabel("Nueva")
+                        }
+                    }
                     Text("\(d.recibida ? "De" : "Para") \(d.persona?.nombre ?? "") · \(Formato.hace(d.fecha))")
                         .font(.caption).foregroundStyle(Tema.secundario).lineLimit(1)
                     if let primera = d.lineas.first {
-                        Text("“\(primera)”").font(.caption.italic()).lineLimit(1)
+                        Text("“\(primera)”").font(.footnote.italic()).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
                     } else if d.completa {
-                        Text("La canción completa").font(.caption.italic())
+                        Text("La canción completa").font(.footnote.italic()).foregroundStyle(.white.opacity(0.8))
                     } else if let m = d.mensaje, !m.isEmpty {
-                        Text("“\(m)”").font(.caption.italic()).lineLimit(1)
+                        Text("“\(m)”").font(.footnote.italic()).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 4)
                 if let ms = d.programadaPara {
-                    Text(Date(timeIntervalSince1970: ms / 1000), style: .date).font(.caption).foregroundStyle(Tema.celeste)
-                } else if d.recibida && !d.vista {
-                    Text("Nueva").font(.caption2.weight(.bold)).foregroundStyle(.black)
-                        .padding(.horizontal, 7).padding(.vertical, 3).background(Capsule().fill(Tema.celeste))
+                    Label { Text(Date(timeIntervalSince1970: ms / 1000), style: .date) } icon: { Image(systemName: "clock") }
+                        .font(.caption2).foregroundStyle(Tema.secundario)
                 } else if d.respuesta != nil {
-                    Text(d.recibida ? "Respondiste" : "Respondió").font(.caption2.weight(.bold)).foregroundStyle(Tema.secundario)
+                    Image(systemName: "arrowshape.turn.up.left.fill").font(.caption).foregroundStyle(Tema.secundario)
+                        .accessibilityLabel(d.recibida ? "Respondiste" : "Respondió")
                 }
             }
+            .padding(.vertical, 4)
         }
     }
 }

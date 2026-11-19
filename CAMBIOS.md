@@ -1,5 +1,13 @@
 # Registro de cambios
 
+## iPhone: versos desde la letra, traductor, letra en la pantalla bloqueada y dedicatorias ordenadas
+- **Versos desde la letra** (`LetraCompleta` en `ReproductorVista.swift`): botón «Versos» arriba de la letra; se tocan los versos (hasta 8) y «Crear imagen» abre la imagen con Compartir y Guardar en Fotos (`NSPhotoLibraryAddUsageDescription`). Ya no se abre otra ventana para elegir. «Compartir versos como imagen» del menú y de la letra ampliada usan lo mismo.
+- **Traductor de la letra** (`TraducirLetra.swift`): traducción del propio iPhone (Apple Translation, sin mandar la letra a otros servicios). iOS 18: la traducción aparece debajo de cada línea; iOS 17.4: hoja de traducción del sistema; antes de 17.4 no aparece el botón. Las líneas que ya están en español no se repiten.
+- **Letra menos saturada**: texto de 31 a 27 puntos, menos espacio entre líneas y letra en texto como versos separados.
+- **Letra en la pantalla bloqueada** (`Reproductor.letraEnBloqueo`): la línea que suena aparece como título en la pantalla bloqueada, el Centro de control y la isla dinámica, con «Canción · Artista» debajo. Se apaga en el menú … → Letra. (Sin widget: un widget no se actualiza al ritmo de la canción; esto sí, sin consumir batería extra.)
+- **Dedicatorias**: pestañas Recibidas/Enviadas, deslizar para borrar, «Borrar todas» (las guardadas y programadas se quedan) y filas más limpias.
+- **Portada original (HD)** en Editar canción (`PortadaEnLineaHoja`): opciones de iTunes y Deezer para elegir.
+
 ## iPhone: logo de ondas en blanco y negro
 - **Logo nuevo** (`App/Logo.swift`): círculo blanco con siete ondas negras, igual que la web y Android. Ícono de la app con el mismo logo.
 - Al abrir la app aparece el círculo, las ondas crecen desde el centro y laten dos veces; en el inicio de sesión las ondas se mueven suave como un ecualizador (quieto con «Reducir movimiento»).

@@ -159,6 +159,26 @@ final class Reproductor {
     }
     func quitarPausaLocal() { pausaLocal = false }
 
+    /// La línea de la letra que suena aparece en la pantalla bloqueada (y en el Centro de control, la isla dinámica
+    /// y CarPlay) en lugar del título; debajo queda «Canción · Artista». Se puede apagar desde el menú de la letra.
+    var letraEnBloqueo: Bool = UserDefaults.standard.object(forKey: "letraEnBloqueo") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(letraEnBloqueo, forKey: "letraEnBloqueo")
+            lineaBloqueo = nil
+            actualizarNowPlaying()
+        }
+    }
+    @ObservationIgnored private var lineaBloqueo: String?
+
+    /// Línea de la letra sincronizada que suena ahora (nil en las pausas o si la canción no tiene letra con tiempos).
+    private func lineaActualLetra(_ t: Double) -> String? {
+        let letras = Letras.compartido
+        guard let c = actual, letras.cancionId == c.id, letras.sincronizada,
+              let i = letras.indice(en: letras.tiempoLetra(t)), letras.lineas.indices.contains(i) else { return nil }
+        let texto = letras.lineas[i].texto.trimmingCharacters(in: .whitespaces)
+        return texto.isEmpty ? nil : texto
+    }
+
     /// Dentro de SyncPlay se guarda más audio por adelantado: los cortes de red no detienen la música.
     @ObservationIgnored var bufferAmplio = false {
         didSet { for item in jugador.items() { item.preferredForwardBufferDuration = bufferAmplio ? 30 : 5 } }
@@ -740,6 +760,10 @@ final class Reproductor {
             Descargas.compartido.guardarAlEscucharla(c)
         }
         quizaPrecargar()
+        if letraEnBloqueo {
+            let linea = lineaActualLetra(t)
+            if linea != lineaBloqueo { lineaBloqueo = linea; actualizarNowPlaying() }
+        }
         if Date().timeIntervalSince(ultimoGuardado) >= 5 { guardarEstado(); ultimoGuardado = Date() }
     }
 
@@ -818,9 +842,11 @@ final class Reproductor {
             return
         }
         MPRemoteCommandCenter.shared().likeCommand.isActive = Biblioteca.compartida.esFavorita(c.id)
+        // Con la letra en la pantalla bloqueada: la línea que suena arriba y «Canción · Artista» debajo
+        let linea = letraEnBloqueo ? lineaBloqueo : nil
         var info: [String: Any] = [
-            MPMediaItemPropertyTitle: c.nombre,
-            MPMediaItemPropertyArtist: c.artista,
+            MPMediaItemPropertyTitle: linea ?? c.nombre,
+            MPMediaItemPropertyArtist: linea == nil ? c.artista : "\(c.nombre) · \(c.artista)",
             MPMediaItemPropertyAlbumTitle: c.album,
             MPMediaItemPropertyPlaybackDuration: duracion,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: tiempo,

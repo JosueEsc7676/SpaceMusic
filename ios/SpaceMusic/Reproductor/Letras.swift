@@ -33,12 +33,62 @@ final class Letras {
     }
     var hayLetra: Bool { sincronizada || !textoPlano.isEmpty }
 
+    // MARK: Versos, elegir y traducir
+
+    /// Versos que se muestran: las líneas sincronizadas (sin las pausas) o los renglones de la letra en texto.
+    var versos: [(id: Int, texto: String)] {
+        if sincronizada { return lineas.filter { !$0.interludio }.map { (id: $0.id, texto: $0.texto) } }
+        return textoPlano.components(separatedBy: .newlines).enumerated()
+            .map { (id: $0.offset, texto: $0.element.trimmingCharacters(in: .whitespaces)) }.filter { !$0.texto.isEmpty }
+    }
+
+    /// Elegir versos tocándolos en la letra (para la imagen), sin abrir otra ventana, como en la web.
+    var seleccionando = false {
+        didSet { if !seleccionando { elegidas = [] } }
+    }
+    var elegidas: Set<Int> = []
+    static let maxVersos = 8
+
+    func alternarVerso(_ id: Int) {
+        if elegidas.contains(id) { elegidas.remove(id) } else if elegidas.count < Letras.maxVersos { elegidas.insert(id) }
+    }
+
+    /// Textos elegidos en el orden de la letra.
+    var textosElegidos: [String] { versos.filter { elegidas.contains($0.id) }.map(\.texto) }
+
+    /// Traducción de la letra (con la traducción del propio iPhone, sin enviar la letra a otros servicios).
+    var traduciendo = false {
+        didSet { if !traduciendo { errorTraduccion = nil } }
+    }
+    private(set) var traducciones: [Int: String] = [:]
+    private(set) var traducidaId: Int?
+    private(set) var errorTraduccion: String?
+    var hayTraduccion: Bool { traducidaId == cancionId && !traducciones.isEmpty }
+
+    func ponerTraducciones(_ t: [Int: String], de id: Int?) {
+        guard id == cancionId else { return }
+        // Las líneas que ya estaban en español vuelven iguales: no se repiten debajo
+        let originales = Dictionary(uniqueKeysWithValues: versos.map { ($0.id, $0.texto) })
+        traducciones = t.filter { k, v in
+            let o = originales[k]?.lowercased().trimmingCharacters(in: .punctuationCharacters.union(.whitespaces))
+            return o != v.lowercased().trimmingCharacters(in: .punctuationCharacters.union(.whitespaces))
+        }
+        traducidaId = id
+        errorTraduccion = traducciones.isEmpty ? "La letra ya está en tu idioma" : nil
+    }
+
+    func falloTraduccion(_ texto: String) { errorTraduccion = texto }
+
     @ObservationIgnored private var tarea: Task<Void, Never>?
 
     func cargar(_ c: Cancion, forzar: Bool = false) {
         guard forzar || c.id != cancionId else { return }
         cancionId = c.id
         desfase = desfases[String(c.id)] ?? 0
+        seleccionando = false
+        traducciones = [:]
+        traducidaId = nil
+        errorTraduccion = nil
         lineas = []
         textoPlano = ""
         mensaje = nil

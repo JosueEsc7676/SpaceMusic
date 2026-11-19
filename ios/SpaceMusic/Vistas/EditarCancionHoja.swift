@@ -20,6 +20,7 @@ struct EditarCancionHoja: View {
     @State private var actualizada: Cancion?
     @State private var importar = false
     @State private var confirmarBorrado = false
+    @State private var buscarPortada = false
 
     var body: some View {
         NavigationStack {
@@ -40,6 +41,9 @@ struct EditarCancionHoja: View {
                     PhotosPicker(selection: $foto, matching: .images) {
                         Label("Cambiar portada", systemImage: "photo")
                     }
+                    Button { buscarPortada = true } label: {
+                        Label("Buscar portada original (HD)", systemImage: "magnifyingglass")
+                    }
                 }
                 Section("Letra") {
                     if cargandoLetra { ProgressView("Cargando letra…") }
@@ -54,6 +58,12 @@ struct EditarCancionHoja: View {
                 }
             }
             .disabled(ocupada)
+            .sheet(isPresented: $buscarPortada) {
+                PortadaEnLineaHoja(cancion: actualizada ?? cancion) { c in
+                    actualizada = c
+                    Reproductor.compartido.actualizar(c)
+                }
+            }
             .navigationTitle("Editar canción")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -168,6 +178,115 @@ struct EditarCancionHoja: View {
                 Letras.compartido.cargar(actualizada ?? cancion, forzar: true)
             }
             Avisos.compartido.mostrar("Letra guardada")
+        } catch { self.error = error.localizedDescription }
+    }
+}
+
+/// Una portada encontrada en internet (iTunes o Deezer).
+struct OpcionPortada: Decodable, Identifiable {
+    var id: String { url }
+    var fuente: String
+    var titulo: String
+    var artista: String
+    var album: String
+    var miniatura: String
+    var url: String
+    var puntaje: Int
+    init(from decoder: Decoder) throws {
+        let c = try decoder.campos()
+        fuente = c.texto("fuente") ?? ""; titulo = c.texto("titulo") ?? ""; artista = c.texto("artista") ?? ""
+        album = c.texto("album") ?? ""; miniatura = c.texto("miniatura") ?? ""; url = c.texto("url") ?? ""
+        puntaje = c.entero("puntaje") ?? 0
+    }
+}
+
+/// Busca la portada original de la canción en HD (para las bajadas de YouTube, que traen la miniatura del video)
+/// y la pone al elegirla. Igual que «Buscar portada original (HD)» de la web.
+struct PortadaEnLineaHoja: View {
+    let cancion: Cancion
+    var alCambiar: (Cancion) -> Void
+    @Environment(\.dismiss) private var cerrar
+    @State private var consulta = ""
+    @State private var opciones: [OpcionPortada]?
+    @State private var error: String?
+    @State private var poniendo: String?
+
+    private let columnas = [GridItem(.adaptive(minimum: 140), spacing: 14)]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 8) {
+                        TextField("Artista y canción", text: $consulta)
+                            .textFieldStyle(.roundedBorder)
+                            .autocorrectionDisabled()
+                            .submitLabel(.search)
+                            .onSubmit { Task { await buscar() } }
+                        Button("Buscar") { Task { await buscar() } }.buttonStyle(BotonSecundario())
+                    }
+                    if let error { Text(error).font(.subheadline).foregroundStyle(Tema.peligro) }
+                    if let opciones {
+                        if opciones.isEmpty {
+                            Text("No se encontraron portadas. Prueba escribiendo el artista y el nombre de otra forma.")
+                                .font(.subheadline).foregroundStyle(Tema.secundario)
+                        }
+                        LazyVGrid(columns: columnas, spacing: 16) {
+                            ForEach(opciones) { o in
+                                Button { Task { await poner(o) } } label: { tarjeta(o) }
+                                    .buttonStyle(.plain)
+                                    .disabled(poniendo != nil)
+                            }
+                        }
+                    } else if error == nil {
+                        ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+                    }
+                    Text("Portadas de iTunes y Deezer en alta calidad. Toca la que corresponde a esta canción.")
+                        .font(.footnote).foregroundStyle(Tema.secundario)
+                }
+                .padding(16)
+            }
+            .navigationTitle("Portada original")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cerrar") { cerrar() } } }
+            .task {
+                consulta = "\(cancion.artista) \(cancion.nombre)".trimmingCharacters(in: .whitespaces)
+                await buscar(conTexto: false)
+            }
+        }
+    }
+
+    private func tarjeta(_ o: OpcionPortada) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ZStack {
+                AsyncImage(url: URL(string: o.miniatura)) { img in img.resizable().scaledToFill() } placeholder: { Color.white.opacity(0.06) }
+                if poniendo == o.url { Color.black.opacity(0.5); ProgressView().tint(.white) }
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Text(o.album.isEmpty ? o.titulo : o.album).font(.footnote.weight(.semibold)).lineLimit(2)
+            Text("\(o.artista) · \(o.fuente)\(o.puntaje >= 3 ? " · coincide" : "")").font(.caption2).foregroundStyle(Tema.secundario).lineLimit(1)
+        }
+    }
+
+    private func buscar(conTexto: Bool = true) async {
+        error = nil
+        opciones = nil
+        var ruta = "/api/canciones/\(cancion.id)/portada/buscar"
+        if conTexto, !consulta.trimmingCharacters(in: .whitespaces).isEmpty { ruta += "?q=" + API.codificar(consulta) }
+        do { opciones = try await API.get(ruta) }
+        catch { self.error = error.localizedDescription; opciones = [] }
+    }
+
+    private func poner(_ o: OpcionPortada) async {
+        poniendo = o.url
+        defer { poniendo = nil }
+        do {
+            var c: Cancion = try await API.enviar("POST", "/api/canciones/\(cancion.id)/portada/en-linea", ["url": o.url])
+            if let ruta = c.portadaUrl { c.portadaUrl = ruta + (ruta.contains("?") ? "&" : "?") + "v=\(UUID().uuidString)" }
+            alCambiar(c)
+            Avisos.compartido.mostrar("Portada actualizada")
+            cerrar()
         } catch { self.error = error.localizedDescription }
     }
 }
