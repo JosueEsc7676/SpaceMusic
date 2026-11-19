@@ -365,6 +365,7 @@ export function songMenu(anchor, song, { playlistId } = {}) {
       ...(session.canEdit ? [
         { label: 'Editar información', icon: 'edit', fn: () => editSong(song) },
         { label: 'Cambiar portada', icon: 'disc', fn: () => changeCover(song) },
+        { label: 'Buscar portada original (HD)', icon: 'search', fn: () => buscarPortada(song) },
         { label: 'Editar letra', icon: 'text', fn: () => editLyrics(song) },
       ] : []),
     ] },
@@ -554,6 +555,59 @@ export function changeCover(song) {
     } catch (e) { errorToast(e); }
   };
   inp.click();
+}
+
+/**
+ * Portada original en HD desde internet (iTunes y Deezer): para las canciones bajadas de YouTube,
+ * que traen la miniatura del video. Se muestran opciones y la persona elige.
+ */
+export async function buscarPortada(song) {
+  let elegida = null;
+  const r = await modal({
+    title: 'Portada original',
+    wide: true,
+    body: `<form class="pw-busca" data-busca><input id="pw-q" type="search" placeholder="Artista y canción" value="${esc(`${song.artista || ''} ${song.nombre || ''}`.trim())}" maxlength="200">
+        <button class="btn sm" type="submit">${icon('search', 'sm')} Buscar</button></form>
+      <div class="pw-lista" data-lista><div class="muted pw-aviso">Buscando…</div></div>
+      <p class="hint" style="font-size:12px;margin:10px 0 0">Portadas de iTunes y Deezer en alta calidad. Elige la que corresponde a esta canción.</p>`,
+    actions: [{ label: 'Cancelar', value: null }, { label: 'Usar esta portada', value: 'ok', primary: true }],
+    onOpen: (el) => {
+      const lista = el.querySelector('[data-lista]');
+      const usar = el.querySelector('.foot .primary');
+      if (usar) usar.disabled = true;
+      const cargar = async (q) => {
+        elegida = null;
+        if (usar) usar.disabled = true;
+        lista.innerHTML = '<div class="muted pw-aviso">Buscando…</div>';
+        try {
+          const ops = await api(`/api/canciones/${song.id}/portada/buscar` + (q ? '?q=' + encodeURIComponent(q) : ''));
+          if (!ops.length) { lista.innerHTML = '<div class="muted pw-aviso">No se encontraron portadas. Prueba escribiendo el artista y el nombre de otra forma.</div>'; return; }
+          lista.innerHTML = ops.map((o, i) => `<button type="button" class="pw-op" data-i="${i}" aria-pressed="false">
+              <img src="${esc(o.miniatura)}" alt="" loading="lazy" referrerpolicy="no-referrer">
+              <b>${esc(o.album || o.titulo)}</b><span>${esc(o.artista)} · ${esc(o.fuente)}${o.puntaje >= 3 ? ' · coincide' : ''}</span></button>`).join('');
+          lista.querySelectorAll('.pw-op').forEach((b) => b.onclick = () => {
+            lista.querySelectorAll('.pw-op').forEach((x) => x.setAttribute('aria-pressed', 'false'));
+            b.setAttribute('aria-pressed', 'true');
+            elegida = ops[+b.dataset.i];
+            if (usar) usar.disabled = false;
+          });
+        } catch (e) { lista.innerHTML = `<div class="muted pw-aviso">${esc(e.message || 'No se pudo buscar')}</div>`; }
+      };
+      el.querySelector('[data-busca]').onsubmit = (e) => { e.preventDefault(); cargar(el.querySelector('#pw-q').value.trim()); };
+      cargar('');
+    },
+    onAction: async (v) => {
+      if (v !== 'ok') return null;
+      if (!elegida) { toast('Elige una portada'); return false; }
+      return api(`/api/canciones/${song.id}/portada/en-linea`, { method: 'POST', body: { url: elegida.url } });
+    },
+  });
+  if (r) {
+    r.portadaUrl += (r.portadaUrl.includes('?') ? '&' : '?') + 'v=' + Date.now();
+    Object.assign(song, r);
+    toast('Portada actualizada');
+    bus.emit('song:updated', r);
+  }
 }
 
 export async function editLyrics(song) {

@@ -1,12 +1,23 @@
 {
-  "version": "3.8.2",
-  "titulo": "Novedades: logo nuevo",
+  "version": "3.9",
+  "titulo": "Novedades: portadas en HD, dedicatorias ordenadas y letra traducida",
   "puntos": [
-    "Logo nuevo en blanco y negro: un círculo con ondas de sonido, en la web, Android, la TV y el iPhone.",
-    "Al abrir la app y al iniciar sesión, el logo se anima: las ondas crecen desde el centro y se mueven como un ecualizador.",
-    "Android 2.1: ícono y notificaciones con el logo nuevo."
+    "Portada original en HD: en el menú de una canción, «Buscar portada original (HD)» encuentra la portada del álbum (iTunes y Deezer) para las canciones bajadas de YouTube.",
+    "Dedicatorias más ordenadas: pestañas Recibidas y Enviadas, borrar una (o todas) de tu lista. Las guardadas se quedan.",
+    "Notificaciones más claras y separadas en el celular.",
+    "Android 2.2: las imágenes de versos y dedicatorias ya se guardan en tu galería (álbum SpaceMusic) y se pueden compartir.",
+    "iPhone: elige los versos tocándolos en la letra, traduce la letra y ve la línea que suena en la pantalla bloqueada."
   ],
   "anteriores": [
+    {
+      "version": "3.8.2",
+      "titulo": "Novedades: logo nuevo",
+      "puntos": [
+        "Logo nuevo en blanco y negro: un círculo con ondas de sonido, en la web, Android, la TV y el iPhone.",
+        "Al abrir la app y al iniciar sesión, el logo se anima: las ondas crecen desde el centro y se mueven como un ecualizador.",
+        "Android 2.1: ícono y notificaciones con el logo nuevo."
+      ]
+    },
     {
       "version": "3.8.1",
       "titulo": "Novedades: SyncPlay sin cortes",

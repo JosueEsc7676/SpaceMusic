@@ -5,7 +5,7 @@ import { api, session } from './api.js';
 import { esc, fmtTime, coverImg, cover, timeAgo } from './util.js';
 import { icon } from './icons.js';
 import { setHero, setTitle } from './router.js';
-import { toast, errorToast, emptyState, trackList, modal, promptDialog } from './ui.js';
+import { toast, errorToast, emptyState, trackList, modal, promptDialog, confirmDialog } from './ui.js';
 import { player } from './player.js';
 
 const fechaLarga = (ms) => new Date(ms).toLocaleString('es', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' });
@@ -147,7 +147,25 @@ export async function tarjetaDedicatoria({ cancion, lineas = [], completa = fals
   return new Promise((res) => c.toBlob(res, 'image/png'));
 }
 
+/** Imagen → base64 (sin el prefijo «data:») para pasarla a la app de Android. */
+function aBase64(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(',')[1] || '');
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
 export async function compartirImagen(blob, nombre) {
+  // App de Android: la vista web no guarda enlaces «blob:»; la app la guarda en la galería y abre «Compartir»
+  if (window.SpaceMusicApp?.guardarImagen) {
+    try {
+      const ok = window.SpaceMusicApp.guardarImagen(await aBase64(blob), nombre, true) === 'ok';
+      toast(ok ? 'Imagen guardada en tu galería (álbum SpaceMusic)' : 'No se pudo guardar la imagen');
+      if (ok) return;
+    } catch { toast('No se pudo guardar la imagen'); }
+  }
   const archivo = new File([blob], nombre, { type: 'image/png' });
   if (navigator.canShare?.({ files: [archivo] })) {
     try { await navigator.share({ files: [archivo] }); return; } catch (e) { if (e.name === 'AbortError') return; }
@@ -158,7 +176,6 @@ export async function compartirImagen(blob, nombre) {
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
-  if (window.SpaceMusicApp) toast('Si no se guardó, mantén presionada la imagen o haz una captura');
 }
 
 // ═══════════════════ Dedicar (tres pasos) ═══════════════════
@@ -326,22 +343,62 @@ export async function dedicatoriasView(el, params) {
   if (params?.id) return detalle(el, params);
   const l = await api('/api/dedicatorias');
   const guardadas = l.recibidas.filter((d) => d.guardada && d.cancion);
-  const item = (d) => `<a class="ded-item" href="#/dedicatorias/${d.id}">
+  const item = (d) => `<div class="ded-fila" data-fila="${d.id}"><a class="ded-item" href="#/dedicatorias/${d.id}">
       <span class="ded-item-art">${d.cancion ? coverImg(d.cancion.portadaUrl, 160) : icon('note')}</span>
       <span class="ded-item-txt"><b class="ellipsis">${esc(d.cancion?.nombre || 'Canción eliminada')}</b>
         <span class="muted ellipsis">${d.recibida ? 'De' : 'Para'} ${esc(d.persona.nombre || '')} · ${esc(timeAgo(d.fecha))}</span>
         ${d.letra ? `<span class="ded-item-letra ellipsis">“${esc(d.letra.split('\n')[0])}”</span>` : d.completa ? '<span class="ded-item-letra">La canción completa</span>' : d.mensaje ? `<span class="ded-item-letra ellipsis">“${esc(d.mensaje)}”</span>` : ''}</span>
-      ${d.programadaPara ? `<span class="sop-chip gray">${icon('clock', 'sm')} ${esc(fechaCorta(d.programadaPara))}</span>` : d.recibida && !d.vista ? '<span class="sop-chip warn">Nueva</span>' : d.respuesta ? `<span class="sop-chip ok">${d.recibida ? 'Respondiste' : 'Respondió'}</span>` : ''}</a>`;
+      ${d.programadaPara ? `<span class="sop-chip gray">${icon('clock', 'sm')} ${esc(fechaCorta(d.programadaPara))}</span>` : d.recibida && !d.vista ? '<span class="sop-chip warn">Nueva</span>' : d.respuesta ? `<span class="sop-chip ok">${d.recibida ? 'Respondiste' : 'Respondió'}</span>` : ''}</a>
+      ${d.programadaPara ? '' : `<button class="icon-btn ded-borrar" data-borrar="${d.id}" aria-label="Borrar de mi lista" title="Borrar de mi lista">${icon('trash', 'sm')}</button>`}</div>`;
+  let pestana = 'recibidas';
+  try { pestana = sessionStorage.getItem('sm_ded_tab') === 'enviadas' ? 'enviadas' : 'recibidas'; } catch { }
+  const lista = (tipo, vacio) => {
+    const ds = l[tipo];
+    const borrables = ds.filter((d) => !d.programadaPara && !(tipo === 'recibidas' && d.guardada)).length;
+    return `<section class="panel ded-sec" data-sec="${tipo}" ${tipo === pestana ? '' : 'hidden'}>
+      <div class="ded-sec-cab"><span class="muted">${ds.length ? `${ds.length} ${ds.length === 1 ? 'dedicatoria' : 'dedicatorias'}` : ''}</span>
+        ${borrables > 1 ? `<button class="btn sm ghost" data-vaciar="${tipo}">${icon('trash', 'sm')} Borrar todas</button>` : ''}</div>
+      ${ds.length ? `<div class="ded-lista">${ds.map(item).join('')}</div>` : `<p class="muted ded-vacio">${vacio}</p>`}</section>`;
+  };
   el.innerHTML = `<div class="exp-cab"><span class="exp-ico">${icon('heart')}</span><div><h1>Dedicatorias</h1>
       <p class="muted">Canciones para un momento. Dedica desde el menú de cualquier canción (⋯ → Dedicar esta canción).</p></div></div>
     ${guardadas.length ? `<section class="panel"><div class="row" style="justify-content:space-between;align-items:center"><h3 style="margin:0">Canciones que me dedicaron</h3>
         <button class="btn sm primary" data-oir-g aria-label="Escuchar todas">${icon('play', 'sm')} Escuchar</button></div>
       ${trackList(guardadas.map((d) => d.cancion), { context: { type: 'dedicadas', label: 'Canciones que me dedicaron', route: '#/dedicatorias' }, showAlbum: false, header: false })}</section>` : ''}
-    <section class="panel"><h3 style="margin-top:0">Recibidas</h3>${l.recibidas.length ? `<div class="ded-lista">${l.recibidas.map(item).join('')}</div>` : '<p class="muted">Aún no te han dedicado canciones.</p>'}</section>
-    <section class="panel"><h3 style="margin-top:0">Enviadas</h3>${l.enviadas.length ? `<div class="ded-lista">${l.enviadas.map(item).join('')}</div>` : '<p class="muted">Todavía no dedicas ninguna.</p>'}</section>
+    <div class="ded-tabs" role="tablist">
+      <button role="tab" data-tab="recibidas" aria-selected="${pestana === 'recibidas'}">Recibidas${l.recibidas.length ? ` <span>${l.recibidas.length}</span>` : ''}</button>
+      <button role="tab" data-tab="enviadas" aria-selected="${pestana === 'enviadas'}">Enviadas${l.enviadas.length ? ` <span>${l.enviadas.length}</span>` : ''}</button></div>
+    ${lista('recibidas', 'Aún no te han dedicado canciones.')}
+    ${lista('enviadas', 'Todavía no dedicas ninguna.')}
     <section class="panel"><h3 style="margin-top:0">Privacidad</h3><p class="muted" style="margin-top:0">Solo pueden dedicarte canciones las personas que tú sigues. Puedes dejar de recibir de alguien cuando quieras.</p>
       ${l.bloqueadas.length ? `<p>No recibes de: ${l.bloqueadas.map((u) => `<button class="chip" data-desbloq="${esc(u)}" aria-label="Volver a recibir de @${esc(u)}">@${esc(u)} ✕</button>`).join(' ')}</p>` : ''}
       <button class="btn sm" data-bloq>Dejar de recibir de alguien</button></section>`;
+  el.querySelectorAll('[data-tab]').forEach((b) => b.onclick = () => {
+    pestana = b.dataset.tab;
+    try { sessionStorage.setItem('sm_ded_tab', pestana); } catch { }
+    el.querySelectorAll('[data-tab]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+    el.querySelectorAll('[data-sec]').forEach((s) => { s.hidden = s.dataset.sec !== pestana; });
+  });
+  el.querySelectorAll('[data-borrar]').forEach((b) => b.onclick = async (e) => {
+    e.preventDefault();
+    const fila = b.closest('[data-fila]');
+    fila.classList.add('saliendo');
+    try {
+      await api('/api/dedicatorias/' + b.dataset.borrar, { method: 'DELETE' });
+      setTimeout(() => fila.remove(), 180);
+    } catch (err) { fila.classList.remove('saliendo'); errorToast(err); }
+  });
+  el.querySelectorAll('[data-vaciar]').forEach((b) => b.onclick = async () => {
+    const recibidas = b.dataset.vaciar === 'recibidas';
+    const ok = await confirmDialog(recibidas ? 'Se borrarán de tu lista todas las dedicatorias recibidas. Las que guardaste en «Canciones que me dedicaron» se quedan.'
+      : 'Se borrarán de tu lista todas las dedicatorias enviadas. Quien las recibió las sigue viendo.', { title: 'Borrar todas', ok: 'Borrar', danger: true });
+    if (!ok) return;
+    try {
+      const r = await api('/api/dedicatorias?tipo=' + b.dataset.vaciar, { method: 'DELETE' });
+      toast(`${r.borradas} ${r.borradas === 1 ? 'dedicatoria borrada' : 'dedicatorias borradas'}`);
+      dedicatoriasView(el, params);
+    } catch (err) { errorToast(err); }
+  });
   el.querySelector('[data-oir-g]')?.addEventListener('click', () => player.play(guardadas.map((d) => d.cancion), 0, { type: 'dedicadas', label: 'Canciones que me dedicaron', route: '#/dedicatorias' }));
   el.querySelector('[data-bloq]').onclick = async () => {
     const u = await promptDialog('Dejar de recibir dedicatorias', { label: 'Usuario', placeholder: '@usuario', ok: 'Bloquear' });

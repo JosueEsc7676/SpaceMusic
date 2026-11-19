@@ -27,6 +27,8 @@ public class Dedicatoria {
     private boolean guardada;
     /** El destinatario la quitó de su lista. */
     private boolean oculta;
+    /** Quien la envió la quitó de sus enviadas (objeto: la columna nueva admite nulos en las filas ya existentes). */
+    private Boolean ocultaDe;
     private LocalDateTime fecha = LocalDateTime.now();
     private LocalDateTime respondidaEn;
     /** La canción completa (no un fragmento). */

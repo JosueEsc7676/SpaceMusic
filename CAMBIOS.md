@@ -1,6 +1,13 @@
 # Registro de cambios
 
 
+## Versión 3.9
+- **Portada original en HD** (`PortadaEnLineaService`, `PortadaEnLineaController`; web: menú de canción → «Buscar portada original (HD)»; iPhone: Editar canción): busca en iTunes y Deezer (gratis, sin claves) con el título limpio (sin «| Álbum», «(Official Video)»…), ordena por coincidencia de título y artista y la persona elige. Solo descarga de `*.mzstatic.com` y `*.dzcdn.net` por https (también tras redirecciones), máximo 10 MB, guardada a 1200 px. `GET /api/canciones/{id}/portada/buscar?q=` y `POST /api/canciones/{id}/portada/en-linea {url}` (admin y colaboradores). Pruebas: `PortadaEnLineaTest` (3).
+- **Dedicatorias**: borrar también las enviadas (`ocultaDe`, solo de tu lista) y «Borrar todas» (`DELETE /api/dedicatorias?tipo=recibidas|enviadas`; las guardadas y las programadas se quedan). Web con pestañas Recibidas/Enviadas, botón de borrar en cada una y tarjetas más ordenadas. Pruebas: `ExperienciasTest` (12).
+- **Notificaciones** (web y Android): panel con fondo sólido, separación entre avisos, texto con más aire, íconos redondos centrados y punto blanco en las nuevas.
+- **Android 2.2** (código 13): `guardarImagen` en el puente guarda los PNG de versos, dedicatorias y tarjetas en Imágenes/SpaceMusic (MediaStore; Android 9 o anterior con permiso) y abre «Compartir». Antes la web usaba un enlace `blob:` que la vista web no guarda.
+- iPhone (rama `app-ios`): versos elegidos desde la letra, traductor de la letra (traducción del iPhone), letra menos saturada, línea de la letra en la pantalla bloqueada, dedicatorias con pestañas y borrar, y portada HD.
+
 ## Versión 3.8.2
 - **Logo nuevo en blanco y negro**: círculo blanco con siete ondas negras (el que tenía la entrada del iPhone, sin colores). `img/icon.svg` (ícono con fondo), `img/logo.svg` (solo el círculo) e `img/logo-animado.svg` (las ondas crecen desde el centro y se mueven como un ecualizador; quieto con «reducir movimiento»). PNG de la web, Android (teléfono y TV) e iPhone generados con las mismas medidas.
 - Pantalla de apertura (`index.html`, `tv.html`, entrada tras iniciar sesión) con el logo nuevo: aparece el círculo, crecen las ondas y laten dos veces. Inicio de sesión de la web y de la TV con el logo animado; barra lateral con el logo nuevo.

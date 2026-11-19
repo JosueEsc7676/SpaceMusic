@@ -230,6 +230,32 @@ class ExperienciasTest {
     }
 
     @Test
+    void borrarDedicatoriasRecibidasYEnviadas() {
+        Usuario gina = u("gina_exp"), hugo = u("hugo_exp");
+        sigue(hugo, gina);
+        Dedicatoria a = dedicatorias.enviar(gina.getId(), "hugo_exp", lista.get(5).getId(), 0, "uno");
+        Dedicatoria b = dedicatorias.enviar(gina.getId(), "hugo_exp", lista.get(6).getId(), 0, "dos");
+        Dedicatoria c = dedicatorias.enviar(gina.getId(), "hugo_exp", lista.get(7).getId(), 0, "tres");
+        java.util.function.Function<Object, List<?>> l = x -> (List<?>) x;
+        // Nadie más puede borrarla
+        assertThrows(NoSuchElementException.class, () -> dedicatorias.ocultar(a.getId(), carla.getId()));
+        // Quien la envió la quita de sus enviadas; quien la recibió la sigue viendo
+        dedicatorias.ocultar(a.getId(), gina.getId());
+        assertTrue(l.apply(dedicatorias.listas(gina.getId()).get("enviadas")).stream().noneMatch(x -> ((Map<?, ?>) x).get("id").equals(a.getId())));
+        assertTrue(l.apply(dedicatorias.listas(hugo.getId()).get("recibidas")).stream().anyMatch(x -> ((Map<?, ?>) x).get("id").equals(a.getId())));
+        // Borrar todas las recibidas respeta las guardadas
+        dedicatorias.guardar(b.getId(), hugo.getId(), true);
+        assertEquals(2, dedicatorias.vaciar(hugo.getId(), true));
+        List<?> recibidas = l.apply(dedicatorias.listas(hugo.getId()).get("recibidas"));
+        assertEquals(1, recibidas.size());
+        assertEquals(b.getId(), ((Map<?, ?>) recibidas.get(0)).get("id"));
+        // Borrar todas las enviadas
+        assertEquals(2, dedicatorias.vaciar(gina.getId(), false));
+        assertTrue(l.apply(dedicatorias.listas(gina.getId()).get("enviadas")).isEmpty());
+        assertNotNull(dedicatoriasRepo.findById(c.getId()).orElse(null)); // solo se oculta: sigue para quien la recibió
+    }
+
+    @Test
     void cancelarProgramadaSoloQuienLaEnvio() {
         Usuario emi = u("emi_exp"), rafa = u("rafa_exp");
         sigue(rafa, emi);

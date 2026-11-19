@@ -55,6 +55,46 @@ final class Descargas {
         }
     }
 
+    /**
+     * Guarda una imagen PNG (versos, dedicatoria, tarjeta) en Imágenes/SpaceMusic: aparece en la galería.
+     * Antes la web intentaba un enlace de descarga «blob:» que la vista web de Android no sabe guardar.
+     * Devuelve la dirección de la imagen guardada (para compartirla) o null si falló.
+     */
+    static Uri imagen(Activity a, byte[] datos, String nombreArchivo) {
+        String nombre = limpiar(nombreArchivo);
+        if (!nombre.toLowerCase().endsWith(".png")) nombre += ".png";
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                android.content.ContentValues v = new android.content.ContentValues();
+                v.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, nombre);
+                v.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png");
+                v.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/SpaceMusic");
+                v.put(android.provider.MediaStore.Images.Media.IS_PENDING, 1);
+                android.content.ContentResolver cr = a.getContentResolver();
+                Uri uri = cr.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
+                if (uri == null) return null;
+                try (java.io.OutputStream o = cr.openOutputStream(uri)) {
+                    if (o == null) return null;
+                    o.write(datos);
+                }
+                v.clear();
+                v.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0);
+                cr.update(uri, v, null, null);
+                return uri;
+            }
+            if (!pedirPermisoSiHaceFalta(a)) return null;
+            java.io.File dir = new java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "SpaceMusic");
+            if (!dir.exists() && !dir.mkdirs()) return null;
+            java.io.File f = new java.io.File(dir, nombre);
+            try (java.io.FileOutputStream o = new java.io.FileOutputStream(f)) { o.write(datos); }
+            android.media.MediaScannerConnection.scanFile(a, new String[]{f.getAbsolutePath()}, new String[]{"image/png"}, null);
+            return Uri.fromFile(f);
+        } catch (Exception e) {
+            android.util.Log.w("SpaceMusic", "No se pudo guardar la imagen: " + e);
+            return null;
+        }
+    }
+
     /** Descarga la versión nueva de la app y abre el instalador al terminar. */
     static void actualizar(final Activity a, String url) {
         DownloadManager dm = (DownloadManager) a.getSystemService(Context.DOWNLOAD_SERVICE);

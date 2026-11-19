@@ -192,11 +192,37 @@ public class DedicatoriasService {
         return fila(dedicatorias.save(d), uid);
     }
 
+    /** Quita una dedicatoria de tu lista: de las recibidas o de las enviadas (a la otra persona no le cambia nada). */
     @Transactional
     public void ocultar(Long id, Long uid) {
-        Dedicatoria d = recibida(id, uid);
-        d.setOculta(true);
+        Dedicatoria d = dedicatorias.findById(id).orElseThrow(() -> new NoSuchElementException("Dedicatoria no encontrada"));
+        if (d.getParaId().equals(uid) && d.esEntregada()) d.setOculta(true);
+        else if (d.getDeId().equals(uid)) {
+            if (!d.esEntregada()) throw new IllegalArgumentException("Esta dedicatoria todavía está programada: cancélala en vez de borrarla");
+            d.setOcultaDe(true);
+        } else throw new NoSuchElementException("Dedicatoria no encontrada");
         dedicatorias.save(d);
+    }
+
+    /**
+     * Borra de tu lista todas las recibidas (menos las que guardaste) o todas las enviadas ya entregadas
+     * (las programadas siguen). Devuelve cuántas se quitaron.
+     */
+    @Transactional
+    public int vaciar(Long uid, boolean recibidas) {
+        int n = 0;
+        if (recibidas) {
+            for (Dedicatoria d : dedicatorias.findByParaIdAndOcultaFalse(uid)) {
+                if (d.isGuardada() || !d.esEntregada()) continue;
+                d.setOculta(true); n++;
+            }
+        } else {
+            for (Dedicatoria d : dedicatorias.findByDeId(uid)) {
+                if (Boolean.TRUE.equals(d.getOcultaDe()) || !d.esEntregada()) continue;
+                d.setOcultaDe(true); n++;
+            }
+        }
+        return n;
     }
 
     @Transactional
@@ -233,7 +259,8 @@ public class DedicatoriasService {
     public Map<String, Object> listas(Long uid) {
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("recibidas", dedicatorias.findTop100ByParaIdAndOcultaFalseOrderByFechaDesc(uid).stream().filter(Dedicatoria::esEntregada).map(d -> fila(d, uid)).toList());
-        r.put("enviadas", dedicatorias.findTop100ByDeIdOrderByFechaDesc(uid).stream().limit(50).map(d -> fila(d, uid)).toList());
+        r.put("enviadas", dedicatorias.findTop100ByDeIdOrderByFechaDesc(uid).stream().filter(d -> !Boolean.TRUE.equals(d.getOcultaDe()))
+                .limit(50).map(d -> fila(d, uid)).toList());
         r.put("bloqueadas", bloqueos.findByUsuarioId(uid).stream().map(b -> usuarios.findById(b.getBloqueadoId()).map(Usuario::getUsername).orElse("")).filter(s -> !s.isEmpty()).toList());
         return r;
     }

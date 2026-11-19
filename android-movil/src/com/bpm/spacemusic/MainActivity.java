@@ -445,6 +445,32 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> Descargas.cancion(MainActivity.this, url, nombre));
         }
 
+        /**
+         * Guarda una imagen (PNG en base64) en la galería, en Imágenes/SpaceMusic.
+         * Con compartir=true abre después la hoja de compartir de Android (WhatsApp, Instagram…).
+         * Devuelve "ok" si se guardó.
+         */
+        @JavascriptInterface
+        public String guardarImagen(String base64, String nombre, boolean compartir) {
+            if (base64 == null || base64.length() > 30_000_000) return "";
+            final byte[] datos;
+            try { datos = android.util.Base64.decode(base64, android.util.Base64.DEFAULT); } catch (Exception e) { return ""; }
+            // PNG de verdad: empieza con la firma 89 50 4E 47
+            if (datos.length < 8 || (datos[0] & 0xff) != 0x89 || datos[1] != 'P' || datos[2] != 'N' || datos[3] != 'G') return "";
+            final Uri uri = Descargas.imagen(MainActivity.this, datos, nombre == null ? "spacemusic.png" : nombre);
+            if (uri == null) return "";
+            if (compartir && Build.VERSION.SDK_INT >= 29) {
+                runOnUiThread(() -> {
+                    try {
+                        Intent i = new Intent(Intent.ACTION_SEND).setType("image/png")
+                                .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        startActivity(Intent.createChooser(i, "Compartir imagen"));
+                    } catch (Exception ignored) { }
+                });
+            }
+            return "ok";
+        }
+
         /** Notificación del sistema (mensaje nuevo, nuevo seguidor…). Al tocarla se abre esa pantalla. */
         @JavascriptInterface
         public void notificar(String titulo, String texto, String ruta) {

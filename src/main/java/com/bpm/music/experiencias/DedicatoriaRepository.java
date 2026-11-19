@@ -8,6 +8,8 @@ import java.util.List;
 public interface DedicatoriaRepository extends JpaRepository<Dedicatoria, Long> {
     List<Dedicatoria> findTop100ByParaIdAndOcultaFalseOrderByFechaDesc(Long paraId);
     List<Dedicatoria> findTop100ByDeIdOrderByFechaDesc(Long deId);
+    List<Dedicatoria> findByParaIdAndOcultaFalse(Long paraId);
+    List<Dedicatoria> findByDeId(Long deId);
     long countByDeIdAndFechaAfter(Long deId, LocalDateTime desde);
     long countByDeIdAndEntregadaFalse(Long deId);
     /** Programadas cuya hora ya llegó. */

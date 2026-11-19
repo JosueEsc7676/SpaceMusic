@@ -86,7 +86,14 @@ public class CancionService {
         biblioteca.requerir(id);
         if (file == null || file.isEmpty()) throw new IllegalArgumentException("No se recibió ninguna imagen");
         if (file.getSize() > 10 * 1024 * 1024) throw new IllegalArgumentException("La imagen no puede pasar de 10 MB");
-        byte[] jpg = imagenes.redimensionar(file.getBytes(), 1200);
+        return cambiarPortada(id, file.getBytes());
+    }
+
+    /** Pone una portada (JPG, PNG o WebP en bytes): se guarda a 1200 px como máximo. */
+    @Transactional
+    public CancionDTO cambiarPortada(Long id, byte[] datos) {
+        biblioteca.requerir(id);
+        byte[] jpg = imagenes.redimensionar(datos, 1200);
         if (jpg == null) throw new IllegalArgumentException("No se pudo leer la imagen (usa JPG o PNG)");
         repo.actualizarPortada(id, jpg, ImagenService.huella(jpg));
         anotar(id, "portada", null, ImagenService.huella(jpg));

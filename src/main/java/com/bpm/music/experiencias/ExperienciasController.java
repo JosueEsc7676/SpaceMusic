@@ -161,6 +161,12 @@ public class ExperienciasController {
         return dedicatorias.guardar(id, CurrentUser.id(), !Boolean.FALSE.equals(b.get("guardar")));
     }
 
+    /** Borra de tu lista todas las recibidas (menos las guardadas) o todas las enviadas: ?tipo=recibidas|enviadas */
+    @DeleteMapping("/dedicatorias")
+    public Map<String, Object> vaciarDedicatorias(@RequestParam(defaultValue = "recibidas") String tipo) {
+        return Map.of("borradas", dedicatorias.vaciar(CurrentUser.id(), !"enviadas".equals(tipo)));
+    }
+
     @DeleteMapping("/dedicatorias/{id}")
     public ResponseEntity<Void> ocultarDedicatoria(@PathVariable Long id) { dedicatorias.ocultar(id, CurrentUser.id()); return ResponseEntity.noContent().build(); }
 

@@ -223,6 +223,11 @@ async function compartir(r) {
 
   const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
   const nombre = r.titulo.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase() + '.png';
+  if (window.SpaceMusicApp?.guardarImagen) {
+    const { compartirImagen } = await import('./dedicatorias.js');
+    await compartirImagen(blob, nombre);
+    return;
+  }
   const archivo = new File([blob], nombre, { type: 'image/png' });
   if (navigator.canShare?.({ files: [archivo] })) {
     try { await navigator.share({ files: [archivo], title: r.titulo }); return; } catch (e) { if (e.name === 'AbortError') return; }
