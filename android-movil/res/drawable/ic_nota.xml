@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Icono pequeño de la notificación (la nota del logo, en blanco) -->
+<!-- Icono pequeño de la notificación (el logo de ondas, en blanco) -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp"
     android:viewportWidth="512" android:viewportHeight="512">
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="40"
-        android:strokeLineCap="round" android:strokeLineJoin="round"
-        android:pathData="M200,372V150l170,-34v222" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M156,372m-62,0a62,62 0,1 1,124 0a62,62 0,1 1,-124 0" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M326,338m-62,0a62,62 0,1 1,124 0a62,62 0,1 1,-124 0" />
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+        android:pathData="M256,20a236,236 0,1 1,0 472a236,236 0,1 1,0 -472zM117,239a13,13 0,0 1,26,0v34a13,13 0,0 1,-26,0zM159,201a13,13 0,0 1,26,0v110a13,13 0,0 1,-26,0zM201,221a13,13 0,0 1,26,0v70a13,13 0,0 1,-26,0zM243,175a13,13 0,0 1,26,0v162a13,13 0,0 1,-26,0zM285,221a13,13 0,0 1,26,0v70a13,13 0,0 1,-26,0zM327,201a13,13 0,0 1,26,0v110a13,13 0,0 1,-26,0zM369,239a13,13 0,0 1,26,0v34a13,13 0,0 1,-26,0z" />
 </vector>

@@ -37,9 +37,10 @@ struct Entrada: View {
             ScrollView {
                 VStack(spacing: 28) {
                     VStack(spacing: 14) {
-                        LogoSpaceMusic(tamano: 84)
-                            .shadow(color: .white.opacity(0.12), radius: 24)
-                            .scaleEffect(aparecer ? 1 : 0.85)
+                        // El logo aparece con sus ondas creciendo y después se mueven suave, como un ecualizador
+                        LogoSpaceMusic(tamano: 84, disco: aparecer ? 1 : 0.5,
+                                       ondas: Array(repeating: aparecer ? 1 : 0, count: 7), vivo: true)
+                            .shadow(color: .white.opacity(0.14), radius: 24)
                         Text("SpaceMusic")
                             .font(.system(size: 32, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)

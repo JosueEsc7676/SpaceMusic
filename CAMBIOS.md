@@ -1,5 +1,10 @@
 # Registro de cambios
 
+## iPhone: logo de ondas en blanco y negro
+- **Logo nuevo** (`App/Logo.swift`): círculo blanco con siete ondas negras, igual que la web y Android. Ícono de la app con el mismo logo.
+- Al abrir la app aparece el círculo, las ondas crecen desde el centro y laten dos veces; en el inicio de sesión las ondas se mueven suave como un ecualizador (quieto con «Reducir movimiento»).
+- Android 2.1 y TV 1.1: ícono y notificación con el logo nuevo.
+
 ## iPhone: SyncPlay sin cortes, inicio de sesión nuevo y logo animado
 - **SyncPlay sin cortes para quien se une** (`AjusteSincronia.swift`, `EscuchaJuntos.swift`): antes, con una conexión lenta, cada salto para alcanzar a los demás tardaba en volver a sonar, quedaba otra vez atrasado y volvía a saltar (el audio se cortaba a cada rato). Ahora el salto apunta un poco adelante (aprendido midiendo cuánto tarda en volver a sonar), después de un salto se espera antes de corregir otra vez (más si se repiten) y los desfases medianos se corrigen solo con la velocidad. Solo un estado nuevo del servidor provoca un salto inmediato. Misma lógica que la web (`js/syncplay-ajuste.js`). Pruebas: `SyncPlayTests` (simulación con 0,2–3 s por salto).
 - **Acelerar sin detenerse a cargar**: dentro de SyncPlay se guardan 30 s de audio por adelantado (antes 5 s) y solo se acelera (hasta 1,05) si hay audio de sobra cargado; antes AVPlayer podía pausarse a cargar al subir la velocidad.
