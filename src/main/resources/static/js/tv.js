@@ -725,7 +725,7 @@ bus.on('player:queue', () => $('.np.open') && pintarNP(false));
 
 function login(msg = '') {
   pintarCuerpo(`<div class="login"><form id="lf">
-    <h1><img src="/img/icon.svg" alt="">SpaceMusic</h1><p>Inicia sesión con tu cuenta</p>
+    <h1><img src="/img/logo-animado.svg" alt="">SpaceMusic</h1><p>Inicia sesión con tu cuenta</p>
     <label>Usuario o correo</label><input class="f" id="lu" autocomplete="username">
     <label>Contraseña</label><input class="f" id="lp" type="password" autocomplete="current-password">
     <div class="err" id="le">${esc(msg)}</div>

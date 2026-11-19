@@ -1,28 +1,31 @@
-/* Pantalla de apertura: logo negro con la nota blanca que se dibuja (≈1,1 s) */
+/* Pantalla de apertura: el círculo blanco aparece y las ondas negras crecen desde el centro y laten (≈1,2 s) */
 #splash { position: fixed; inset: 0; z-index: 9999; background: #000; display: grid; place-content: center; justify-items: center; gap: 22px;
   animation: spAuto .3s 6s forwards; }
 #splash::before { content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(40% 35% at 50% 46%, rgba(180,165,255,.10), transparent 70%); opacity: 0; animation: spFade 1s .2s ease-out forwards; }
+  background: radial-gradient(40% 35% at 50% 46%, rgba(255,255,255,.08), transparent 70%); opacity: 0; animation: spFade 1s .2s ease-out forwards; }
 #splash.out { animation: spOut .45s cubic-bezier(.4,0,.2,1) forwards; }
 #splash.quick { animation: none; }
-#splash.quick * , #splash.quick::before { animation-duration: .01s !important; animation-delay: 0s !important; }
-#splash .sp-logo { position: relative; width: 128px; height: 128px; will-change: transform, opacity; animation: spIn .55s cubic-bezier(.2,1.35,.4,1) both; }
+#splash.quick * , #splash.quick::before { animation-duration: .01s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; }
+#splash .sp-logo { position: relative; width: 128px; height: 128px; will-change: transform, opacity; }
 #splash .sp-logo::before { content: ""; position: absolute; inset: -40%; border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255,255,255,.18), transparent); opacity: 0; animation: spGlow 1.2s .7s ease-out both; }
+  background: radial-gradient(closest-side, rgba(255,255,255,.18), transparent); opacity: 0; animation: spGlow 1.2s .55s ease-out both; }
 #splash svg { position: relative; width: 100%; height: 100%; display: block; overflow: visible; }
-#splash .sp-stem { fill: none; stroke: #fff; stroke-width: 34; stroke-linecap: round; stroke-linejoin: round;
-  stroke-dasharray: 640; stroke-dashoffset: 640; animation: spDraw .55s .2s cubic-bezier(.6,0,.3,1) forwards; }
-#splash .sp-head { fill: #fff; transform-box: fill-box; transform-origin: center; transform: scale(0); animation: spPop .42s cubic-bezier(.2,1.6,.4,1) forwards; }
-#splash .sp-h1 { animation-delay: .62s; }
-#splash .sp-h2 { animation-delay: .72s; }
+#splash .sp-disco { fill: #fff; transform-box: fill-box; transform-origin: center; animation: spIn .55s cubic-bezier(.2,1.35,.4,1) both; }
+#splash .sp-b { fill: #000; transform-box: fill-box; transform-origin: center; transform: scaleY(0);
+  animation: spOnda .5s cubic-bezier(.3,1.3,.5,1) forwards, spLate .35s ease-in-out 2 alternate; }
+/* Desde el centro hacia afuera; después dos latidos, como un ecualizador */
+#splash .sp-b4 { animation-delay: .22s, .78s; }
+#splash .sp-b3, #splash .sp-b5 { animation-delay: .3s, .86s; }
+#splash .sp-b2, #splash .sp-b6 { animation-delay: .38s, .94s; }
+#splash .sp-b1, #splash .sp-b7 { animation-delay: .46s, 1.02s; }
 #splash .sp-name { font: 800 22px/1 Manrope, Inter, system-ui, sans-serif; letter-spacing: .01em; color: #fff; opacity: 0;
-  animation: spName .45s .78s ease-out forwards; }
+  animation: spName .45s .7s ease-out forwards; }
 .tv-splash#splash .sp-logo { width: 9rem; height: 9rem; }
 .tv-splash#splash .sp-name { font-size: 1.8rem; }
 
-@keyframes spIn { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
-@keyframes spDraw { to { stroke-dashoffset: 0; } }
-@keyframes spPop { to { transform: scale(1); } }
+@keyframes spIn { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: none; } }
+@keyframes spOnda { 0% { transform: scaleY(0); } 70% { transform: scaleY(1.15); } 100% { transform: scaleY(1); } }
+@keyframes spLate { from { transform: scaleY(1); } to { transform: scaleY(.55); } }
 @keyframes spGlow { 0% { opacity: 0; transform: scale(.6); } 40% { opacity: 1; } 100% { opacity: 0; transform: scale(1.5); } }
 @keyframes spName { from { opacity: 0; transform: translateY(6px); } to { opacity: .94; transform: none; } }
 @keyframes spFade { to { opacity: 1; } }
@@ -30,5 +33,5 @@
 @keyframes spAuto { to { opacity: 0; visibility: hidden; } }
 
 @media (prefers-reduced-motion: reduce) {
-  #splash *, #splash *::before, #splash::before { animation-duration: .01s !important; animation-delay: 0s !important; }
+  #splash *, #splash *::before, #splash::before { animation-duration: .01s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; }
 }

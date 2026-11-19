@@ -1,6 +1,11 @@
 # Registro de cambios
 
 
+## Versión 3.8.2
+- **Logo nuevo en blanco y negro**: círculo blanco con siete ondas negras (el que tenía la entrada del iPhone, sin colores). `img/icon.svg` (ícono con fondo), `img/logo.svg` (solo el círculo) e `img/logo-animado.svg` (las ondas crecen desde el centro y se mueven como un ecualizador; quieto con «reducir movimiento»). PNG de la web, Android (teléfono y TV) e iPhone generados con las mismas medidas.
+- Pantalla de apertura (`index.html`, `tv.html`, entrada tras iniciar sesión) con el logo nuevo: aparece el círculo, crecen las ondas y laten dos veces. Inicio de sesión de la web y de la TV con el logo animado; barra lateral con el logo nuevo.
+- Android 2.1 (código 12) y TV 1.1 (código 2): ícono y notificación con el logo nuevo, firmadas con la misma llave.
+
 ## Versión 3.8.1
 - **SyncPlay sin cortes para quien se une** (`js/syncplay-ajuste.js`, `js/juntos.js`): antes, con una conexión lenta, cada salto para alcanzar a los demás tardaba en volver a sonar, quedaba otra vez atrasado y volvía a saltar. Ahora el salto apunta un poco adelante (aprendido midiendo cuánto tardó en volver a sonar), tras un salto se espera antes de corregir otra vez (más si se repiten) y los desfases de hasta 0,8 s se corrigen solo con la velocidad. Solo un estado nuevo del servidor provoca un salto inmediato. Pruebas: `pruebas/syncplay-ajuste.test.mjs` (simulación: el método anterior saltaba más de 15 veces por minuto con 1,5 s por salto; el nuevo, 3 como máximo) y `pruebas/syncplay-sincronia.mjs` (8/8, nueva prueba con la red del invitado a 1,5 s de demora; desfase mediano 24–40 ms).
 - iPhone (rama `app-ios`): la misma corrección, búfer de 30 s en SyncPlay, pausas locales (llamada, audífonos, temporizador), inicio de sesión en blanco y negro sin el enlace del servidor y logo animado al abrir.

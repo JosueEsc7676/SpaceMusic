@@ -57,7 +57,7 @@ pintarCuerpo(`
 <div class="app">
   <nav class="sidebar" aria-label="Navegación principal">
     <div class="side-block">
-      <a class="brand" href="#/"><span class="brand-logo">${icon('note')}</span>SpaceMusic</a>
+      <a class="brand" href="#/"><span class="brand-logo"><img src="/img/logo.svg" alt=""></span>SpaceMusic</a>
       <a class="nav-link" href="#/" data-nav="/">${icon('home')}Inicio</a>
       <a class="nav-link" href="#/buscar" data-nav="/buscar">${icon('search')}Buscar</a>
       <a class="nav-link" href="#/biblioteca" data-nav="/biblioteca">${icon('library')}Tu biblioteca</a>

@@ -9,6 +9,9 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none;
 @keyframes in { from { opacity: 0; transform: translateY(10px); } }
 .brand { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 21px; font-weight: 800; letter-spacing: -.3px; margin-bottom: 26px; color: var(--text); text-decoration: none; }
 .brand img { width: 36px; height: 36px; }
+/* Inicio de sesión: logo de ondas grande y animado encima del nombre */
+.brand-vivo { flex-direction: column; gap: 12px; font-size: 22px; margin-bottom: 22px; }
+.brand-vivo img { width: 76px; height: 76px; filter: drop-shadow(0 0 22px rgba(255,255,255,.14)); }
 h1 { margin: 0 0 6px; font-family: "Manrope", "Inter", sans-serif; font-size: 27px; font-weight: 800; text-align: center; letter-spacing: -.4px; }
 .sub { text-align: center; color: var(--text-2); margin: 0 0 24px; font-size: 14px; }
 .field { margin-bottom: 14px; position: relative; }
