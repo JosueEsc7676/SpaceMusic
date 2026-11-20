@@ -147,7 +147,6 @@ public class ReproductorService extends Service {
                     ui.post(() -> {
                         if (url.equals(portadaUrl)) {
                             portada = b;
-                            fondoBorroso = b == null ? null : desenfocar(b);
                             if (!linea.isEmpty()) { lineaMostrada = ""; animarLetra(); }
                             actualizar();
                         }
@@ -204,58 +203,45 @@ public class ReproductorService extends Service {
         return b.build();
     }
 
-    /** Dibuja una línea (y la siguiente atenuada) centradas en la franja del medio. */
-    private static void dibujarLetra(Canvas c, String actual, String sig, float alfa, float dy) {
+    /** Letra manuscrita (como el diseño de referencia del iPhone): la fuente «cursive» del sistema. */
+    private static final Typeface MANUSCRITA = Typeface.create("cursive", Typeface.NORMAL);
+
+    /** Dibuja la línea centrada, un poco debajo de la mitad, en letra manuscrita blanca con sombra suave. */
+    private static void dibujarLetra(Canvas c, String actual, float alfa, float dy) {
         if (actual.isEmpty() || alfa <= 0.01f) return;
-        int ancho = (int) (LADO * 0.84f);
-        TextPaint grande = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-        grande.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
-        grande.setColor(Color.argb((int) (255 * alfa), 255, 255, 255));
-        grande.setShadowLayer(12, 0, 2, Color.argb((int) (120 * alfa), 0, 0, 0));
-        float tam = 62;
+        int ancho = (int) (LADO * 0.80f);
+        TextPaint tp = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        tp.setTypeface(MANUSCRITA);
+        tp.setColor(Color.argb((int) (255 * alfa), 255, 255, 255));
+        tp.setShadowLayer(10, 0, 2, Color.argb((int) (140 * alfa), 0, 0, 0));
+        float tam = 70;
         StaticLayout l;
         do {
-            grande.setTextSize(tam);
-            l = capa(actual, grande, ancho, 4);
+            tp.setTextSize(tam);
+            l = capa(actual, tp, ancho, 3);
             tam -= 4;
-        } while (l.getHeight() > LADO * 0.36f && tam > 28);
-        StaticLayout s = null;
-        if (!sig.isEmpty()) {
-            TextPaint chica = new TextPaint(grande);
-            chica.setTextSize(Math.max(24, tam * 0.55f));
-            chica.setColor(Color.argb((int) (130 * alfa), 255, 255, 255));
-            s = capa(sig, chica, ancho, 2);
-        }
-        float alto = l.getHeight() + (s == null ? 0 : 22 + s.getHeight());
-        float y = (LADO - alto) / 2 + dy;
+        } while (l.getHeight() > LADO * 0.3f && tam > 32);
+        float y = LADO * 0.53f - l.getHeight() / 2f + dy;
         c.save();
         c.translate((LADO - ancho) / 2f, y);
         l.draw(c);
-        if (s != null) { c.translate(0, l.getHeight() + 22); s.draw(c); }
         c.restore();
     }
 
-    /** Un cuadro de la transición (p de 0 a 1). Al llegar la letra la portada se desenfoca; al irse vuelve nítida. */
+    /** Un cuadro de la transición (p de 0 a 1): portada nítida, abajo más oscura, y la letra encima. */
     private Bitmap cuadro(String deL, String deS, String aL, String aS, float p) {
         float e = p * p * (3 - 2 * p);
         Bitmap b = Bitmap.createBitmap(LADO, LADO, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(b);
-        Paint pintura = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
         c.drawColor(Color.BLACK);
-        if (fondoBorroso != null) cubrir(c, fondoBorroso, pintura);
-        // Velo oscuro, más fuerte en el centro donde va la letra
+        if (portada != null) cubrir(c, portada, new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG));
         Paint velo = new Paint();
-        velo.setShader(new LinearGradient(0, 0, 0, LADO, new int[]{0x55000000, 0x99000000, 0x66000000}, new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
+        velo.setShader(new LinearGradient(0, 0, 0, LADO, new int[]{0x1A000000, 0x1F000000, 0x6B000000, 0xC7000000},
+                new float[]{0f, 0.38f, 0.62f, 1f}, Shader.TileMode.CLAMP));
         c.drawRect(new Rect(0, 0, LADO, LADO), velo);
-        float nitidez = deL.isEmpty() && aL.isEmpty() ? 1 : deL.isEmpty() ? 1 - e : aL.isEmpty() ? e : 0;
-        if (nitidez > 0.01f && portada != null) {
-            Paint n = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
-            n.setAlpha((int) (255 * nitidez));
-            cubrir(c, portada, n);
-        }
-        float salto = LADO * 0.05f;
-        dibujarLetra(c, deL, deS, 1 - e, -salto * e);
-        dibujarLetra(c, aL, aS, e, salto * (1 - e));
+        float salto = LADO * 0.03f;
+        dibujarLetra(c, deL, 1 - e, -salto * e);
+        dibujarLetra(c, aL, e, salto * (1 - e));
         return b;
     }
 
@@ -266,7 +252,7 @@ public class ReproductorService extends Service {
         lineaMostrada = aL;
         siguienteMostrada = aS;
         final int mia = ++animacion;
-        if (portada == null && fondoBorroso == null) return;
+        if (portada == null) return;
         final float[] pasos = {0.2f, 0.4f, 0.6f, 0.8f, 1f};
         for (int k = 0; k < pasos.length; k++) {
             final float p = pasos[k];

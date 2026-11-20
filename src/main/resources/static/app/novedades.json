@@ -1,13 +1,22 @@
 {
-  "version": "3.11",
-  "titulo": "Novedades: la letra en la pantalla bloqueada, más bonita",
+  "version": "3.11.1",
+  "titulo": "Novedades: nuevo diseño de la letra en la pantalla bloqueada",
   "puntos": [
-    "Pantalla bloqueada: cuando llega la letra, la portada no desaparece: se desenfoca y la letra queda en el centro, donde siempre se ve.",
-    "Transición fluida entre versos: la línea anterior sube y se desvanece mientras la nueva entra.",
-    "iPhone: la portada ocupa toda la pantalla bloqueada con la forma del teléfono; las portadas pequeñas se ven como tarjeta sobre su fondo desenfocado.",
-    "Android 2.3: también muestra la letra en la pantalla de bloqueo."
+    "La portada se ve nítida a pantalla completa y la letra aparece encima, centrada, en letra manuscrita.",
+    "Transición suave entre versos: la línea anterior sube y se desvanece mientras entra la nueva.",
+    "Android 2.4 con el mismo diseño."
   ],
   "anteriores": [
+    {
+      "version": "3.11",
+      "titulo": "Novedades: la letra en la pantalla bloqueada, más bonita",
+      "puntos": [
+        "Pantalla bloqueada: cuando llega la letra, la portada no desaparece: se desenfoca y la letra queda en el centro, donde siempre se ve.",
+        "Transición fluida entre versos: la línea anterior sube y se desvanece mientras la nueva entra.",
+        "iPhone: la portada ocupa toda la pantalla bloqueada con la forma del teléfono; las portadas pequeñas se ven como tarjeta sobre su fondo desenfocado.",
+        "Android 2.3: también muestra la letra en la pantalla de bloqueo."
+      ]
+    },
     {
       "version": "3.10",
       "titulo": "Novedades: tus dispositivos como Spotify Connect y SyncPlay con código",

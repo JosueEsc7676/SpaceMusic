@@ -1,6 +1,10 @@
 # Registro de cambios
 
 
+## Versión 3.11.1
+- **Letra en la pantalla bloqueada con el diseño de referencia**: portada nítida a pantalla completa con degradado oscuro abajo y la línea que suena centrada al 53 % del alto, en letra manuscrita blanca con sombra suave (iPhone: Savoye; Android 2.4, código 15: fuente «cursive» del sistema). Solo la línea actual. Misma transición entre versos.
+- iPhone (rama `app-ios`): la imagen vuelve a ser cuadrada (1500 px): iOS solo la pone a pantalla completa si es cuadrada (la vertical se mostraba como tarjeta); la letra va dentro de la columna central que queda visible.
+
 ## Versión 3.11
 - **Letra en la pantalla de bloqueo de Android** (app 2.3, código 14): `nativo.js` manda a la app la línea que suena y la siguiente (`SpaceMusicApp.letra`, solo letras sincronizadas; vacío en pausas largas); `ReproductorService` la dibuja sobre la portada desenfocada (720 px, velo más oscuro en el centro, texto centrado que no se pierde aunque el sistema recorte la imagen) y anima 5 cuadros en unos 0,35 s: la línea anterior sube y se desvanece, la nueva entra desde abajo; al llegar la letra la portada se desenfoca y al irse vuelve nítida. Se apaga con `localStorage sm_letra_bloqueo=false`.
 - iPhone (rama `app-ios`): portada vertical a la medida de la pantalla, letra en la franja visible y la misma transición.
