@@ -98,8 +98,12 @@ public class PortadaEnLineaService {
             if (chica.isEmpty()) continue;
             // La misma imagen en 1400 × 1400 (iTunes la genera al tamaño pedido)
             String hd = chica.replaceAll("/\\d+x\\d+bb\\.(jpg|png|webp)$", "/1400x1400bb.jpg");
-            r.add(opcion("iTunes", x.path("trackName").asText(), x.path("artistName").asText(), x.path("collectionName").asText(),
-                    chica.replaceAll("/\\d+x\\d+bb\\.", "/300x300bb."), hd, 1400, c));
+            Map<String, Object> o = opcion("iTunes", x.path("trackName").asText(), x.path("artistName").asText(), x.path("collectionName").asText(),
+                    chica.replaceAll("/\\d+x\\d+bb\\.", "/300x300bb."), hd, 1400, c);
+            // Año del lanzamiento (para completar las bajadas de YouTube)
+            String fecha = x.path("releaseDate").asText("");
+            if (fecha.matches("\\d{4}.*")) o.put("anio", Integer.parseInt(fecha.substring(0, 4)));
+            r.add(o);
         }
     }
 

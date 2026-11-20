@@ -1,110 +1,414 @@
 #!/usr/bin/env bash
 # descargar — baja música a SpaceMusic sin repetir canciones.
 #
-#   descargar "https://open.spotify.com/track|album|playlist|artist/..."   (Spotify)
-#   descargar "https://www.youtube.com/watch?v=..."  "https://soundcloud.com/..."   (YouTube, YouTube Music, SoundCloud y más)
-#   descargar "Artista - Canción"                                            (búsqueda por nombre)
-#   Se pueden pasar varios enlaces a la vez.
+#   descargar "enlace o nombre" [más...]   Descarga ahora, en esta ventana.
+#   descargar --encolar < lista.txt         Agrega una lista (una entrada por línea, sin límite)
+#                                           a la cola y la baja EN SEGUNDO PLANO en el servidor:
+#                                           sigue aunque se cierre la ventana o se apague el PC.
+#   descargar --ver                         Muestra el progreso de la cola (Ctrl+C = dejar de mirar).
+#   descargar --reintentar                  Vuelve a poner en la cola lo que falló antes.
 #
-# - No repite: recuerda lo ya descargado (archivo de historial) y salta lo que ya existe.
-# - Si algo falla, lo reintenta solo (hasta 3 rondas, esperando entre una y otra).
-# - Credenciales propias de Spotify (opcional, mucho más rápido y sin bloqueos):
-#     guarda CLIENT_ID y CLIENT_SECRET en ~/.config/spacemusic/spotify.env
+# Entradas: Spotify (canción, álbum, playlist, artista), YouTube, YouTube Music, SoundCloud, Bandcamp,
+#           Apple Music, Deezer, Tidal y Amazon Music (se convierten con song.link), enlaces directos a un
+#           archivo de audio (.mp3, .m4a, .flac…) o "Artista - Canción".
+# Contra los bloqueos de YouTube: pausas entre peticiones, otros clientes de YouTube en el último intento,
+#   cookies opcionales (~/.config/spacemusic/youtube-cookies.txt, formato Netscape) y, si un enlace no baja,
+#   la misma canción se busca en SoundCloud y en Spotify (con sus datos y letra).
+#
+# - No repite: recuerda lo ya descargado (historial) y salta lo que ya existe (mp3 o m4a).
+# - Si algo falla, lo reintenta solo (3 rondas), y en cada ronda prueba más fuentes de audio.
+# - Listas grandes: se bajan por tandas de 50 para que el avance se guarde poco a poco.
+# - Se mantiene solo: actualiza yt-dlp una vez al día y vuelve a aplicar los arreglos a spotdl.
+# - Credenciales de Spotify: CLIENT_ID y CLIENT_SECRET en ~/.config/spacemusic/spotify.env
 set -uo pipefail
 
 BASE=/home/admin123/spacemusic
 DESTINO=$BASE/musica/Descargas
 ENV=$BASE/spotdl-env/bin
+PARCHE=$BASE/parche-spotdl.py
+LEER_PLAYLIST=$BASE/leer-playlist.py
 DATOS=$HOME/.config/spacemusic
 HISTORIAL=$DATOS/descargadas-spotify.txt
 HISTORIAL_YT=$DATOS/descargadas-otras.txt
+COLA=$DATOS/cola
+HECHAS=$DATOS/cola-hechas
+LOG=$DATOS/descargas.log
+FALLIDAS=$DATOS/fallidas.txt
+PIDFILE=$DATOS/.trabajador.pid
 RONDAS=3
-mkdir -p "$DESTINO" "$DATOS"
+HILOS=6                     # canciones en paralelo
+TANDA=50                    # canciones por tanda en listas grandes
+mkdir -p "$DESTINO" "$DATOS" "$COLA" "$HECHAS"
 
 verde() { printf '\033[1;32m%s\033[0m\n' "$*"; }
 amarillo() { printf '\033[1;33m%s\033[0m\n' "$*"; }
 rojo() { printf '\033[1;31m%s\033[0m\n' "$*"; }
 
-# Desde el .bat llega todo en un solo texto: si son varios enlaces separados por espacios, se separan
-if [ $# -eq 1 ] && [[ "$1" =~ ^https?:// ]] && [[ "$1" == *" "* ]]; then
-  read -ra PARTES <<< "$1"
-  set -- "${PARTES[@]}"
-fi
+# ---------- Cola en segundo plano ----------
+trabajador_activo() {
+  local pid
+  pid=$(cat "$PIDFILE" 2>/dev/null) && [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
 
-if [ $# -eq 0 ]; then
-  echo "Uso: descargar \"enlace o nombre\" [más enlaces...]"
-  exit 1
-fi
+arrancar_trabajador() {
+  trabajador_activo && return 0
+  # setsid: queda separado de la conexión SSH, así sigue aunque se cierre la ventana
+  setsid -f "$0" --trabajar >>"$LOG" 2>&1 </dev/null
+  sleep 1
+}
+
+ver() {
+  # si quedaron listas a medias (p. ej. se reinició el servidor), se retoman solas
+  if ! trabajador_activo && [ -n "$(find "$COLA" -maxdepth 1 -name '*.txt' | head -1)" ]; then
+    amarillo "Había descargas pendientes (¿se reinició el servidor?). Retomándolas…"
+    arrancar_trabajador
+  fi
+  if trabajador_activo; then
+    echo "Mostrando el progreso. Puedes cerrar esta ventana o apagar el PC:"
+    echo "la descarga sigue en el servidor. (Ctrl+C = dejar de mirar)"
+    echo
+    tail -n 25 -F --pid="$(cat "$PIDFILE")" "$LOG" 2>/dev/null
+    echo
+    verde "── La cola terminó ──"
+  else
+    echo "No hay descargas en curso. Lo último que pasó:"
+    echo
+    tail -n 12 "$LOG" 2>/dev/null || echo "  (todavía no hay registro)"
+  fi
+  local n
+  n=$(grep -c . "$FALLIDAS" 2>/dev/null || true)
+  [ "${n:-0}" -gt 0 ] && amarillo "Hay $n entrada(s) que fallaron. Usa la opción F para reintentarlas."
+  return 0
+}
+
+encolar() {
+  local archivo n
+  archivo=$COLA/$(date +%Y%m%d-%H%M%S)-$$.txt
+  # quitar los \r de Windows y las líneas vacías
+  tr -d '\r' | grep -v '^[[:space:]]*$' > "$archivo.tmp" || true
+  n=$(wc -l < "$archivo.tmp")
+  if [ "$n" -eq 0 ]; then rm -f "$archivo.tmp"; echo "La lista estaba vacía."; return 1; fi
+  mv "$archivo.tmp" "$archivo"
+  local antes; antes=$(( $(ls "$COLA" | wc -l) - 1 ))
+  verde "✓ $n entrada(s) agregadas a la cola."
+  [ "$antes" -gt 0 ] && echo "  Antes hay $antes lista(s) esperando; se bajan en orden."
+  arrancar_trabajador
+}
+
+reintentar() {
+  if [ ! -s "$FALLIDAS" ]; then echo "No hay nada pendiente por reintentar."; return 0; fi
+  local tmp; tmp=$(mktemp)
+  sort -u "$FALLIDAS" > "$tmp" && : > "$FALLIDAS"
+  encolar < "$tmp"; rm -f "$tmp"
+}
+
+trabajar() {
+  exec 7>"$DATOS/.cola.lock"
+  flock -n 7 || exit 0                  # ya hay un trabajador
+  echo $$ > "$PIDFILE"
+  # rotar el registro si crece mucho
+  [ -f "$LOG" ] && [ "$(stat -c %s "$LOG")" -gt 5000000 ] && mv "$LOG" "$LOG.anterior"
+  while true; do
+    # la más vieja primero; si el servidor se reinició a mitad, se retoma (lo bajado se salta)
+    local f
+    f=$(find "$COLA" -maxdepth 1 -name '*.txt' | sort | head -1)
+    [ -z "$f" ] && break
+    mapfile -t LINEAS < "$f"
+    echo
+    verde "════ $(date '+%d/%m %H:%M') · Lista $(basename "$f" .txt) · ${#LINEAS[@]} entrada(s) ════"
+    # 7>&-: spotdl y yt-dlp no heredan el candado de la cola; si alguno quedara colgado,
+    # no impide que la cola vuelva a arrancar
+    procesar "${LINEAS[@]}" 7>&-
+    mv "$f" "$HECHAS/"
+    # guardar solo las 50 listas más recientes
+    ls -1t "$HECHAS" | tail -n +51 | sed "s|^|$HECHAS/|" | xargs -r rm -f
+  done
+  rm -f "$PIDFILE"
+}
+
+# ---------- Mantenimiento automático ----------
+# Cada descarga en curso tiene un candado "compartido" (fd 8). La actualización necesita el
+# "exclusivo": solo se hace si nada está descargando, así nunca cambia yt-dlp a mitad de una descarga.
+mantener() {
+  local marca=$DATOS/.actualizado
+  exec 8>"$DATOS/.en-uso"
+  if [ ! -f "$marca" ] || [ -n "$(find "$marca" -mmin +1440 2>/dev/null)" ]; then
+    if flock -n -x 8; then
+      amarillo "Actualizando yt-dlp (una vez al día)…"
+      if timeout 180 "$ENV/pip" install -q -U --disable-pip-version-check \
+           "yt-dlp[default,curl-cffi]" yt-dlp-ejs ytmusicapi syncedlyrics >/dev/null 2>&1; then
+        touch "$marca"
+      else
+        amarillo "  No se pudo actualizar (sin internet?). Se sigue con la versión actual."
+      fi
+      "$ENV/python" "$PARCHE" "$("$ENV/python" -c 'import spotdl,os;print(os.path.dirname(spotdl.__file__))')" >/dev/null \
+        || amarillo "  Aviso: algún arreglo de spotdl no se pudo aplicar."
+    fi
+  fi
+  if ! flock -s -w 300 8; then
+    amarillo "  Otra descarga está actualizando; se sigue igual."
+  fi
+}
 
 CRED=()
+OFICIAL=()
 if [ -f "$DATOS/spotify.env" ]; then
   # shellcheck disable=SC1091
   . "$DATOS/spotify.env"
-  [ -n "${CLIENT_ID:-}" ] && [ -n "${CLIENT_SECRET:-}" ] && CRED=(--client-id "$CLIENT_ID" --client-secret "$CLIENT_SECRET")
+  # --use-official-api: sin esto spotdl IGNORA las credenciales y usa un cliente lento que Spotify bloquea
+  if [ -n "${CLIENT_ID:-}" ] && [ -n "${CLIENT_SECRET:-}" ]; then
+    CRED=(--client-id "$CLIENT_ID" --client-secret "$CLIENT_SECRET")
+    OFICIAL=(--use-official-api)
+  fi
 fi
 
+YTDLP_ARGS="--js-runtimes node --retries 10 --fragment-retries 10 --extractor-retries 5 --socket-timeout 30"
+# Desde el 2.º intento también se prueba el cliente web_music con "PO token" del servicio
+# bgutil-pot (127.0.0.1:4416), que evita los bloqueos "no eres un bot" / 403 de YouTube.
+# (Con los clientes normales, yt-dlp también lo usa solo cuando YouTube lo pide.)
+ytdlp_args() {
+  if [ "$1" -ge 2 ]; then
+    echo "$YTDLP_ARGS --extractor-args youtube:player_client=default,web_music"
+  else
+    echo "$YTDLP_ARGS"
+  fi
+}
+
+# Fuentes de audio por ronda: si una canción no aparece en la primera, se busca en más sitios.
+fuentes() {
+  case $1 in
+    1) echo "youtube-music youtube" ;;
+    2) echo "youtube-music youtube bandcamp" ;;
+    *) echo "youtube youtube-music bandcamp soundcloud piped" ;;
+  esac
+}
+
+# Bloqueo de Spotify: si tus claves pasan el límite, Spotify las bloquea por horas (429 con
+# "Retry-After" enorme). El arreglo de spotipy anota hasta cuándo en este archivo y no se queda
+# esperando; mientras dure, se usa el cliente no oficial (no gasta tu límite).
+export SPACEMUSIC_BLOQUEO=$DATOS/.spotify-bloqueado-hasta
+spotify_bloqueado() {
+  local hasta
+  hasta=$(cat "$SPACEMUSIC_BLOQUEO" 2>/dev/null) || return 1
+  [ -n "$hasta" ] && [ "$hasta" -gt "$(date +%s)" ] 2>/dev/null
+}
+
 spotify() {
+  local ronda=$1; shift
+  local oficial=("${USAR_OFICIAL[@]}")
+  if [ ${#oficial[@]} -gt 0 ] && spotify_bloqueado; then
+    local horas=$(( ( $(cat "$SPACEMUSIC_BLOQUEO") - $(date +%s) + 1799 ) / 3600 ))
+    amarillo "  Spotify limitó tus claves por unas $horas hora(s) más. Mientras tanto se usa el modo sin claves (más lento, pero sigue)."
+    oficial=()
+  fi
+  # shellcheck disable=SC2046
   "$ENV/spotdl" download "$@" \
     --output "$DESTINO/{artist}/{album}/{track-number} - {title}.{output-ext}" \
-    --audio youtube --format mp3 --bitrate 320k \
-    --generate-lrc --lyrics synced musixmatch genius \
-    --overwrite skip --scan-for-songs --archive "$HISTORIAL" \
-    --threads 4 --print-errors --save-errors "$ERRORES" \
-    --yt-dlp-args "--js-runtimes node --retries 10 --fragment-retries 10 --socket-timeout 30" \
-    "${CRED[@]}"
+    --audio $(fuentes "$ronda") \
+    --format m4a --bitrate disable \
+    --generate-lrc --lyrics synced genius \
+    --overwrite skip --scan-for-songs --detect-formats mp3 m4a --archive "$HISTORIAL" \
+    --threads "$HILOS" --max-retries 5 --print-errors --save-errors "$ERRORES" \
+    --yt-dlp-args "$(ytdlp_args "$ronda")" \
+    "${CRED[@]}" "${oficial[@]}"
+}
+
+# Anti-bloqueo: pausas cortas entre peticiones; cookies si existen; en la 3.ª ronda, otros clientes de YouTube
+antibloqueo() {
+  local args="--sleep-requests 1 --min-sleep-interval 1 --max-sleep-interval 4 --force-ipv4"
+  [ -s "$DATOS/youtube-cookies.txt" ] && args="$args --cookies $DATOS/youtube-cookies.txt"
+  [ "${1:-1}" -ge 3 ] && args="$args --extractor-args youtube:player_client=tv,web_safari,mweb,web_music"
+  echo "$args"
 }
 
 otra() {
-  "$ENV/yt-dlp" "$1" -x --audio-format mp3 --audio-quality 0 \
+  # shellcheck disable=SC2086
+  "$ENV/yt-dlp" "$1" $(ytdlp_args "${2:-1}") $(antibloqueo "${2:-1}") -f "bestaudio[ext=m4a]/bestaudio/best" -x --audio-format m4a \
     --embed-metadata --embed-thumbnail --convert-thumbnails jpg \
     --replace-in-metadata "title" '(?i)\s*[\(\[](letra|lyrics?|official[^\)\]]*|video[^\)\]]*|audio[^\)\]]*|visualizer|hd|hq|4k)[\)\]]' "" \
     --parse-metadata "%(artist,creator)s:%(artist)s" \
     --parse-metadata 'title:(?P<artist>.+?)\s+[-–]\s+(?P<title>.+)' \
     --parse-metadata "%(artist,uploader)s:%(meta_artist)s" \
     --download-archive "$HISTORIAL_YT" --no-overwrites --ignore-errors \
-    --retries 10 --fragment-retries 10 --socket-timeout 30 --js-runtimes node \
+    --concurrent-fragments 4 \
     -o "$DESTINO/%(artist,uploader)s/%(title)s.%(ext)s"
 }
 
-FALLIDAS_FINAL=()
-for ENTRADA in "$@"; do
-  echo
-  verde "▶ $ENTRADA"
-  if [[ "$ENTRADA" =~ ^https?:// ]] && [[ ! "$ENTRADA" =~ spotify\.com ]]; then
-    # YouTube, YouTube Music, SoundCloud, Bandcamp…
-    for r in $(seq 1 $RONDAS); do
-      if otra "$ENTRADA"; then break; fi
-      [ "$r" -lt $RONDAS ] && { amarillo "  Falló, reintentando en 20 s ($r/$RONDAS)…"; sleep 20; }
-      [ "$r" -eq $RONDAS ] && FALLIDAS_FINAL+=("$ENTRADA")
-    done
-    continue
+# Si un enlace (YouTube…) no se pudo bajar: se averigua «Artista - Canción» y se busca en SoundCloud;
+# si tampoco, se deja para Spotify (búsqueda por nombre, con sus datos, portada y letra).
+respaldo() {
+  local url=$1 nombre
+  nombre=$("$ENV/yt-dlp" "$url" $(antibloqueo 3) --skip-download --no-warnings \
+            --print "%(artist,creator,uploader)s - %(track,title)s" 2>/dev/null | head -1 | \
+           sed -E 's/\s*[\(\[](letra|lyrics?|official[^)\]]*|video[^)\]]*|audio[^)\]]*)[)\]]//Ig; s/ - Topic - / - /')
+  [ -z "$nombre" ] || [ "$nombre" = "NA - NA" ] && return 1
+  amarillo "  Buscando «$nombre» en SoundCloud…"
+  if "$ENV/yt-dlp" "scsearch1:$nombre" -f "bestaudio/best" -x --audio-format m4a --embed-metadata --embed-thumbnail \
+       --convert-thumbnails jpg --no-overwrites --download-archive "$HISTORIAL_YT" \
+       -o "$DESTINO/%(uploader)s/%(title)s.%(ext)s" >/dev/null 2>&1; then
+    verde "  ✓ Bajada desde SoundCloud"
+    return 0
   fi
+  amarillo "  Se buscará «$nombre» con Spotify."
+  RESPALDO_SPOTIFY+=("$nombre")
+  return 0
+}
 
-  # Spotify o búsqueda por nombre
+# Enlaces de Apple Music, Deezer, Tidal o Amazon Music → búsquedas «Artista - Canción» (una por canción);
+# se bajan con Spotify, con sus datos, portada y letra. Usa iTunes, la API de Deezer o el título de la página.
+convertir() {
+  "$ENV/python" "$BASE/convertir-enlace.py" "$1" 2>/dev/null
+}
+
+# Enlace directo a un archivo de audio
+directo() {
+  local url=$1 nombre dir="$DESTINO/Directas"
+  mkdir -p "$dir"
+  nombre=$(basename "${url%%\?*}" | tr -cd 'A-Za-z0-9._ -' | cut -c1-120)
+  [ -z "$nombre" ] && nombre="audio-$(date +%s)"
+  [ -e "$dir/$nombre" ] && { echo "  Ya estaba: $nombre"; return 0; }
+  curl -fsSL -m 600 --max-filesize 300000000 -o "$dir/$nombre.part" "$url" && mv "$dir/$nombre.part" "$dir/$nombre" && verde "  ✓ $nombre"
+}
+
+# Baja varias entradas de Spotify (canciones, álbumes, artistas, búsquedas) juntas, por tandas,
+# con reintentos. Primer argumento: "oficial" o "libre". Agrega lo que falle a FALLIDAS_FINAL.
+# Se bajan juntas porque spotdl revisa toda la biblioteca cada vez que arranca (segundos que
+# crecen con la biblioteca): así se hace una vez por tanda y no una vez por enlace.
+bajar_spotify() {
+  local modo=$1 r CODIGO ESPERA; shift
   ERRORES=$(mktemp)
-  PENDIENTES=("$ENTRADA")
+  PENDIENTES=("$@")
+  USAR_OFICIAL=()
+  [ "$modo" = oficial ] && USAR_OFICIAL=("${OFICIAL[@]}")
+  local tam=$TANDA CAIDAS i total TROZO
   for r in $(seq 1 $RONDAS); do
     : > "$ERRORES"
-    spotify "${PENDIENTES[@]}"
-    mapfile -t PENDIENTES < <(grep -o 'https://open.spotify.com/track/[A-Za-z0-9]*' "$ERRORES" | sort -u)
+    CAIDAS=()
+    total=${#PENDIENTES[@]}
+    # por tandas: el historial se guarda al final de cada tanda
+    for (( i = 0; i < total; i += tam )); do
+      TROZO=("${PENDIENTES[@]:i:tam}")
+      [ "$total" -gt "$tam" ] && [ "$tam" -gt 1 ] && \
+        echo "  Tanda $(( i / tam + 1 )) de $(( (total + tam - 1) / tam )) ($(( i + 1 ))–$(( i + tam < total ? i + tam : total )) de $total)…"
+      local antes; antes=$(wc -l < "$ERRORES")
+      CODIGO=0
+      spotify "$r" "${TROZO[@]}" || CODIGO=$?
+      # spotdl a veces se cae (error de Spotify, un álbum raro…) y aun así termina con código 0.
+      # Si en esta tanda dejó errores sin ninguna canción concreta, la tanda entera queda pendiente.
+      if ! tail -n +"$((antes + 1))" "$ERRORES" | grep -q 'open.spotify.com/track/' && \
+         { [ "$CODIGO" -ne 0 ] || tail -n +"$((antes + 1))" "$ERRORES" | grep -q '[^[:space:]]'; }; then
+        amarillo "  spotdl se detuvo por un error: $(tail -n +"$((antes + 1))" "$ERRORES" | grep -m1 '[^[:space:]]' | cut -c1-150)"
+        CAIDAS+=("${TROZO[@]}")
+      fi
+    done
+    mapfile -t PENDIENTES < <( { grep -o 'https://open.spotify.com/track/[A-Za-z0-9]*' "$ERRORES"; printf '%s\n' "${CAIDAS[@]}"; } | grep . | awk '!visto[$0]++')
+    if [ ${#CAIDAS[@]} -gt 0 ]; then
+      # la próxima ronda va de a uno, para que un enlace problemático no frene a los demás
+      tam=1
+      # si la API oficial rechazó algo (p. ej. 401), el siguiente intento usa el cliente no oficial
+      grep -qE '401|403|authentication' "$ERRORES" && USAR_OFICIAL=()
+    fi
     [ ${#PENDIENTES[@]} -eq 0 ] && break
     if [ "$r" -lt $RONDAS ]; then
       ESPERA=$((r * 30))
-      amarillo "  ${#PENDIENTES[@]} canciones fallaron. Reintentando en $ESPERA s (ronda $((r + 1)) de $RONDAS)…"
+      amarillo "  ${#PENDIENTES[@]} pendiente(s). Reintentando en $ESPERA s con más fuentes (ronda $((r + 1)) de $RONDAS)…"
       sleep "$ESPERA"
     else
       FALLIDAS_FINAL+=("${PENDIENTES[@]}")
     fi
   done
   rm -f "$ERRORES"
-done
+}
 
-echo
-if [ ${#FALLIDAS_FINAL[@]} -eq 0 ]; then
-  verde "✓ Todo descargado. Aparecerá en SpaceMusic en menos de un minuto."
-else
-  rojo "✗ No se pudieron bajar ${#FALLIDAS_FINAL[@]} canciones después de $RONDAS intentos:"
+# Baja una lista de entradas y muestra el resumen. Devuelve 2 si algo falló.
+procesar() {
+  # Si una línea trae varios enlaces separados por espacios, se separan.
+  # Las búsquedas "Artista - Canción" quedan enteras.
+  local ENTRADAS=() A PARTES
+  for A in "$@"; do
+    A="${A#"${A%%[![:space:]]*}"}"; A="${A%"${A##*[![:space:]]}"}"
+    [ -z "$A" ] && continue
+    if [[ "$A" =~ ^https?:// ]] && [[ "$A" == *" "* ]]; then
+      read -ra PARTES <<< "$A"
+      ENTRADAS+=("${PARTES[@]}")
+    else
+      ENTRADAS+=("$A")
+    fi
+  done
+  [ ${#ENTRADAS[@]} -eq 0 ] && { echo "No hay nada que descargar."; return 1; }
+
+  mantener
+  FALLIDAS_FINAL=()
+  RESPALDO_SPOTIFY=()
+  local n=0 ENTRADA r SPOT=() LENTAS=() PISTAS CONV
+  for ENTRADA in "${ENTRADAS[@]}"; do
+    n=$((n + 1))
+    echo
+    verde "▶ [$n/${#ENTRADAS[@]}] $ENTRADA"
+    # Apple Music, Deezer, Tidal, Amazon Music: se convierte al mismo tema en Spotify o YouTube Music
+    if [[ "$ENTRADA" =~ ^https?://([a-z]+\.)?(music\.apple\.com|deezer\.com|deezer\.page\.link|tidal\.com|listen\.tidal\.com|music\.amazon\.) ]]; then
+      mapfile -t CONV < <(convertir "$ENTRADA")
+      if [ ${#CONV[@]} -gt 0 ]; then
+        echo "  → ${#CONV[@]} canción(es): ${CONV[0]}$([ ${#CONV[@]} -gt 1 ] && echo " …")"
+        SPOT+=("${CONV[@]}")
+      else
+        amarillo "  No se pudo leer el enlace"; FALLIDAS_FINAL+=("$ENTRADA")
+      fi
+      continue
+    fi
+    if [[ "$ENTRADA" =~ ^https?://[^?#]+\.(mp3|m4a|flac|ogg|opus|wav|aac)([?#].*)?$ ]]; then
+      directo "$ENTRADA" || FALLIDAS_FINAL+=("$ENTRADA")
+    elif [[ "$ENTRADA" =~ ^https?:// ]] && [[ ! "$ENTRADA" =~ spotify\.com ]]; then
+      # YouTube, YouTube Music, SoundCloud, Bandcamp…
+      for r in $(seq 1 $RONDAS); do
+        if otra "$ENTRADA" "$r"; then break; fi
+        if [ "$r" -lt $RONDAS ]; then amarillo "  Falló, reintentando en 20 s ($r/$RONDAS)…"; sleep 20; continue; fi
+        # Último recurso: la misma canción en SoundCloud o con Spotify
+        respaldo "$ENTRADA" || FALLIDAS_FINAL+=("$ENTRADA")
+      done
+    elif [[ "$ENTRADA" =~ open\.spotify\.com/playlist/ ]]; then
+      # Playlists: la API oficial ya no deja leerlas con credenciales de app (error 401).
+      # Se bajan con el cliente sin claves: trae todos los datos de cada canción de una vez
+      # (con el arreglo del parche ya no reconsulta canción por canción) y no gasta tu límite.
+      echo "  En espera (las playlists se bajan aparte, sin gastar tu límite de Spotify)."
+      LENTAS+=("$ENTRADA")
+    else
+      echo "  En espera para bajarse junto con lo demás de Spotify."
+      SPOT+=("$ENTRADA")
+    fi
+  done
+
+  SPOT+=("${RESPALDO_SPOTIFY[@]}")
+  if [ ${#SPOT[@]} -gt 0 ]; then
+    mapfile -t SPOT < <(printf '%s\n' "${SPOT[@]}" | awk '!visto[$0]++')   # sin repetidos
+    echo
+    verde "▶ Spotify: ${#SPOT[@]} elemento(s) (canciones, álbumes, artistas o búsquedas)"
+    if [ ${#OFICIAL[@]} -gt 0 ]; then bajar_spotify oficial "${SPOT[@]}"; else bajar_spotify libre "${SPOT[@]}"; fi
+  fi
+  if [ ${#LENTAS[@]} -gt 0 ]; then
+    mapfile -t LENTAS < <(printf '%s\n' "${LENTAS[@]}" | awk '!visto[$0]++')
+    echo
+    verde "▶ Playlists: ${#LENTAS[@]}"
+    bajar_spotify libre "${LENTAS[@]}"
+  fi
+
+  echo
+  if [ ${#FALLIDAS_FINAL[@]} -eq 0 ]; then
+    verde "✓ Todo descargado ($(date '+%H:%M')). Aparecerá en SpaceMusic en menos de un minuto."
+    return 0
+  fi
+  printf '%s\n' "${FALLIDAS_FINAL[@]}" >> "$FALLIDAS"
+  rojo "✗ No se pudo bajar ${#FALLIDAS_FINAL[@]} después de $RONDAS intentos:"
   printf '   %s\n' "${FALLIDAS_FINAL[@]}"
-  echo "  Vuelve a pegar el mismo enlace más tarde: lo que ya se bajó no se repite."
-  exit 2
-fi
+  echo "  Quedaron anotadas: usa la opción F del menú más tarde para reintentarlas."
+  return 2
+}
+
+case "${1:-}" in
+  --encolar)    encolar; exit $? ;;
+  --ver)        ver; exit 0 ;;
+  --reintentar) reintentar; exit $? ;;
+  --trabajar)   trabajar; exit 0 ;;
+  "")           echo "Uso: descargar \"enlace o nombre\" [más...]  |  --encolar < lista  |  --ver  |  --reintentar"; exit 1 ;;
+  *)            procesar "$@"; exit $? ;;
+esac
