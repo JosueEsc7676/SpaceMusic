@@ -109,13 +109,43 @@ public class EstilosService {
     }
     private volatile long creado;
 
+    /** Etiquetas de estilo de la IA (Administración → Organización): las aceptadas y las propuestas no rechazadas. */
+    private com.bpm.music.organizador.EtiquetaCancionRepository etiquetasIa;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setEtiquetasIa(com.bpm.music.organizador.EtiquetaCancionRepository r) { this.etiquetasIa = r; }
+
+    /** Estilo que la IA le puso a cada canción (las aceptadas ganan a las propuestas). */
+    private Map<Long, Estilo> estilosDeIa() {
+        Map<Long, Estilo> r = new HashMap<>();
+        if (etiquetasIa == null) return r;
+        try {
+            for (var estado : List.of(com.bpm.music.organizador.EtiquetaCancion.Estado.PROPUESTA, com.bpm.music.organizador.EtiquetaCancion.Estado.ACEPTADA)) {
+                for (var e : etiquetasIa.findByTipoAndEstado("estilo", estado)) {
+                    Estilo x = estiloDeIa(e.getValor());
+                    if (x != null) r.put(e.getCancionId(), x);
+                }
+            }
+        } catch (Exception ignored) { /* sin tablas de organización: solo géneros */ }
+        return r;
+    }
+
+    /** Estilo a partir del valor de la IA («corridos tumbados», «trap latino»…). */
+    public static Estilo estiloDeIa(String valor) {
+        if (valor == null || valor.isBlank()) return null;
+        Estilo x = POR_CLAVE.get(BibliotecaService.normalizar(valor).replace(' ', '-'));
+        return x != null ? x : deGenero(valor);
+    }
+
     private Indice construir(List<CancionDTO> todas) {
         Map<Long, Estilo> porCancion = new HashMap<>();
         Map<String, Map<String, Integer>> votosArtista = new HashMap<>();
         List<CancionDTO> pendientes = new ArrayList<>();
+        // 0) Lo que ordenó la IA para cada canción (más preciso que el género del archivo, p. ej. «Latino»)
+        Map<Long, Estilo> ia = estilosDeIa();
         // 1) Por el propio género
         for (CancionDTO c : todas) {
-            Estilo x = deGenero(c.getGenero());
+            Estilo x = ia.containsKey(c.getId()) ? ia.get(c.getId()) : deGenero(c.getGenero());
             if (x != null) {
                 porCancion.put(c.getId(), x);
                 votosArtista.computeIfAbsent(GeneroService.clave(c.getArtista()), k -> new HashMap<>()).merge(x.clave(), 1, Integer::sum);

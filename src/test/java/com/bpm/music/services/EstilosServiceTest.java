@@ -69,4 +69,13 @@ class EstilosServiceTest {
         assertTrue(porArtista.size() >= 3, "deben aparecer varios artistas: " + porArtista);
         assertTrue(porArtista.getOrDefault("Romeo Santos", 0) <= 2, "no deben ir muchas seguidas del mismo álbum");
     }
+
+    @Test
+    void losEstilosDeLaIaSeEntiendenParaLosMix() {
+        // Los valores que devuelve la IA tienen que caer en un estilo de los mix
+        for (String v : com.bpm.music.organizador.IaLocalService.ESTILOS) {
+            assertNotNull(EstilosService.estiloDeIa(v), "la IA dijo «" + v + "» y los mix no lo entienden");
+        }
+        assertNull(EstilosService.estiloDeIa(""));
+    }
 }
