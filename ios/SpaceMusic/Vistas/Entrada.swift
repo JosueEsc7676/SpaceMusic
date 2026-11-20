@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 
 /// Iniciar sesión, crear cuenta y recuperar contraseña (en blanco y negro, con el logo de la app).
@@ -24,6 +25,9 @@ struct Entrada: View {
     @State private var verClave = false
     @State private var sacudida: CGFloat = 0
     @State private var aparecer = false
+    /// Google, Facebook y Apple configurados en el servidor.
+    @State private var proveedores: [String: Bool] = [:]
+    @Environment(\.webAuthenticationSession) private var sesionWeb
     @FocusState private var foco: Campo?
 
     enum Campo { case usuario, correo, nombre, clave, clave2, extra }
@@ -110,6 +114,31 @@ struct Entrada: View {
                     .opacity(listo ? 1 : 0.45)
                     .animation(.easeOut(duration: 0.15), value: listo)
 
+                    if modo == .entrar, proveedores.values.contains(true) {
+                        VStack(spacing: 10) {
+                            HStack(spacing: 10) {
+                                Rectangle().fill(Color.white.opacity(0.15)).frame(height: 1)
+                                Text("o").font(.footnote).foregroundStyle(.white.opacity(0.5))
+                                Rectangle().fill(Color.white.opacity(0.15)).frame(height: 1)
+                            }
+                            ForEach(["google", "facebook", "apple"].filter { proveedores[$0] == true }, id: \.self) { p in
+                                Button { Task { await entrarCon(p) } } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: p == "apple" ? "apple.logo" : p == "google" ? "g.circle.fill" : "f.circle.fill")
+                                        Text("Continuar con \(p == "google" ? "Google" : p == "facebook" ? "Facebook" : "Apple")")
+                                    }
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 13)
+                                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.25)))
+                                    .foregroundStyle(.white)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(cargando)
+                            }
+                        }
+                    }
+
                     VStack(spacing: 16) {
                         switch modo {
                         case .entrar:
@@ -141,6 +170,7 @@ struct Entrada: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .task { await consultarEstado() }
+        .task { proveedores = (try? await API.get("/api/auth/oauth/proveedores")) ?? [:] }
         .onAppear { withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.05)) { aparecer = true } }
         .onChange(of: usuario) { error = nil }
         .onChange(of: clave) { error = nil }
@@ -278,6 +308,34 @@ struct Entrada: View {
             return token
         }
         return t
+    }
+
+    /// Entrar con Google, Facebook o Apple: se abre su página en una ventana segura y la sesión vuelve
+    /// a la app con «spacemusic://oauth?token=…» (el servidor hace todo el intercambio con el servicio).
+    private func entrarCon(_ p: String) async {
+        guard let url = URL(string: Sesion.compartida.servidor + "/api/auth/oauth/\(p)/inicio?app=ios") else { return }
+        error = nil
+        cargando = true
+        defer { cargando = false }
+        do {
+            let vuelta = try await sesionWeb.authenticate(using: url, callbackURLScheme: "spacemusic", preferredBrowserSession: .ephemeral)
+            let q = URLComponents(url: vuelta, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            if let e = q.first(where: { $0.name == "error" })?.value { fallo(e); return }
+            guard let token = q.first(where: { $0.name == "token" })?.value, !token.isEmpty,
+                  let pedido = URL(string: Sesion.compartida.servidor + "/api/auth/me") else { fallo("No se pudo iniciar sesión"); return }
+            var r = URLRequest(url: pedido)
+            r.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            let (datos, resp) = try await URLSession.shared.data(for: r)
+            guard (resp as? HTTPURLResponse)?.statusCode == 200 else { fallo("No se pudo iniciar sesión"); return }
+            let u = try JSONDecoder().decode(Usuario.self, from: datos)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            sesion.motivoSalida = nil
+            sesion.guardar(token: token, usuario: u)
+        } catch let e as ASWebAuthenticationSessionError where e.code == .canceledLogin {
+            // La persona cerró la ventana: nada que avisar
+        } catch {
+            fallo(error.localizedDescription)
+        }
     }
 
     private func consultarEstado() async {
