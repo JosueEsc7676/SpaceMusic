@@ -1272,3 +1272,17 @@ body.admin-mode .sop-lado, body.admin-mode .sop-contenido { min-width: 0; }
 .juntos-codigo { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-top: 10px; padding: 10px 16px; border-radius: 14px; border: 1px dashed rgba(255,255,255,.35); background: rgba(255,255,255,.06); color: #fff; font: inherit; cursor: pointer; }
 .juntos-codigo small { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
 .juntos-codigo b { font-size: 26px; letter-spacing: .18em; font-variant-numeric: tabular-nums; }
+
+/* Mensajes: fotos, voz, eliminar y bloquear */
+.bubble { position: relative; }
+.bubble .msg-opc { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; border: 0; border-radius: 50%; background: rgba(0,0,0,.35); color: #fff; display: grid; place-items: center; opacity: 0; transition: opacity .15s; cursor: pointer; }
+.bubble:hover .msg-opc, .bubble .msg-opc:focus-visible { opacity: 1; }
+@media (hover: none) { .bubble .msg-opc { opacity: .55; } }
+.bubble.borrado p { font-style: italic; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
+.bubble.con-archivo { padding: 6px; }
+.msg-foto img { display: block; max-width: min(260px, 62vw); max-height: 320px; border-radius: 14px; object-fit: cover; background: rgba(255,255,255,.06); }
+.msg-voz { display: flex; align-items: center; gap: 8px; padding: 4px 6px; }
+.msg-voz audio { height: 36px; max-width: 220px; }
+.msg-voz small { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.dm-mic.grabando { color: #ff6b6b; animation: grabar 1s ease-in-out infinite; }
+@keyframes grabar { 50% { opacity: .45; } }

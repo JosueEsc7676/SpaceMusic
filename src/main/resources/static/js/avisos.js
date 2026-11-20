@@ -16,12 +16,15 @@ function pintarContadores() {
 }
 
 /** Aviso del sistema: en la app de Android, notificación nativa; en el navegador, si se dio permiso. */
-export function avisoSistema(titulo, texto, ruta) {
+export function avisoSistema(titulo, texto, ruta, foto) {
   const app = window.SpaceMusicApp;
+  // Con la foto de perfil de quien escribe (apps 2.6+); las anteriores, sin foto
+  const fotoAbs = foto ? new URL(foto, location.origin).href : '';
+  if (app?.notificarConFoto && fotoAbs) { try { app.notificarConFoto(titulo, texto, ruta || '', fotoAbs); } catch { } return; }
   if (app?.notificar) { try { app.notificar(titulo, texto, ruta || ''); } catch { } return; }
   if (!document.hidden || !('Notification' in window) || Notification.permission !== 'granted') return;
   try {
-    const n = new Notification(titulo, { body: texto, icon: '/img/icon-192.png', tag: 'sm-' + (ruta || titulo) });
+    const n = new Notification(titulo, { body: texto, icon: fotoAbs || '/img/icon-192.png', tag: 'sm-' + (ruta || titulo) });
     n.onclick = () => { window.focus(); if (ruta) location.hash = ruta; n.close(); };
   } catch { }
 }
@@ -172,8 +175,9 @@ function conectarEnVivo() {
     const texto = d.mensaje.cancion && d.mensaje.texto === '🎵' ? 'Te compartió una canción'
       : salaDeInvitacion(d.mensaje.texto) ? 'Te invitó a escuchar juntos en SyncPlay' : d.mensaje.texto;
     toast(`${d.nombre}: ${texto}`, { ms: 6000, action: { label: 'Ver', fn: () => { location.hash = ruta; } } });
-    avisoSistema(d.nombre, texto, ruta);
+    avisoSistema(d.nombre, texto, ruta, d.foto);
   });
+  fuente.addEventListener('mensaje-borrado', (e) => { try { bus.emit('dm:borrado', JSON.parse(e.data)); } catch { } });
   // El servidor avisa antes de reiniciarse: si se corta la conexión, se muestra "en mantenimiento"
   fuente.addEventListener('mantenimiento', () => bus.emit('servidor:mantenimiento'));
   fuente.addEventListener('visto', (e) => { try { bus.emit('dm:visto', JSON.parse(e.data)); } catch { } });

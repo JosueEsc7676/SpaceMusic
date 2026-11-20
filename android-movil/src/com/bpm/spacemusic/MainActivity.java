@@ -104,6 +104,22 @@ public class MainActivity extends Activity {
                 }
                 return true;
             }
+
+            /** Mensajes de voz: la web pide el micrófono; se concede solo a nuestro servidor y con el permiso de Android. */
+            @Override
+            public void onPermissionRequest(final android.webkit.PermissionRequest pedido) {
+                runOnUiThread(() -> {
+                    boolean audio = false;
+                    for (String r : pedido.getResources()) if (android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) audio = true;
+                    if (!audio || !mismoServidor(pedido.getOrigin().toString() + "/")) { pedido.deny(); return; }
+                    if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                        microfonoPendiente = pedido;
+                        requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, PERMISO_MICROFONO);
+                        return;
+                    }
+                    pedido.grant(new String[]{android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                });
+            }
         });
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -214,6 +230,9 @@ public class MainActivity extends Activity {
     }
 
     /** true si la dirección es del servidor de SpaceMusic (con conexión segura). */
+    private static final int PERMISO_MICROFONO = 61;
+    private android.webkit.PermissionRequest microfonoPendiente;
+
     boolean mismoServidor(String url) {
         try {
             Uri u = Uri.parse(url), base = Uri.parse(servidor());
@@ -304,6 +323,12 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int req, String[] permisos, int[] resultados) {
         super.onRequestPermissionsResult(req, permisos, resultados);
+        if (req == PERMISO_MICROFONO && microfonoPendiente != null) {
+            boolean ok = resultados.length > 0 && resultados[0] == PackageManager.PERMISSION_GRANTED;
+            if (ok) microfonoPendiente.grant(new String[]{android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+            else microfonoPendiente.deny();
+            microfonoPendiente = null;
+        }
         if (req == 8 && enSinConexion && permisoMusica()) mostrarSinConexion();
     }
 
@@ -487,6 +512,13 @@ public class MainActivity extends Activity {
             i.putExtra("linea", linea == null ? "" : linea.length() > 300 ? linea.substring(0, 300) : linea);
             i.putExtra("siguiente", siguiente == null ? "" : siguiente.length() > 300 ? siguiente.substring(0, 300) : siguiente);
             try { startService(i); } catch (Exception e) { android.util.Log.w("SpaceMusic", "Letra: " + e); }
+        }
+
+        /** Notificación de un mensaje con la foto de perfil de quien escribe (solo fotos de nuestro servidor). */
+        @JavascriptInterface
+        public void notificarConFoto(String titulo, String texto, String ruta, String foto) {
+            final String f = foto != null && mismoServidor(foto) ? foto : "";
+            runOnUiThread(() -> Avisos.mostrar(MainActivity.this, titulo, texto, ruta, f));
         }
 
         /** La web avisa que ya arrancó. */

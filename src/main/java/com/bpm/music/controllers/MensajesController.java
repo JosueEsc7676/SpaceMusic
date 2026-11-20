@@ -2,7 +2,9 @@ package com.bpm.music.controllers;
 
 import com.bpm.music.security.CurrentUser;
 import com.bpm.music.services.MensajesService;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -62,6 +64,47 @@ public class MensajesController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
+    /** Foto o audio: se guarda cifrado. Campos: file, duracion (segundos, audios), texto (opcional). */
+    @PostMapping("/mensajes/{username}/archivo")
+    public ResponseEntity<Map<String, Object>> enviarArchivo(@PathVariable String username,
+                                                            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+                                                            @RequestParam(required = false) Integer duracion,
+                                                            @RequestParam(required = false) String texto) throws java.io.IOException {
+        try {
+            return ResponseEntity.ok(servicio.enviarArchivo(CurrentUser.id(), username, file.getBytes(), duracion, texto));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** El archivo del mensaje descifrado (solo para los dos de la conversación). */
+    @GetMapping("/mensajes/adjunto/{id}")
+    public ResponseEntity<byte[]> archivo(@PathVariable Long id) {
+        var a = servicio.archivo(CurrentUser.id(), id);
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType(a.getKey()))
+                .cacheControl(CacheControl.maxAge(java.time.Duration.ofDays(7)).cachePrivate())
+                .header("X-Content-Type-Options", "nosniff")
+                .body(a.getValue());
+    }
+
+    /** Eliminar un mensaje: el tuyo para los dos; el que recibiste, solo de tu conversación. */
+    @DeleteMapping("/mensajes/item/{id}")
+    public ResponseEntity<Void> borrarMensaje(@PathVariable Long id) {
+        servicio.borrarMensaje(CurrentUser.id(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Bloquear o desbloquear a alguien en los mensajes: {username, bloquear}. */
+    @PostMapping("/mensajes/bloqueos")
+    public Map<String, Object> bloquear(@RequestBody Map<String, Object> b) {
+        return servicio.bloquear(CurrentUser.id(), java.util.Objects.toString(b.get("username"), ""), !Boolean.FALSE.equals(b.get("bloquear")));
+    }
+
+    @GetMapping("/mensajes/bloqueos")
+    public List<Map<String, Object>> bloqueados() { return servicio.bloqueados(CurrentUser.id()); }
 
     @PostMapping("/mensajes/{username}/leidos")
     public Map<String, Object> leidos(@PathVariable String username) {

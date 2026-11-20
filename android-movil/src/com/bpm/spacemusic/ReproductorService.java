@@ -240,7 +240,7 @@ public class ReproductorService extends Service {
         } while (l.getHeight() > LADO * 0.3f && tam > 32);
         float y = LADO * 0.53f - l.getHeight() / 2f + dy;
         // Halo oscuro y suave detrás de la letra: más fuerte cuanto más clara es la portada
-        int fuerza = (int) (255 * (0.28f + 0.5f * luz) * alfa);
+        int fuerza = 0; // la sombra pareja de toda la portada reemplaza al halo
         Paint halo = new Paint(Paint.ANTI_ALIAS_FLAG);
         float cx = LADO / 2f, cy = y + l.getHeight() / 2f, rx = ancho * 0.72f, ry = Math.max(l.getHeight(), LADO * 0.08f) * 1.25f;
         halo.setShader(new RadialGradient(0, 0, 1, new int[]{Color.argb(fuerza, 0, 0, 0), Color.argb(fuerza * 6 / 10, 0, 0, 0), 0},
@@ -263,15 +263,11 @@ public class ReproductorService extends Service {
         Canvas c = new Canvas(b);
         c.drawColor(Color.BLACK);
         if (portada != null) cubrir(c, portada, new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG));
+        // Sombra pareja sobre toda la portada, justa para leer la letra (un poco más en portadas claras)
+        c.drawColor(Color.argb((int) (255 * (0.16f + 0.22f * luzPortada)), 0, 0, 0));
         Paint velo = new Paint();
-        velo.setShader(new LinearGradient(0, 0, 0, LADO, new int[]{0x1A000000, 0x1F000000, 0x6B000000, 0xC7000000},
-                new float[]{0f, 0.38f, 0.62f, 1f}, Shader.TileMode.CLAMP));
+        velo.setShader(new LinearGradient(0, 0, 0, LADO, new int[]{0, 0, 0x73000000}, new float[]{0f, 0.62f, 1f}, Shader.TileMode.CLAMP));
         c.drawRect(new Rect(0, 0, LADO, LADO), velo);
-        // Sombra en las cuatro esquinas (viñeta) para que la letra resalte también en portadas claras
-        Paint vineta = new Paint();
-        vineta.setShader(new RadialGradient(LADO / 2f, LADO / 2f, LADO * 0.72f,
-                new int[]{0, 0, Color.argb((int) (255 * (0.4f + 0.2f * luzPortada)), 0, 0, 0)}, new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
-        c.drawRect(new Rect(0, 0, LADO, LADO), vineta);
         float salto = LADO * 0.03f;
         dibujarLetra(c, deL, 1 - e, -salto * e, luzPortada);
         dibujarLetra(c, aL, e, salto * (1 - e), luzPortada);

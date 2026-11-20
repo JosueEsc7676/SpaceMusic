@@ -40,4 +40,16 @@ public class Mensaje {
 
     @Builder.Default
     private boolean leido = false;
+
+    /** null o TEXTO; IMAGEN o AUDIO cuando lleva un archivo (guardado cifrado en el servidor). */
+    private String tipo;
+    /** Nombre del archivo cifrado (en la carpeta «adjuntos»). */
+    private String adjunto;
+    private String adjuntoMime;
+    /** Duración del audio en segundos. */
+    private Integer duracion;
+    /** Quien lo envió lo eliminó para todos. */
+    private Boolean borrado;
+    /** Quien lo recibió lo quitó de su conversación. */
+    private Boolean ocultoPara;
 }

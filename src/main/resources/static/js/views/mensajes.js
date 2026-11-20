@@ -1,9 +1,9 @@
 // Mensajes entre amigos (solo si se siguen los dos)
-import { api, deUsuario } from '../api.js';
+import { api, deUsuario, session } from '../api.js';
 import { esc, timeAgo, coverImg, bus, store } from '../util.js';
 import { icon } from '../icons.js';
 import { setHero, setTitle } from '../router.js';
-import { emptyState, errorToast, registerList, toast, showMenu } from '../ui.js';
+import { emptyState, errorToast, registerList, toast, showMenu, confirmDialog } from '../ui.js';
 import { salaDeInvitacion } from '../syncplay-enlace.js';
 import { player } from '../player.js';
 import { avatarPersona } from './people.js';
@@ -31,11 +31,27 @@ function filaConversacion(c, activa) {
   return `<a class="conv ${activa ? 'active' : ''} ${c.noLeidos ? 'unread' : ''}" href="#/mensajes/${encodeURIComponent(u.username)}">
     ${avatarPersona(u)}
     <span class="conv-tt"><b class="ellipsis">${esc(u.nombre)}</b>
-      <span class="ellipsis">${m.mio ? 'Tú: ' : ''}${m.cancion ? '🎵 ' + esc(m.cancion.nombre) : salaDeInvitacion(m.texto) ? 'Invitación a SyncPlay' : esc(m.texto)}</span></span>
+      <span class="ellipsis">${m.mio ? 'Tú: ' : ''}${m.borrado ? 'Mensaje eliminado' : m.cancion ? '🎵 ' + esc(m.cancion.nombre) : salaDeInvitacion(m.texto) ? 'Invitación a SyncPlay' : esc(m.texto)}</span></span>
     <span class="conv-end"><small>${esc(timeAgo(m.fecha))}</small>${c.noLeidos ? `<i class="conv-badge">${c.noLeidos}</i>` : ''}</span></a>`;
 }
 
+/** Dirección del archivo del mensaje (foto o audio) con el permiso de la sesión. */
+const urlArchivo = (m) => `${m.adjuntoUrl}?t=${encodeURIComponent(session.token || '')}`;
+const fmtDur = (s) => `${Math.floor((s || 0) / 60)}:${String(Math.round(s || 0) % 60).padStart(2, '0')}`;
+
 function burbuja(m) {
+  const opc = `<button class="msg-opc" data-opc="${m.id}" data-mio="${m.mio ? 1 : 0}" aria-label="Opciones del mensaje">${icon('more', 'sm')}</button>`;
+  if (m.borrado) {
+    return `<div class="bubble ${m.mio ? 'mine' : ''} borrado" data-id="${m.id}"><p>${icon('close', 'sm')} Mensaje eliminado</p><time>${esc(hora(m.fecha))}</time></div>`;
+  }
+  // Foto o mensaje de voz (cifrados en el servidor; solo los dos de la conversación pueden abrirlos)
+  let archivo = '';
+  if (m.tipo === 'IMAGEN') {
+    archivo = `<a class="msg-foto" href="${esc(urlArchivo(m))}" target="_blank" rel="noopener"><img src="${esc(urlArchivo(m))}" alt="Foto" loading="lazy"></a>`;
+  } else if (m.tipo === 'AUDIO') {
+    archivo = `<div class="msg-voz">${icon('mic', 'sm')}<audio controls preload="none" src="${esc(urlArchivo(m))}"></audio>${m.duracion ? `<small>${fmtDur(m.duracion)}</small>` : ''}</div>`;
+  }
+  const textoArchivo = m.tipo && (m.texto === '📷 Foto' || m.texto === '🎤 Mensaje de voz');
   let cancion = '';
   if (m.cancion) {
     const lid = registerList([m.cancion], { type: 'mensajes', label: 'Compartida en mensajes' });
@@ -47,8 +63,8 @@ function burbuja(m) {
   const texto = sala ? `<a class="msg-sync" href="#/juntos/${sala}" aria-label="Abrir SyncPlay y unirme">
       <b>${icon('headphones')} SyncPlay</b><span>${m.mio ? 'Invitaste a escuchar juntos' : 'Te invitaron a escuchar juntos'}</span>
       <span class="ir">Abrir SyncPlay y unirme ${icon('right', 'sm')}</span></a>`
-    : m.cancion && m.texto === '🎵' ? '' : `<p>${esc(m.texto)}</p>`;
-  return `<div class="bubble ${m.mio ? 'mine' : ''} ${sala ? 'sync' : ''}" data-id="${m.id}">${cancion}${texto}<time>${esc(hora(m.fecha))}${m.mio ? (m.leido ? ' · Visto' : '') : ''}</time></div>`;
+    : (m.cancion && m.texto === '🎵') || textoArchivo ? '' : `<p>${esc(m.texto)}</p>`;
+  return `<div class="bubble ${m.mio ? 'mine' : ''} ${sala ? 'sync' : ''} ${archivo ? 'con-archivo' : ''}" data-id="${m.id}">${opc}${archivo}${cancion}${texto}<time>${esc(hora(m.fecha))}${m.mio ? (m.leido ? ' · Visto' : '') : ''}</time></div>`;
 }
 
 function htmlLista(convs, amigos, username) {
@@ -171,14 +187,17 @@ function pintarChat(box, d, isStale, copia) {
   if (!copia) bus.emit('mensajes:leidos');
   box.innerHTML = `<header class="dm-head"><a class="round-btn dm-back" href="#/mensajes" aria-label="Volver">${icon('left')}</a>
       <a class="dm-who" href="#/u/${encodeURIComponent(u.username)}">${avatarPersona(u)}<span><b>${esc(u.nombre)}</b><small>@${esc(u.username)}${d.puedeEscribir ? ' · Amigos' : ''}</small></span></a>
-      <span class="dm-head-acc"><button class="icon-btn" data-syncplay aria-label="SyncPlay con este amigo" title="SyncPlay">${icon('headphones')}</button></span></header>
+      <span class="dm-head-acc"><button class="icon-btn" data-syncplay aria-label="SyncPlay con este amigo" title="SyncPlay">${icon('headphones')}</button>
+        <button class="icon-btn" data-chat-opc aria-label="Más opciones" title="Más opciones">${icon('more')}</button></span></header>
     <div class="dm-msgs" data-msgs>${d.mensajes.length ? d.mensajes.map(burbuja).join('')
       : `<div class="dm-hello">${avatarPersona(u, 'xl')}<b>${esc(u.nombre)}</b><span>Salúdale o compártele una canción.</span></div>`}</div>
     ${d.puedeEscribir ? `<form class="dm-send" data-form>
         <button type="button" class="icon-btn" data-mas title="Compartir música y conectar" aria-label="Compartir música y conectar">${icon('plus')}</button>
         <input data-text maxlength="1000" placeholder="Escribe un mensaje" autocomplete="off" enterkeyhint="send">
-        <button class="send-btn" aria-label="Enviar">${icon('send')}</button></form>`
-      : `<div class="dm-locked">${icon('lock', 'sm')} Para escribirse tienen que seguirse los dos.</div>`}`;
+        <button type="button" class="icon-btn dm-mic" data-mic aria-label="Grabar mensaje de voz" title="Mantén para grabar un mensaje de voz">${icon('mic')}</button>
+        <button class="send-btn" aria-label="Enviar">${icon('send')}</button>
+        <input type="file" data-foto accept="image/*" hidden></form>`
+      : `<div class="dm-locked">${icon('lock', 'sm')} ${d.bloqueado ? 'Bloqueaste a esta persona. Desbloquéala desde el menú ⋯ para volver a escribirle.' : 'Para escribirse tienen que seguirse los dos.'}</div>`}`;
   const msgs = box.querySelector('[data-msgs]');
   const bajar = () => { msgs.scrollTop = msgs.scrollHeight; };
   bajar();
@@ -203,7 +222,91 @@ function pintarChat(box, d, isStale, copia) {
       pintar([m]);
     } catch (err) { errorToast(err); }
   };
+  /** Foto o audio: se sube y el servidor lo guarda cifrado. */
+  const enviarArchivo = async (blob, nombre, duracion) => {
+    const fd = new FormData();
+    fd.append('file', blob, nombre);
+    if (duracion) fd.append('duracion', String(Math.round(duracion)));
+    try {
+      const m = await api('/api/mensajes/' + encodeURIComponent(u.username) + '/archivo', { method: 'POST', form: fd, timeout: 60000 });
+      pintar([m]);
+    } catch (err) { errorToast(err); }
+  };
   const form = box.querySelector('[data-form]');
+  const entradaFoto = form?.querySelector('[data-foto]');
+  entradaFoto?.addEventListener('change', () => {
+    const f = entradaFoto.files[0];
+    entradaFoto.value = '';
+    if (!f) return;
+    if (f.size > 12 * 1024 * 1024) { toast('La foto no puede pasar de 12 MB', { error: true }); return; }
+    enviarArchivo(f, f.name || 'foto.jpg');
+  });
+  // Mensaje de voz: tocar para empezar a grabar y otra vez para enviar (máximo 5 minutos)
+  const mic = form?.querySelector('[data-mic]');
+  let grabador = null, inicioGrab = 0, tope = null;
+  mic?.addEventListener('click', async () => {
+    if (grabador) { grabador.stop(); return; }
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { toast('Este navegador no puede grabar audio'); return; }
+    let flujo;
+    try { flujo = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { toast('Permite el micrófono para grabar mensajes de voz', { error: true }); return; }
+    const tipo = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus'].find((t) => MediaRecorder.isTypeSupported?.(t)) || '';
+    const partes = [];
+    grabador = new MediaRecorder(flujo, tipo ? { mimeType: tipo } : undefined);
+    grabador.ondataavailable = (e) => { if (e.data.size) partes.push(e.data); };
+    grabador.onstop = () => {
+      flujo.getTracks().forEach((t) => t.stop());
+      clearTimeout(tope);
+      const dur = (Date.now() - inicioGrab) / 1000;
+      mic.classList.remove('grabando');
+      mic.setAttribute('aria-label', 'Grabar mensaje de voz');
+      const blob = new Blob(partes, { type: grabador.mimeType || 'audio/webm' });
+      grabador = null;
+      if (dur < 0.8 || !blob.size) { toast('Mensaje de voz muy corto'); return; }
+      enviarArchivo(blob, blob.type.includes('mp4') ? 'voz.m4a' : blob.type.includes('ogg') ? 'voz.ogg' : 'voz.webm', dur);
+    };
+    inicioGrab = Date.now();
+    grabador.start();
+    mic.classList.add('grabando');
+    mic.setAttribute('aria-label', 'Detener y enviar el mensaje de voz');
+    toast('Grabando… toca el micrófono otra vez para enviar', { ms: 2500 });
+    tope = setTimeout(() => grabador?.stop(), 5 * 60 * 1000);
+  });
+  // Opciones de cada mensaje: eliminar (el tuyo para los dos; el recibido, solo para ti)
+  msgs.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-opc]');
+    if (!b) return;
+    const id = Number(b.dataset.opc), mio = b.dataset.mio === '1';
+    showMenu(b, [
+      { label: mio ? 'Eliminar para todos' : 'Eliminar para mí', icon: 'trash', danger: true, fn: async () => {
+        if (mio && !(await confirmDialog('El mensaje se eliminará también para la otra persona.', { title: 'Eliminar mensaje', ok: 'Eliminar', danger: true }))) return;
+        try { await api('/api/mensajes/item/' + id, { method: 'DELETE' }); quitarOMarcar(id, mio); } catch (err) { errorToast(err); }
+      } },
+    ]);
+  });
+  const quitarOMarcar = (id, paraTodos) => {
+    const b = msgs.querySelector(`.bubble[data-id="${id}"]`);
+    if (!b) return;
+    if (paraTodos) b.outerHTML = burbuja({ id, mio: b.classList.contains('mine'), borrado: true, fecha: new Date().toISOString() });
+    else b.remove();
+  };
+  escucha(bus.on('dm:borrado', (x) => {
+    const b = box.isConnected && msgs.querySelector(`.bubble[data-id="${x.id}"]`);
+    if (b && !b.classList.contains('borrado')) quitarOMarcar(x.id, true);
+  }));
+  // Menú del chat: bloquear o desbloquear
+  box.querySelector('[data-chat-opc]')?.addEventListener('click', (e) => {
+    showMenu(e.currentTarget, [
+      { label: 'Ver perfil', icon: 'user', fn: () => { location.hash = '#/u/' + encodeURIComponent(u.username); } },
+      d.bloqueado
+        ? { label: 'Desbloquear', icon: 'lock', fn: async () => {
+          try { await api('/api/mensajes/bloqueos', { method: 'POST', body: { username: u.username, bloquear: false } }); toast('Desbloqueaste a ' + u.nombre); abrirChat(box, u.username, isStale); } catch (err) { errorToast(err); }
+        } }
+        : { label: 'Bloquear', icon: 'lock', danger: true, fn: async () => {
+          if (!(await confirmDialog(`${u.nombre} ya no podrá escribirte y tú tampoco a esta persona. No se le avisa.`, { title: 'Bloquear', ok: 'Bloquear', danger: true }))) return;
+          try { await api('/api/mensajes/bloqueos', { method: 'POST', body: { username: u.username, bloquear: true } }); toast('Bloqueaste a ' + u.nombre); abrirChat(box, u.username, isStale); } catch (err) { errorToast(err); }
+        } },
+    ]);
+  });
   form?.querySelector('[data-text]')?.addEventListener('focus', () => setTimeout(() => { ajustarAlTeclado(); bajar(); }, 250));
   form?.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -217,6 +320,7 @@ function pintarChat(box, d, isStale, copia) {
   box.querySelector('[data-mas]')?.addEventListener('click', (e) => {
     const c = player.current;
     showMenu(e.currentTarget, [
+      { label: 'Enviar una foto', icon: 'image', fn: () => entradaFoto?.click() },
       c ? { label: 'Enviar la canción que suena', icon: 'note', fn: () => enviar('', c.id) } : null,
       c ? { label: 'Dedicar esta canción', icon: 'heart', fn: () => import('../dedicatorias.js').then((m) => m.dedicarCancion(c, { para: u.username })).catch(errorToast) } : null,
       c ? null : { title: 'Pon una canción para enviarla o dedicarla' },

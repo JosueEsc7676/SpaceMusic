@@ -94,6 +94,34 @@ public class CifradoMensajes {
         }
     }
 
+    private static final byte[] AAD_ARCHIVO = "adj:v1".getBytes(StandardCharsets.US_ASCII);
+
+    /** Cifra un archivo (imagen o audio de un mensaje): nonce aleatorio + datos cifrados con AES-256-GCM. */
+    public byte[] cifrarBytes(byte[] datos) {
+        try {
+            byte[] nonce = new byte[NONCE];
+            azar.nextBytes(nonce);
+            Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
+            c.init(Cipher.ENCRYPT_MODE, clave, new GCMParameterSpec(ETIQUETA_BITS, nonce));
+            c.updateAAD(AAD_ARCHIVO);
+            byte[] cifrado = c.doFinal(datos);
+            return ByteBuffer.allocate(NONCE + cifrado.length).put(nonce).put(cifrado).array();
+        } catch (Exception e) {
+            throw new IllegalStateException("No se pudo cifrar el archivo", e);
+        }
+    }
+
+    public byte[] descifrarBytes(byte[] todo) {
+        try {
+            Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
+            c.init(Cipher.DECRYPT_MODE, clave, new GCMParameterSpec(ETIQUETA_BITS, todo, 0, NONCE));
+            c.updateAAD(AAD_ARCHIVO);
+            return c.doFinal(todo, NONCE, todo.length - NONCE);
+        } catch (Exception e) {
+            throw new IllegalStateException("El archivo no se pudo descifrar", e);
+        }
+    }
+
     public String descifrar(String guardado) {
         if (!estaCifrado(guardado)) return guardado; // mensaje anterior al cifrado (se cifra en la migración)
         try {
