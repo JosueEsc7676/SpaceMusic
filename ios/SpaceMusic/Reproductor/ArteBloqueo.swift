@@ -95,7 +95,6 @@ enum ArteBloqueo {
                 ctx.cgContext.drawLinearGradient(g, start: .zero, end: CGPoint(x: 0, y: lado), options: [])
             }
         }
-        }
         return Base(fondo: fondo, luz: claridad)
     }
 
