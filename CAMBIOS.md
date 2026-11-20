@@ -1,5 +1,9 @@
 # Registro de cambios
 
+## iPhone: pantalla bloqueada más fluida y legible
+- Un solo cambio de imagen por verso (el sistema hace el fundido) y la del verso siguiente se dibuja antes (`precargadas`), para cambiar justo a tiempo; antes 6 cuadros se veían a saltos.
+- `ArteBloqueo`: viñeta ovalada en las esquinas de la columna visible y halo oscuro detrás de la letra, más fuertes cuanto más clara es la portada en la zona de la letra (`luz`, medida en 8 × 8 píxeles); sombra de la letra más marcada.
+
 ## iPhone: pantalla bloqueada con el diseño de referencia
 - `ArteBloqueo`: imagen cuadrada de 1500 px (iOS solo la pone a pantalla completa si es cuadrada; la vertical salía como tarjeta). Portada nítida con degradado oscuro abajo y la línea que suena centrada al 53 % del alto dentro de la columna que se ve (ancho ÷ alto de la pantalla), en letra manuscrita Savoye blanca con sombra suave; solo la línea actual. Misma transición entre versos.
 

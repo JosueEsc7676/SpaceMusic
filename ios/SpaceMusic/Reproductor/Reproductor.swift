@@ -389,25 +389,42 @@ final class Reproductor {
         }
     }
 
-    /// Pasa la pantalla bloqueada a lo que corresponde ahora con una transición fluida (6 cuadros en unos 0,4 s):
-    /// la línea anterior sube y se desvanece y la nueva entra desde abajo; la portada se desenfoca al llegar la letra.
+    /// Imágenes ya dibujadas para la pantalla bloqueada (la del verso actual y la del siguiente, preparada antes).
+    @ObservationIgnored private var precargadas: [String: UIImage] = [:]
+
+    private func claveBloqueo(_ id: Int, _ texto: String?) -> String { "\(id)|\(texto ?? "")" }
+
+    /// Pasa la pantalla bloqueada al verso que suena. La pantalla bloqueada no muestra bien muchos cuadros seguidos
+    /// (la animación se veía a saltos): ahora se cambia la imagen una sola vez, en el momento justo, porque la del
+    /// verso siguiente ya está dibujada de antemano; el sistema hace el fundido.
     private func mostrarBloqueo(animar: Bool) {
         guard let c = actual, let b = baseBloqueo, b.id == c.id else { actualizarNowPlaying(); return }
-        let de = letraMostrada, a = letraDeseada
-        if de?.actual == a?.actual, de?.siguiente == a?.siguiente, arteBloqueo?.id == c.id { return }
+        let a = letraDeseada
+        if letraMostrada?.actual == a?.actual, arteBloqueo?.id == c.id { return }
         letraMostrada = a
         animacionBloqueo?.cancel()
         let id = c.id
         let base = b.base
+        let clave = claveBloqueo(id, a?.actual)
+        let siguiente = letraEnBloqueo ? siguienteBloqueo : nil
         animacionBloqueo = Task { @MainActor [weak self] in
-            let pasos: [Double] = animar ? [0.17, 0.34, 0.5, 0.67, 0.84, 1] : [1]
-            for p in pasos {
-                let img = await Task.detached(priority: .userInitiated) { ArteBloqueo.cuadro(base, de: de, a: a, p: CGFloat(p)) }.value
-                guard let self, !Task.isCancelled, self.actual?.id == id else { return }
-                self.arteBloqueo = (id, MPMediaItemArtwork(boundsSize: img.size) { _ in img })
-                self.actualizarNowPlaying()
-                if p < 1 { try? await Task.sleep(for: .milliseconds(65)) }
+            guard let self else { return }
+            let img: UIImage
+            if let lista = self.precargadas[clave] {
+                img = lista
+            } else {
+                img = await Task.detached(priority: .userInitiated) { ArteBloqueo.cuadro(base, de: nil, a: a, p: 1) }.value
             }
+            guard !Task.isCancelled, self.actual?.id == id else { return }
+            self.arteBloqueo = (id, MPMediaItemArtwork(boundsSize: img.size) { _ in img })
+            self.actualizarNowPlaying()
+            // Se prepara ya el verso siguiente (y se olvida lo demás)
+            self.precargadas = [clave: img]
+            guard let siguiente, !siguiente.isEmpty else { return }
+            let claveSig = self.claveBloqueo(id, siguiente)
+            let sig = await Task.detached(priority: .utility) { ArteBloqueo.cuadro(base, de: nil, a: (siguiente, nil), p: 1) }.value
+            guard !Task.isCancelled, self.actual?.id == id else { return }
+            self.precargadas[claveSig] = sig
         }
     }
 
