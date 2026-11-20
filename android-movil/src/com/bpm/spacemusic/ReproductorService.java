@@ -297,7 +297,6 @@ public class ReproductorService extends Service {
         if (img != null) m.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, img);
         sesion.setMetadata(m.build());
     }
-    }
 
     @SuppressWarnings("deprecation")
     private Notification notificacion() {
