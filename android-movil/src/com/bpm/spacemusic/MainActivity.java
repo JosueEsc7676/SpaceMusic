@@ -477,6 +477,18 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> Avisos.mostrar(MainActivity.this, titulo, texto, ruta));
         }
 
+        /**
+         * Línea de la letra que suena (y la siguiente) para la pantalla de bloqueo. Vacía: sin letra en este momento.
+         */
+        @JavascriptInterface
+        public void letra(String linea, String siguiente) {
+            Intent i = new Intent(MainActivity.this, ReproductorService.class);
+            i.setAction(ReproductorService.ACCION_LETRA);
+            i.putExtra("linea", linea == null ? "" : linea.length() > 300 ? linea.substring(0, 300) : linea);
+            i.putExtra("siguiente", siguiente == null ? "" : siguiente.length() > 300 ? siguiente.substring(0, 300) : siguiente);
+            try { startService(i); } catch (Exception e) { android.util.Log.w("SpaceMusic", "Letra: " + e); }
+        }
+
         /** La web avisa que ya arrancó. */
         @JavascriptInterface
         public void lista() {

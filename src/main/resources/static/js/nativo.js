@@ -5,6 +5,8 @@
 import { bus, cover } from './util.js';
 import { player } from './player.js';
 import { np, queueDrawer } from './nowplaying.js';
+import { api } from './api.js';
+import { parseLrc } from './lrc.js';
 
 const app = window.SpaceMusicApp;
 
@@ -37,6 +39,7 @@ export function iniciarNativo() {
   player.audio.addEventListener('play', enviar);
   player.audio.addEventListener('pause', enviar);
 
+  letraEnBloqueo();
   buscarActualizacion();
 
   // Órdenes desde la notificación, la pantalla de bloqueo o los auriculares
@@ -59,6 +62,46 @@ export function iniciarNativo() {
     if (location.hash && location.hash !== '#/' && history.length > 1) { history.back(); return true; }
     return false; // en el inicio: la app pasa a segundo plano (la música sigue)
   };
+}
+
+/**
+ * Letra en la pantalla de bloqueo de Android: se manda a la app la línea que suena y la siguiente, y la app las dibuja
+ * sobre la portada desenfocada con una transición entre versos. Se puede apagar con localStorage sm_letra_bloqueo=false.
+ */
+function letraEnBloqueo() {
+  if (!app?.letra) return;
+  let lineas = [], deCancion = null, enviada = null;
+  const activa = () => { try { return localStorage.getItem('sm_letra_bloqueo') !== 'false'; } catch { return true; } };
+  const mandar = (l, s) => {
+    const clave = l + '|' + s;
+    if (clave === enviada) return;
+    enviada = clave;
+    try { app.letra(l, s); } catch { }
+  };
+  const cargar = async () => {
+    const s = player.current;
+    lineas = [];
+    deCancion = s?.id ?? null;
+    mandar('', '');
+    if (!s || !activa()) return;
+    const d = await api(`/api/letras/${s.id}`).catch(() => null);
+    if (player.current?.id !== s.id || !d?.letraSincronizada) return;
+    lineas = parseLrc(d.letraSincronizada).filter((x) => !x.interlude);
+  };
+  const revisar = () => {
+    if (!lineas.length || player.current?.id !== deCancion || !activa()) return;
+    const t = (player.audio.currentTime || 0) + 0.25;
+    let i = -1;
+    for (let k = 0; k < lineas.length; k++) { if (lineas[k].t <= t) i = k; else break; }
+    const l = lineas[i];
+    // En las pausas largas (pasó el final de la línea) no se muestra nada: vuelve la portada
+    if (!l || t > l.end + 0.5) { mandar('', ''); return; }
+    mandar(l.text, lineas[i + 1]?.text || '');
+  };
+  bus.on('player:song', cargar);
+  player.audio.addEventListener('timeupdate', revisar);
+  player.audio.addEventListener('seeked', revisar);
+  cargar();
 }
 
 /** Si el servidor tiene una versión nueva de la app, ofrece instalarla. */

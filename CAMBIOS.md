@@ -1,6 +1,10 @@
 # Registro de cambios
 
 
+## Versión 3.11
+- **Letra en la pantalla de bloqueo de Android** (app 2.3, código 14): `nativo.js` manda a la app la línea que suena y la siguiente (`SpaceMusicApp.letra`, solo letras sincronizadas; vacío en pausas largas); `ReproductorService` la dibuja sobre la portada desenfocada (720 px, velo más oscuro en el centro, texto centrado que no se pierde aunque el sistema recorte la imagen) y anima 5 cuadros en unos 0,35 s: la línea anterior sube y se desvanece, la nueva entra desde abajo; al llegar la letra la portada se desenfoca y al irse vuelve nítida. Se apaga con `localStorage sm_letra_bloqueo=false`.
+- iPhone (rama `app-ios`): portada vertical a la medida de la pantalla, letra en la franja visible y la misma transición.
+
 ## Versión 3.10
 - **Reproducir en otro dispositivo como Spotify Connect, sin pantallas extra** (`js/remoto.js`, `js/dispositivos.js`): se quitó la ventana «Controlar…». En Dispositivos → «Reproducir en» se elige este dispositivo u otro (`elegirDispositivo`, `elegirEste`); si aquí sonaba algo pasa allá desde el mismo segundo. Mientras se controla otro, los controles de siempre (`player.play/toggle/resume/pause/next/prev/seek/setVolume/playNext/addToQueue`) le mandan la orden y la barra del reproductor muestra su canción, tiempo y volumen. Se toma solo el dispositivo activo cuando aquí no suena nada; al elegir «Este dispositivo» no se vuelve a tomar hasta que el otro vuelva a empezar a sonar. Las órdenes que llegan siempre actúan en este dispositivo.
 - **Orden «cola»** (`ControlRemotoService`): cambia «A continuación» del otro dispositivo sin tocar la canción que suena (web y iPhone la ejecutan).
