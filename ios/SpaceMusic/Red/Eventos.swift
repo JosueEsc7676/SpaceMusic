@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 import UserNotifications
 
 /// Un mensaje que llegó por la conexión en vivo.
@@ -20,6 +21,8 @@ final class Eventos {
     private(set) var notificacionesSinLeer = 0
     /// Último mensaje recibido (las pantallas de chat lo escuchan).
     private(set) var ultimoMensaje: EventoMensaje?
+    /// Último mensaje eliminado (para quitarlo de la conversación abierta).
+    private(set) var ultimoBorrado: Int?
     /// Usuario que vio los mensajes por última vez.
     private(set) var ultimoVisto: (por: String, cuando: Date)?
     /// Conversación abierta en pantalla (para no avisar de sus mensajes).
@@ -155,8 +158,11 @@ final class Eventos {
             if !m.mio && chatAbierto != con {
                 mensajesSinLeer += 1
                 marcarMensajeAvisado(m.id)
-                avisar(titulo: ev.nombre, texto: m.cancion.map { "🎵 \($0.nombre) · \($0.artista)" } ?? m.texto, ruta: "#/mensajes/\(con)")
+                avisar(titulo: ev.nombre, texto: m.cancion.map { "🎵 \($0.nombre) · \($0.artista)" } ?? m.texto, ruta: "#/mensajes/\(con)",
+                       foto: json["foto"] as? String)
             }
+        case "mensaje-borrado":
+            if let json = try? JSONSerialization.jsonObject(with: d) as? [String: Any], let id = json["id"] as? Int { ultimoBorrado = id }
         case "visto":
             if let json = try? JSONSerialization.jsonObject(with: d) as? [String: Any], let por = json["por"] as? String {
                 ultimoVisto = (por, Date())
@@ -182,14 +188,30 @@ final class Eventos {
 
     /// Notificación del sistema. Los mensajes del chat en vivo solo avisan fuera de la app;
     /// lo que llega por el resumen (mensajes y avisos nuevos) avisa siempre, también en primer plano.
-    private func avisar(titulo: String, texto: String, ruta: String, siempre: Bool = false) {
+    private func avisar(titulo: String, texto: String, ruta: String, siempre: Bool = false, foto: String? = nil) {
         guard siempre || !appActiva else { return }
         let c = UNMutableNotificationContent()
         c.title = titulo
         c.body = texto
         c.sound = .default
         c.userInfo = ["ruta": ruta]
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: c, trigger: nil))
+        c.threadIdentifier = ruta
+        Task {
+            // Con la foto de perfil de quien escribe (como imagen de la notificación)
+            if let foto, !foto.isEmpty, let adjunto = await Eventos.fotoParaAviso(foto) { c.attachments = [adjunto] }
+            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: c, trigger: nil))
+        }
+    }
+
+    /// Baja la foto de perfil (solo de nuestro servidor) y la guarda en un archivo temporal para la notificación.
+    private static func fotoParaAviso(_ ruta: String) async -> UNNotificationAttachment? {
+        let base = Sesion.compartida.servidor
+        guard let url = URL(string: ruta.hasPrefix("http") ? ruta : base + ruta), url.host == URL(string: base)?.host,
+              let (datos, resp) = try? await URLSession.shared.data(from: url),
+              (resp as? HTTPURLResponse)?.statusCode == 200, UIImage(data: datos) != nil else { return nil }
+        let archivo = FileManager.default.temporaryDirectory.appendingPathComponent("aviso-\(UUID().uuidString).jpg")
+        guard (try? datos.write(to: archivo)) != nil else { return nil }
+        return try? UNNotificationAttachment(identifier: "foto", url: archivo, options: [UNNotificationAttachmentOptionsTypeHintKey: "public.jpeg"])
     }
 
     static func pedirPermiso() {

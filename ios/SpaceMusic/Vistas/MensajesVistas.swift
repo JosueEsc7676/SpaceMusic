@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 /// Lista de conversaciones. Solo se puede escribir a amigos (se siguen los dos).
@@ -120,6 +121,10 @@ struct ChatVista: View {
     @State private var creandoSyncPlay = false
     @State private var eventos = Eventos.compartido
     @FocusState private var escribiendo: Bool
+    @State private var eligiendoFoto = false
+    @State private var foto: PhotosPickerItem?
+    @State private var grabadora = GrabadoraVoz()
+    @State private var confirmarBloqueo = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -152,6 +157,31 @@ struct ChatVista: View {
                     Avatar(ruta: chat?.usuario?.fotoPerfil, nombre: chat?.usuario?.nombre ?? username, tamano: 30)
                 }
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    NavigationLink(value: Destino.perfil(username)) { Label("Ver perfil", systemImage: "person") }
+                    if chat?.bloqueado == true {
+                        Button { Task { await bloquear(false) } } label: { Label("Desbloquear", systemImage: "lock.open") }
+                    } else {
+                        Button(role: .destructive) { confirmarBloqueo = true } label: { Label("Bloquear", systemImage: "hand.raised") }
+                    }
+                } label: { Image(systemName: "ellipsis.circle") }
+                .accessibilityLabel("Más opciones")
+            }
+        }
+        .confirmationDialog("Bloquear a \(chat?.usuario?.nombre ?? username)", isPresented: $confirmarBloqueo, titleVisibility: .visible) {
+            Button("Bloquear", role: .destructive) { Task { await bloquear(true) } }
+            Button("Cancelar", role: .cancel) {}
+        } message: { Text("Ya no podrá escribirte y tú tampoco a esta persona. No se le avisa.") }
+        .photosPicker(isPresented: $eligiendoFoto, selection: $foto, matching: .images)
+        .onChange(of: foto) { _, nueva in
+            guard let nueva else { return }
+            foto = nil
+            Task { await enviarFoto(nueva) }
+        }
+        .onChange(of: eventos.ultimoBorrado) { _, id in
+            guard let id, let i = mensajes.firstIndex(where: { $0.id == id }) else { return }
+            withAnimation { marcarBorrado(i) }
         }
         .task { await cargar() }
         .onAppear { eventos.chatAbierto = username }
@@ -179,7 +209,7 @@ struct ChatVista: View {
                             .disabled(cargandoMas)
                     }
                     ForEach(mensajes) { m in
-                        Burbuja(mensaje: m).id(m.id)
+                        Burbuja(mensaje: m) { Task { await borrar(m) } }.id(m.id)
                     }
                     if let ultimo = mensajes.last, ultimo.mio, ultimo.leido {
                         Text("Visto").font(.caption2).foregroundStyle(Tema.secundario)
@@ -200,11 +230,33 @@ struct ChatVista: View {
     @ViewBuilder
     private var barra: some View {
         if chat?.puedeEscribir == false {
-            Text("Solo pueden escribirse si se siguen los dos.")
-                .font(.footnote).foregroundStyle(Tema.secundario).padding()
+            Text(chat?.bloqueado == true ? "Bloqueaste a esta persona. Desbloquéala desde ⋯ para volver a escribirle."
+                                         : "Solo pueden escribirse si se siguen los dos.")
+                .font(.footnote).foregroundStyle(Tema.secundario).multilineTextAlignment(.center).padding()
+        } else if grabadora.grabando {
+            // Grabando un mensaje de voz
+            HStack(spacing: 12) {
+                Button { grabadora.cancelar() } label: {
+                    Image(systemName: "trash").font(.body.weight(.semibold)).frame(width: 38, height: 38).background(Circle().fill(Tema.tarjeta))
+                }
+                .accessibilityLabel("Cancelar el mensaje de voz")
+                Circle().fill(Color.red).frame(width: 10, height: 10)
+                Text("Grabando · \(Formato.duracion(Int(grabadora.segundos)))").font(.subheadline.monospacedDigit())
+                Spacer()
+                Button { Task { await enviarVoz() } } label: {
+                    Image(systemName: "arrow.up").font(.body.weight(.bold)).foregroundStyle(.black)
+                        .frame(width: 38, height: 38).background(Circle().fill(Tema.celeste))
+                }
+                .accessibilityLabel("Enviar el mensaje de voz")
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
         } else {
             HStack(alignment: .bottom, spacing: 8) {
                 Menu {
+                    Button { eligiendoFoto = true } label: { Label("Enviar una foto", systemImage: "photo") }
                     if let c = Reproductor.compartido.actual {
                         Button { Task { await enviar(cancion: c) } } label: { Label("Enviar la canción que suena", systemImage: "music.note") }
                         Button { Hojas.compartidas.dedicar = c } label: { Label("Dedicar esta canción", systemImage: "heart.text.square") }
@@ -221,12 +273,21 @@ struct ChatVista: View {
                     .focused($escribiendo)
                     .padding(.horizontal, 14).padding(.vertical, 9)
                     .background(RoundedRectangle(cornerRadius: 20).fill(Tema.tarjeta))
-                Button { Task { await enviar(cancion: nil) } } label: {
-                    Image(systemName: "arrow.up").font(.body.weight(.bold)).foregroundStyle(.black)
-                        .frame(width: 38, height: 38).background(Circle().fill(Tema.celeste))
+                if texto.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    // Sin texto: el botón graba un mensaje de voz (como en las apps de mensajes)
+                    Button { Task { _ = await grabadora.empezar() } } label: {
+                        Image(systemName: "mic.fill").font(.body.weight(.semibold))
+                            .frame(width: 38, height: 38).background(Circle().fill(Tema.tarjeta))
+                    }
+                    .disabled(enviando)
+                    .accessibilityLabel("Grabar mensaje de voz")
+                } else {
+                    Button { Task { await enviar(cancion: nil) } } label: {
+                        Image(systemName: "arrow.up").font(.body.weight(.bold)).foregroundStyle(.black)
+                            .frame(width: 38, height: 38).background(Circle().fill(Tema.celeste))
+                    }
+                    .disabled(enviando)
                 }
-                .disabled(texto.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || enviando)
-                .opacity(texto.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 10)
@@ -284,6 +345,55 @@ struct ChatVista: View {
         } catch { Avisos.compartido.error(error) }
     }
 
+    private func subir(_ datos: Data, nombre: String, tipo: String, duracion: Int?) async {
+        enviando = true
+        defer { enviando = false }
+        do {
+            var campos: [String: String] = [:]
+            if let duracion { campos["duracion"] = String(duracion) }
+            let m: Mensaje = try await API.subir("/api/mensajes/\(API.segmento(username))/archivo",
+                                                  archivos: [ArchivoSubida(campo: "file", nombre: nombre, tipo: tipo, datos: datos)], campos: campos)
+            if !mensajes.contains(where: { $0.id == m.id }) { withAnimation { mensajes.append(m) } }
+        } catch { Avisos.compartido.error(error) }
+    }
+
+    private func enviarFoto(_ item: PhotosPickerItem) async {
+        guard let datos = try? await item.loadTransferable(type: Data.self), let jpg = Fotos.jpeg(datos, maximo: 2048) else {
+            Avisos.compartido.mostrar("No se pudo leer la foto"); return
+        }
+        await subir(jpg, nombre: "foto.jpg", tipo: "image/jpeg", duracion: nil)
+    }
+
+    private func enviarVoz() async {
+        guard let voz = grabadora.terminar() else { return }
+        await subir(voz.datos, nombre: "voz.m4a", tipo: "audio/mp4", duracion: voz.duracion)
+    }
+
+    private func marcarBorrado(_ i: Int) {
+        mensajes[i].borrado = true
+        mensajes[i].tipo = nil
+        mensajes[i].adjuntoUrl = nil
+        mensajes[i].cancion = nil
+        mensajes[i].texto = "Mensaje eliminado"
+    }
+
+    /// El tuyo se elimina para los dos; el recibido, solo de tu conversación.
+    private func borrar(_ m: Mensaje) async {
+        do {
+            try await API.hacer("DELETE", "/api/mensajes/item/\(m.id)")
+            guard let i = mensajes.firstIndex(where: { $0.id == m.id }) else { return }
+            withAnimation { if m.mio { marcarBorrado(i) } else { mensajes.remove(at: i) } }
+        } catch { Avisos.compartido.error(error) }
+    }
+
+    private func bloquear(_ b: Bool) async {
+        do {
+            try await API.hacer("POST", "/api/mensajes/bloqueos", ["username": username, "bloquear": b])
+            Avisos.compartido.mostrar(b ? "Bloqueaste a \(chat?.usuario?.nombre ?? username)" : "Desbloqueado")
+            await cargar()
+        } catch { Avisos.compartido.error(error) }
+    }
+
     private func enviar(cancion: Cancion?) async {
         let t = texto.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !enviando, !t.isEmpty || cancion != nil else { return }
@@ -304,11 +414,27 @@ struct ChatVista: View {
 /// Burbuja de un mensaje; si trae canción se puede reproducir.
 struct Burbuja: View {
     let mensaje: Mensaje
+    var alBorrar: (() -> Void)? = nil
+    @State private var confirmar = false
 
     var body: some View {
         HStack {
             if mensaje.mio { Spacer(minLength: 50) }
             VStack(alignment: mensaje.mio ? .trailing : .leading, spacing: 6) {
+                if mensaje.borrado {
+                    Label("Mensaje eliminado", systemImage: "nosign")
+                        .font(.subheadline.italic())
+                        .foregroundStyle(Tema.secundario)
+                        .padding(.horizontal, 14).padding(.vertical, 9)
+                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.white.opacity(0.15)))
+                } else {
+                if mensaje.tipo == "IMAGEN" { FotoMensaje(url: mensaje.urlArchivo) }
+                if mensaje.tipo == "AUDIO" {
+                    AudioMensaje(url: mensaje.urlArchivo, duracion: mensaje.duracion, mio: mensaje.mio)
+                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(mensaje.mio ? AnyShapeStyle(Tema.celeste.opacity(0.85)) : AnyShapeStyle(Color(white: 0.17))))
+                        .foregroundStyle(mensaje.mio ? Color.black : Tema.texto)
+                }
                 if let c = mensaje.cancion {
                     Button { Reproductor.compartido.reproducirSuelta(c, contexto: "mensajes") } label: {
                         HStack(spacing: 10) {
@@ -338,7 +464,7 @@ struct Burbuja: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Abre la invitación. El servidor comprueba si puedes unirte.")
-                } else if !(mensaje.cancion != nil && mensaje.texto == "🎵") {
+                } else if mensaje.textoVisible {
                     Text(mensaje.texto)
                         .padding(.horizontal, 14).padding(.vertical, 9)
                         .background(
@@ -348,8 +474,20 @@ struct Burbuja: View {
                         .foregroundStyle(mensaje.mio ? Color.black : Tema.texto)
                         .textSelection(.enabled)
                 }
+                }
                 Text(Formato.hora(mensaje.fecha)).font(.caption2).foregroundStyle(Tema.secundario)
             }
+            .contextMenu {
+                if !mensaje.borrado, alBorrar != nil {
+                    Button(role: .destructive) { if mensaje.mio { confirmar = true } else { alBorrar?() } } label: {
+                        Label(mensaje.mio ? "Eliminar para todos" : "Eliminar para mí", systemImage: "trash")
+                    }
+                }
+            }
+            .confirmationDialog("Eliminar mensaje", isPresented: $confirmar, titleVisibility: .visible) {
+                Button("Eliminar para todos", role: .destructive) { alBorrar?() }
+                Button("Cancelar", role: .cancel) {}
+            } message: { Text("El mensaje también se eliminará para la otra persona.") }
             if !mensaje.mio { Spacer(minLength: 50) }
         }
     }

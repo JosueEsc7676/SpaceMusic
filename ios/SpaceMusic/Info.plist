@@ -21,6 +21,8 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>SpaceMusic se conecta a tu servidor de música en la red de casa.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Para grabar mensajes de voz para tus amigos.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Para guardar en Fotos las imágenes de versos y dedicatorias.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

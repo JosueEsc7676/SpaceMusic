@@ -566,6 +566,12 @@ struct Mensaje: Decodable, Identifiable, Equatable {
     var fecha: String?
     var leido: Bool
     var cancion: Cancion?
+    /// IMAGEN o AUDIO (archivo cifrado en el servidor); nil para texto.
+    var tipo: String?
+    var adjuntoUrl: String?
+    var duracion: Int?
+    /// Quien lo envió lo eliminó para todos.
+    var borrado: Bool
 
     init(from decoder: Decoder) throws {
         let c = try decoder.campos()
@@ -575,8 +581,12 @@ struct Mensaje: Decodable, Identifiable, Equatable {
         fecha = c.texto("fecha")
         leido = c.bool("leido") ?? false
         cancion = c.v("cancion")
+        tipo = c.texto("tipo")
+        adjuntoUrl = c.texto("adjuntoUrl")
+        duracion = c.entero("duracion")
+        borrado = c.bool("borrado") ?? false
     }
-    static func == (a: Mensaje, b: Mensaje) -> Bool { a.id == b.id && a.leido == b.leido }
+    static func == (a: Mensaje, b: Mensaje) -> Bool { a.id == b.id && a.leido == b.leido && a.borrado == b.borrado }
 }
 
 struct Conversacion: Decodable, Identifiable {
@@ -603,12 +613,15 @@ struct Chat: Decodable {
     var mensajes: [Mensaje]
     var puedeEscribir: Bool
     var hayMas: Bool
+    /// Yo bloqueé a esta persona.
+    var bloqueado: Bool
     init(from decoder: Decoder) throws {
         let c = try decoder.campos()
         usuario = c.v("usuario")
         mensajes = c.lista("mensajes")
         puedeEscribir = c.bool("puedeEscribir") ?? false
         hayMas = c.bool("hayMas") ?? false
+        bloqueado = c.bool("bloqueado") ?? false
     }
 }
 
