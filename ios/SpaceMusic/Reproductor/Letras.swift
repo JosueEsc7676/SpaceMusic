@@ -47,10 +47,45 @@ final class Letras {
         didSet { if !seleccionando { elegidas = [] } }
     }
     var elegidas: Set<Int> = []
-    static let maxVersos = 8
+    static let maxVersos = 12
 
     func alternarVerso(_ id: Int) {
         if elegidas.contains(id) { elegidas.remove(id) } else if elegidas.count < Letras.maxVersos { elegidas.insert(id) }
+    }
+
+    /// La letra en bloques (estrofas), como al compartir en la web: se corta en las pausas, en las líneas vacías,
+    /// en silencios de más de 6 s o a las 4 líneas.
+    var bloques: [[(id: Int, texto: String)]] {
+        var r: [[(id: Int, texto: String)]] = []
+        var actual: [(id: Int, texto: String)] = []
+        func cerrar() { if !actual.isEmpty { r.append(actual); actual = [] } }
+        if sincronizada {
+            var anterior: Double?
+            for l in lineas {
+                if l.interludio { cerrar(); anterior = nil; continue }
+                if let a = anterior, l.tiempo - a > 6 { cerrar() }
+                if actual.count >= 4 { cerrar() }
+                actual.append((id: l.id, texto: l.texto))
+                anterior = l.tiempo
+            }
+        } else {
+            for (i, l) in textoPlano.components(separatedBy: .newlines).enumerated() {
+                let t = l.trimmingCharacters(in: .whitespaces)
+                if t.isEmpty { cerrar(); continue }
+                if actual.count >= 4 { cerrar() }
+                actual.append((id: i, texto: t))
+            }
+        }
+        cerrar()
+        return r
+    }
+
+    /// Toca un bloque: lo elige entero o lo quita (hasta 12 líneas en total).
+    func alternarBloque(_ b: [(id: Int, texto: String)]) {
+        let ids = Set(b.map(\.id))
+        if ids.isSubset(of: elegidas) { elegidas.subtract(ids) }
+        else if elegidas.union(ids).count <= Letras.maxVersos { elegidas.formUnion(ids) }
+        else { Avisos.compartido.mostrar("Puedes elegir hasta \(Letras.maxVersos) líneas") }
     }
 
     /// Textos elegidos en el orden de la letra.

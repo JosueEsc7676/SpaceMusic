@@ -1,3 +1,4 @@
+import Charts
 import PhotosUI
 import SwiftUI
 
@@ -175,22 +176,16 @@ struct PerfilVista: View {
                     .padding(.horizontal)
                 }
                 if !p.vibras.isEmpty {
+                    // Vibras: tarjetas con degradado en carrusel, cada una con su color
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Vibras").titulo()
-                        ForEach(Array(p.vibras.enumerated()), id: \.offset) { _, v in
+                        Text("Vibras").titulo().padding(.horizontal)
+                        ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
-                                Text(v.icono ?? "✨").font(.title)
-                                VStack(alignment: .leading) {
-                                    Text(v.nombre).font(.headline)
-                                    Text(v.descripcion).font(.subheadline).foregroundStyle(Tema.secundario)
-                                }
+                                ForEach(Array(p.vibras.enumerated()), id: \.offset) { _, v in TarjetaVibra(vibra: v) }
                             }
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(RoundedRectangle(cornerRadius: 12).fill(Tema.tarjeta))
+                            .padding(.horizontal)
                         }
                     }
-                    .padding(.horizontal)
                 }
                 if !p.topCanciones.isEmpty {
                     let cs = p.topCanciones.compactMap(\.cancion)
@@ -214,24 +209,9 @@ struct PerfilVista: View {
                     }
                 }
                 if !p.topGeneros.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 12) {
                         Text("Géneros").titulo()
-                        ForEach(Array(p.topGeneros.prefix(6).enumerated()), id: \.offset) { _, g in
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text(g.genero).font(.subheadline.weight(.medium))
-                                    Spacer()
-                                    Text("\(Int(g.porcentaje.rounded()))%").font(.caption).foregroundStyle(Tema.secundario)
-                                }
-                                GeometryReader { geo in
-                                    Capsule().fill(Tema.tarjeta)
-                                        .overlay(alignment: .leading) {
-                                            Capsule().fill(Tema.aurora).frame(width: geo.size.width * min(g.porcentaje / 100, 1))
-                                        }
-                                }
-                                .frame(height: 6)
-                            }
-                        }
+                        GraficaGeneros(generos: Array(p.topGeneros.prefix(6)))
                     }
                     .padding(.horizontal)
                 }
@@ -308,7 +288,6 @@ struct PerfilVista: View {
                     NavigationLink(value: Destino.personas(username: p.mini.username, seguidores: false)) {
                         Text("**\(p.siguiendo)** siguiendo")
                     }
-                    if let t = p.totalReproducciones { Text("**\(t)** escuchas") }
                 }
                 .font(.subheadline)
                 .foregroundStyle(Tema.texto)
@@ -407,5 +386,71 @@ struct PersonasVista: View {
             .refreshable { await recargar() }
         }
         .navigationTitle(seguidores ? "Seguidores" : "Siguiendo")
+    }
+}
+
+/// Una vibra del perfil: emoji grande, nombre y descripción sobre un degradado de su propio color.
+struct TarjetaVibra: View {
+    let vibra: Perfil.Vibra
+    var body: some View {
+        let (r, g, b) = Tema.colorGenero(vibra.nombre)
+        let color = Color(red: r, green: g, blue: b)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(vibra.icono ?? "✨").font(.system(size: 34))
+            Spacer(minLength: 0)
+            Text(vibra.nombre).font(.headline).foregroundStyle(.white).lineLimit(2)
+            Text(vibra.descripcion).font(.caption).foregroundStyle(.white.opacity(0.8)).lineLimit(3)
+        }
+        .padding(16)
+        .frame(width: 190, height: 170, alignment: .leading)
+        .background(
+            LinearGradient(colors: [color.opacity(0.95), color.opacity(0.45), Color.black.opacity(0.6)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.12)))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Géneros del perfil: gráfica de dona con el principal en el centro y la leyenda en dos columnas.
+struct GraficaGeneros: View {
+    let generos: [Perfil.TopGenero]
+    private func color(_ nombre: String) -> Color {
+        let (r, g, b) = Tema.colorGenero(nombre)
+        return Color(red: r, green: g, blue: b)
+    }
+    var body: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Chart(Array(generos.enumerated()), id: \.offset) { _, g in
+                    SectorMark(angle: .value("Porcentaje", max(g.porcentaje, 0.5)), innerRadius: .ratio(0.62), angularInset: 2)
+                        .cornerRadius(5)
+                        .foregroundStyle(color(g.genero))
+                }
+                .chartLegend(.hidden)
+                .frame(height: 210)
+                if let primero = generos.first {
+                    VStack(spacing: 2) {
+                        Text("\(Int(primero.porcentaje.rounded()))%").font(.system(size: 30, weight: .heavy, design: .rounded))
+                        Text(primero.genero).font(.caption.weight(.semibold)).foregroundStyle(Tema.secundario).lineLimit(1)
+                    }
+                    .frame(maxWidth: 120)
+                }
+            }
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], alignment: .leading, spacing: 10) {
+                ForEach(Array(generos.enumerated()), id: \.offset) { _, g in
+                    HStack(spacing: 8) {
+                        Circle().fill(color(g.genero)).frame(width: 10, height: 10)
+                        Text(g.genero).font(.subheadline.weight(.medium)).lineLimit(1)
+                        Spacer(minLength: 2)
+                        Text("\(Int(g.porcentaje.rounded()))%").font(.caption.monospacedDigit()).foregroundStyle(Tema.secundario)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 9)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Tema.tarjeta))
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
     }
 }

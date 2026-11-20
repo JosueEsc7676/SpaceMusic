@@ -601,7 +601,7 @@ struct LetraCompleta: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if letras.hayLetra && !letras.cargando { barra }
+            if letras.hayLetra && !letras.cargando && (TraducirLetra.disponible || letras.seleccionando) { barra }
             Group {
                 if letras.cargando {
                     ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -640,17 +640,13 @@ struct LetraCompleta: View {
             if letras.traduciendo, let e = letras.errorTraduccion {
                 Text(e).font(.caption).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
             } else if letras.seleccionando {
-                Text("Toca los versos para tu imagen").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.7))
+                Text("Toca los bloques de la letra para tu imagen").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.7))
             }
             Spacer(minLength: 0)
             if TraducirLetra.disponible && !letras.seleccionando {
-                chip(letras.traduciendo ? "Original" : "Traducir", icono: "translate", activo: letras.traduciendo) {
+                chip(letras.traduciendo ? "Original" : "Traducir", icono: "character.bubble.fill", activo: letras.traduciendo) {
                     letras.traduciendo.toggle()
                 }
-            }
-            chip(letras.seleccionando ? "Listo" : "Versos", icono: letras.seleccionando ? "checkmark" : "text.quote", activo: letras.seleccionando) {
-                manual = false
-                letras.seleccionando.toggle()
             }
         }
         .padding(.horizontal, 22)
@@ -660,7 +656,11 @@ struct LetraCompleta: View {
 
     private func chip(_ titulo: String, icono: String, activo: Bool, accion: @escaping () -> Void) -> some View {
         Button(action: accion) {
-            Label(titulo, systemImage: icono)
+            // Ícono y texto siempre visibles (con Label a veces solo se veía el texto)
+            HStack(spacing: 5) {
+                Image(systemName: icono)
+                Text(titulo)
+            }
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
@@ -674,30 +674,36 @@ struct LetraCompleta: View {
 
     private var listaSeleccion: some View {
         ScrollView(showsIndicators: false) {
-            LazyVStack(alignment: .leading, spacing: 6) {
-                ForEach(letras.versos, id: \.id) { v in
-                    let elegido = letras.elegidas.contains(v.id)
-                    Button { withAnimation(.easeOut(duration: 0.15)) { letras.alternarVerso(v.id) } } label: {
-                        HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Image(systemName: elegido ? "checkmark.circle.fill" : "circle")
-                                .font(.body)
-                                .foregroundStyle(.white.opacity(elegido ? 1 : 0.35))
-                            Text(v.texto)
-                                .font(.system(size: 20, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white.opacity(elegido ? 1 : 0.55))
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+            LazyVStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(letras.bloques.enumerated()), id: \.offset) { _, bloque in
+                    let elegido = !bloque.isEmpty && Set(bloque.map(\.id)).isSubset(of: letras.elegidas)
+                    Button { withAnimation(.easeOut(duration: 0.15)) { letras.alternarBloque(bloque) } } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(bloque, id: \.id) { v in
+                                Text(v.texto)
+                                    .font(.system(size: 19, weight: .bold, design: .rounded))
+                                    .multilineTextAlignment(.leading)
+                            }
                         }
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 14)
-                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(elegido ? 0.14 : 0)))
+                        .foregroundStyle(.white.opacity(elegido ? 1 : 0.6))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(elegido ? 0.18 : 0.06)))
+                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(Color.white.opacity(elegido ? 0.7 : 0), lineWidth: 1.5))
+                        .overlay(alignment: .topTrailing) {
+                            if elegido {
+                                Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(.white).padding(10)
+                            }
+                        }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(elegido ? .isSelected : [])
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 14)
             .padding(.vertical, 12)
         }
     }

@@ -85,23 +85,16 @@ enum ArteBloqueo {
                 ctx.cgContext.interpolationQuality = .high
                 portada.draw(in: cubrir(portada.size, en: marco))
             }
-            // Sombra en las cuatro esquinas de lo que se ve (la columna central): una viñeta ovalada
-            let c = ctx.cgContext
-            let vineta = [UIColor(white: 0, alpha: 0).cgColor, UIColor(white: 0, alpha: 0).cgColor,
-                          UIColor(white: 0, alpha: 0.38 + 0.2 * claridad).cgColor]
-            if let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: vineta as CFArray, locations: [0, 0.55, 1]) {
-                c.saveGState()
-                c.translateBy(x: lado / 2, y: lado * 0.5)
-                c.scaleBy(x: columna * 0.62, y: lado * 0.62)
-                c.drawRadialGradient(g, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 1, options: [.drawsAfterEndLocation])
-                c.restoreGState()
-            }
-            // Arriba un velo muy leve; desde la mitad, cada vez más oscuro (como la referencia)
-            let colores = [UIColor(white: 0, alpha: 0.10).cgColor, UIColor(white: 0, alpha: 0.12).cgColor,
-                           UIColor(white: 0, alpha: 0.42).cgColor, UIColor(white: 0, alpha: 0.78).cgColor]
-            if let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colores as CFArray, locations: [0, 0.38, 0.62, 1]) {
+            // Sombra pareja sobre toda la portada, justa para leer la letra: un poco más en portadas claras
+            ctx.cgContext.setFillColor(UIColor(white: 0, alpha: 0.16 + 0.22 * claridad).cgColor)
+            ctx.cgContext.fill(marco)
+            // Abajo un poco más oscuro, para los controles de la pantalla bloqueada
+            let colores = [UIColor(white: 0, alpha: 0).cgColor, UIColor(white: 0, alpha: 0).cgColor,
+                           UIColor(white: 0, alpha: 0.45).cgColor]
+            if let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colores as CFArray, locations: [0, 0.62, 1]) {
                 ctx.cgContext.drawLinearGradient(g, start: .zero, end: CGPoint(x: 0, y: lado), options: [])
             }
+        }
         }
         return Base(fondo: fondo, luz: claridad)
     }
@@ -144,7 +137,7 @@ enum ArteBloqueo {
         // Centro de la letra al 53 % del alto (debajo del sujeto de la portada y encima de los controles)
         let y = lado * 0.53 - h / 2 + dy
         // Halo oscuro y suave detrás de la letra: más fuerte cuanto más clara es la portada (álbumes claros)
-        let fuerza = (0.28 + 0.5 * luz) * alfa
+        let fuerza: CGFloat = 0 // la sombra pareja de toda la portada reemplaza al halo
         if let c = UIGraphicsGetCurrentContext(), fuerza > 0.02,
            let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
                               colors: [UIColor(white: 0, alpha: fuerza).cgColor, UIColor(white: 0, alpha: fuerza * 0.6).cgColor,
