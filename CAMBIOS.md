@@ -1,5 +1,10 @@
 # Registro de cambios
 
+## iPhone: pantalla bloqueada con la portada a la medida y la letra con transición
+- **Portada vertical** (`ArteBloqueo.swift`): la imagen de la pantalla bloqueada tiene la proporción de la pantalla del iPhone (1000 px de ancho), así no queda mal colocada. Portadas de 900 px o más: nítidas a pantalla completa; más pequeñas: tarjeta redondeada con sombra sobre la misma portada desenfocada (no se ven pixeladas).
+- **Letra**: al llegar, la portada se desenfoca (no desaparece) y la letra va en la franja central (35–63 % del alto), entre el reloj y los controles, con un velo más oscuro para que siempre se lea. La línea que suena grande y la siguiente atenuada.
+- **Transición fluida** entre versos: 6 cuadros en unos 0,4 s (la línea anterior sube y se desvanece, la nueva entra desde abajo); los cuadros se dibujan fuera del hilo principal. Al irse la letra, la portada vuelve a verse nítida.
+
 ## iPhone: el mismo reproductor controla tus otros dispositivos, SyncPlay con código y letra sobre la portada
 - **Como Spotify Connect, sin pantallas extra** (`Reproductor.remoto`, `reflejar`, `ordenRemota`; `ControlRemoto.destino`, `elegir`, `elegirEsteIPhone`): se quitaron la pantalla «Controlar…» y el mini reproductor aparte. Al elegir otro dispositivo en Dispositivos → «Reproducir en», el reproductor de siempre (mini y completo, letra incluida) muestra su canción, tiempo y cola, y reproducir, pausar, anterior/siguiente, mover, volumen, elegir canciones y la cola («cola», agregar, quitar, mover) le mandan la orden. Aquí no suena nada mientras tanto y se informa vacío. Se toma solo el dispositivo activo cuando aquí no suena nada; «Este iPhone» trae la música desde el mismo segundo. Las órdenes que traen música («reproducir», «transferir») salen de ese modo.
 - **SyncPlay con código** (`JuntosVista`): código grande para copiar en la sala, «Unirme con código» y el código en el enlace compartido.

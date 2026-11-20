@@ -72,6 +72,7 @@ final class Reproductor {
 
     private init() {
         radioAutomatica = UserDefaults.standard.object(forKey: "radioAutomatica") as? Bool ?? true
+        ArteBloqueo.ajustarPantalla()
         jugador.actionAtItemEnd = .advance
         jugador.automaticallyWaitsToMinimizeStalling = true
         configurarAudio()
@@ -347,14 +348,13 @@ final class Reproductor {
         didSet {
             UserDefaults.standard.set(letraEnBloqueo, forKey: "letraEnBloqueo")
             lineaBloqueo = nil
-            actualizarNowPlaying()
+            mostrarBloqueo(animar: true)
         }
     }
     @ObservationIgnored private var lineaBloqueo: String?
     @ObservationIgnored private var siguienteBloqueo: String?
     /// Portada original (para dibujar la letra encima) y la última imagen con letra.
     @ObservationIgnored private var portadaImagen: (id: Int, img: UIImage)?
-    @ObservationIgnored private var arteLetra: (clave: String, arte: MPMediaItemArtwork)?
 
     /// Línea de la letra sincronizada que suena ahora y la siguiente (nil en las pausas o sin letra con tiempos).
     private func lineaActualLetra(_ t: Double) -> (actual: String, siguiente: String?)? {
@@ -367,59 +367,46 @@ final class Reproductor {
         return (texto, siguiente)
     }
 
-    /// Portada con la letra encima (800 × 800): portada desenfocada y oscurecida, línea actual grande y la siguiente
-    /// más tenue. Se ve en la pantalla bloqueada a buen tamaño, a diferencia del título, que se corta.
-    private static func portadaConLetra(_ linea: String, siguiente: String?, portada: UIImage?) -> UIImage {
-        let lado: CGFloat = 800
-        let marco = CGRect(x: 0, y: 0, width: lado, height: lado)
-        let formato = UIGraphicsImageRendererFormat.default()
-        formato.scale = 1
-        return UIGraphicsImageRenderer(size: marco.size, format: formato).image { ctx in
-            UIColor.black.setFill()
-            ctx.fill(marco)
-            if let portada {
-                // Desenfoque barato: la portada a 36 px y después estirada
-                let chica = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 36), format: formato).image { _ in
-                    portada.draw(in: CGRect(x: 0, y: 0, width: 36, height: 36))
-                }
-                chica.draw(in: marco.insetBy(dx: -40, dy: -40))
-                UIColor(white: 0, alpha: 0.5).setFill()
-                ctx.fill(marco)
-            }
-            func fuente(_ tam: CGFloat, _ peso: UIFont.Weight) -> UIFont {
-                let f = UIFont.systemFont(ofSize: tam, weight: peso)
-                return f.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: tam) } ?? f
-            }
-            let estilo = NSMutableParagraphStyle()
-            estilo.alignment = .left
-            estilo.lineBreakMode = .byWordWrapping
-            estilo.lineSpacing = 4
-            let margen: CGFloat = 70
-            let ancho = lado - margen * 2
-            func medir(_ t: String, _ a: [NSAttributedString.Key: Any]) -> CGFloat {
-                ceil((t as NSString).boundingRect(with: CGSize(width: ancho, height: .greatestFiniteMagnitude),
-                                                  options: .usesLineFragmentOrigin, attributes: a, context: nil).height)
-            }
-            // La línea actual lo más grande que quepa
-            var tam: CGFloat = 78
-            var a: [NSAttributedString.Key: Any] = [:]
-            var alto: CGFloat = 0
-            repeat {
-                a = [.font: fuente(tam, .heavy), .foregroundColor: UIColor.white, .paragraphStyle: estilo]
-                alto = medir(linea, a)
-                tam -= 4
-            } while alto > lado * 0.52 && tam > 34
-            let b: [NSAttributedString.Key: Any] = [.font: fuente(max(30, tam * 0.55), .bold),
-                                                    .foregroundColor: UIColor(white: 1, alpha: 0.5), .paragraphStyle: estilo]
-            let altoSig = siguiente.map { min(medir($0, b), lado * 0.22) } ?? 0
-            let espacio: CGFloat = siguiente == nil ? 0 : 30
-            var y = max(margen, (lado - alto - espacio - altoSig) / 2)
-            (linea as NSString).draw(with: CGRect(x: margen, y: y, width: ancho, height: alto),
-                                     options: .usesLineFragmentOrigin, attributes: a, context: nil)
-            y += alto + espacio
-            if let siguiente {
-                (siguiente as NSString).draw(with: CGRect(x: margen, y: y, width: ancho, height: altoSig),
-                                             options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: b, context: nil)
+    @ObservationIgnored private var baseBloqueo: (id: Int, base: ArteBloqueo.Base)?
+    @ObservationIgnored private var arteBloqueo: (id: Int, arte: MPMediaItemArtwork)?
+    @ObservationIgnored private var letraMostrada: ArteBloqueo.Letra?
+    @ObservationIgnored private var animacionBloqueo: Task<Void, Never>?
+
+    /// Lo que debería verse ahora en la pantalla bloqueada (la letra, si está activada y hay una línea sonando).
+    private var letraDeseada: ArteBloqueo.Letra? {
+        guard letraEnBloqueo, let l = lineaBloqueo else { return nil }
+        return (l, siguienteBloqueo)
+    }
+
+    /// Prepara la portada vertical (nítida y desenfocada) de la canción para la pantalla bloqueada.
+    private func prepararBaseBloqueo(_ c: Cancion, _ img: UIImage) {
+        Task { @MainActor [weak self] in
+            let base = await Task.detached(priority: .utility) { ArteBloqueo.base(img) }.value
+            guard let self, self.actual?.id == c.id else { return }
+            self.baseBloqueo = (c.id, base)
+            self.letraMostrada = nil
+            self.mostrarBloqueo(animar: false)
+        }
+    }
+
+    /// Pasa la pantalla bloqueada a lo que corresponde ahora con una transición fluida (6 cuadros en unos 0,4 s):
+    /// la línea anterior sube y se desvanece y la nueva entra desde abajo; la portada se desenfoca al llegar la letra.
+    private func mostrarBloqueo(animar: Bool) {
+        guard let c = actual, let b = baseBloqueo, b.id == c.id else { actualizarNowPlaying(); return }
+        let de = letraMostrada, a = letraDeseada
+        if de?.actual == a?.actual, de?.siguiente == a?.siguiente, arteBloqueo?.id == c.id { return }
+        letraMostrada = a
+        animacionBloqueo?.cancel()
+        let id = c.id
+        let base = b.base
+        animacionBloqueo = Task { @MainActor [weak self] in
+            let pasos: [Double] = animar ? [0.17, 0.34, 0.5, 0.67, 0.84, 1] : [1]
+            for p in pasos {
+                let img = await Task.detached(priority: .userInitiated) { ArteBloqueo.cuadro(base, de: de, a: a, p: CGFloat(p)) }.value
+                guard let self, !Task.isCancelled, self.actual?.id == id else { return }
+                self.arteBloqueo = (id, MPMediaItemArtwork(boundsSize: img.size) { _ in img })
+                self.actualizarNowPlaying()
+                if p < 1 { try? await Task.sleep(for: .milliseconds(65)) }
             }
         }
     }
@@ -1021,7 +1008,7 @@ final class Reproductor {
             if linea?.actual != lineaBloqueo {
                 lineaBloqueo = linea?.actual
                 siguienteBloqueo = linea?.siguiente
-                actualizarNowPlaying()
+                mostrarBloqueo(animar: true)
             }
         }
         if Date().timeIntervalSince(ultimoGuardado) >= 5 { guardarEstado(); ultimoGuardado = Date() }
@@ -1111,15 +1098,9 @@ final class Reproductor {
             MPNowPlayingInfoPropertyPlaybackRate: sonando ? 1.0 : 0.0,
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
-        if letraEnBloqueo, let linea = lineaBloqueo {
-            // La letra dibujada sobre la portada (se rehace solo cuando cambia la línea)
-            let clave = "\(c.id)|\(linea)"
-            if arteLetra?.clave != clave {
-                let img = Reproductor.portadaConLetra(linea, siguiente: siguienteBloqueo,
-                                                      portada: portadaImagen?.id == c.id ? portadaImagen?.img : nil)
-                arteLetra = (clave, MPMediaItemArtwork(boundsSize: img.size) { _ in img })
-            }
-            info[MPMediaItemPropertyArtwork] = arteLetra?.arte
+        // Portada vertical a la medida de la pantalla (con la letra, si está activada); mientras se prepara, la original
+        if let a = arteBloqueo, a.id == c.id {
+            info[MPMediaItemPropertyArtwork] = a.arte
         } else if let p = portadaNowPlaying, p.id == c.id {
             info[MPMediaItemPropertyArtwork] = p.arte
         }
@@ -1133,7 +1114,7 @@ final class Reproductor {
             let arte = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
             portadaNowPlaying = (c.id, arte)
             portadaImagen = (c.id, img)
-            arteLetra = nil
+            prepararBaseBloqueo(c, img)
             actualizarNowPlaying()
         }
     }
