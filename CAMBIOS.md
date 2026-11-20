@@ -1,5 +1,8 @@
 # Registro de cambios
 
+## iPhone: pantalla bloqueada con el diseño de referencia
+- `ArteBloqueo`: imagen cuadrada de 1500 px (iOS solo la pone a pantalla completa si es cuadrada; la vertical salía como tarjeta). Portada nítida con degradado oscuro abajo y la línea que suena centrada al 53 % del alto dentro de la columna que se ve (ancho ÷ alto de la pantalla), en letra manuscrita Savoye blanca con sombra suave; solo la línea actual. Misma transición entre versos.
+
 ## iPhone: pantalla bloqueada con la portada a la medida y la letra con transición
 - **Portada vertical** (`ArteBloqueo.swift`): la imagen de la pantalla bloqueada tiene la proporción de la pantalla del iPhone (1000 px de ancho), así no queda mal colocada. Portadas de 900 px o más: nítidas a pantalla completa; más pequeñas: tarjeta redondeada con sombra sobre la misma portada desenfocada (no se ven pixeladas).
 - **Letra**: al llegar, la portada se desenfoca (no desaparece) y la letra va en la franja central (35–63 % del alto), entre el reloj y los controles, con un velo más oscuro para que siempre se lea. La línea que suena grande y la siguiente atenuada.
