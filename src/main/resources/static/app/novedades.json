@@ -1,12 +1,21 @@
 {
-  "version": "3.11.1",
-  "titulo": "Novedades: nuevo diseño de la letra en la pantalla bloqueada",
+  "version": "3.11.2",
+  "titulo": "Novedades: la letra en la pantalla bloqueada se lee mejor",
   "puntos": [
-    "La portada se ve nítida a pantalla completa y la letra aparece encima, centrada, en letra manuscrita.",
-    "Transición suave entre versos: la línea anterior sube y se desvanece mientras entra la nueva.",
-    "Android 2.4 con el mismo diseño."
+    "Cambio de verso limpio y a tiempo en la pantalla bloqueada (antes se veía a saltos).",
+    "Sombra en las esquinas y un halo oscuro detrás de la letra, más fuerte en portadas claras: la letra se lee con cualquier álbum.",
+    "Android 2.5 con las mismas mejoras."
   ],
   "anteriores": [
+    {
+      "version": "3.11.1",
+      "titulo": "Novedades: nuevo diseño de la letra en la pantalla bloqueada",
+      "puntos": [
+        "La portada se ve nítida a pantalla completa y la letra aparece encima, centrada, en letra manuscrita.",
+        "Transición suave entre versos: la línea anterior sube y se desvanece mientras entra la nueva.",
+        "Android 2.4 con el mismo diseño."
+      ]
+    },
     {
       "version": "3.11",
       "titulo": "Novedades: la letra en la pantalla bloqueada, más bonita",

@@ -12,6 +12,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
+import android.graphics.RadialGradient;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Shader;
@@ -63,6 +64,8 @@ public class ReproductorService extends Service {
     private static final int LADO = 720;
     private String linea = "", siguiente = "", lineaMostrada = "", siguienteMostrada = "";
     private Bitmap fondoBorroso, arte;
+    /** Qué tan clara es la portada en el centro (0 oscura, 1 blanca): define cuánto se oscurece detrás de la letra. */
+    private float luzPortada = 0.5f;
     private int animacion;
 
     @Override
@@ -147,6 +150,7 @@ public class ReproductorService extends Service {
                     ui.post(() -> {
                         if (url.equals(portadaUrl)) {
                             portada = b;
+                            luzPortada = b == null ? 0.5f : luzCentro(b);
                             if (!linea.isEmpty()) { lineaMostrada = ""; animarLetra(); }
                             actualizar();
                         }
@@ -189,6 +193,19 @@ public class ReproductorService extends Service {
         return Bitmap.createScaledBitmap(chica, 120, Math.max(1, 120 * h / w), true);
     }
 
+    /** Luz promedio del centro de la portada (donde va la letra), de 0 a 1. */
+    private static float luzCentro(Bitmap b) {
+        try {
+            int w = b.getWidth(), h = b.getHeight();
+            Bitmap centro = Bitmap.createBitmap(b, w / 5, (int) (h * 0.38f), Math.max(1, w * 3 / 5), Math.max(1, (int) (h * 0.3f)));
+            Bitmap uno = Bitmap.createScaledBitmap(centro, 1, 1, true);
+            int px = uno.getPixel(0, 0);
+            return (Color.red(px) + Color.green(px) + Color.blue(px)) / (3f * 255f);
+        } catch (Exception e) {
+            return 0.5f;
+        }
+    }
+
     /** Dibuja `img` cubriendo el cuadro (como «center crop»). */
     private static void cubrir(Canvas c, Bitmap img, Paint p) {
         float esc = Math.max((float) LADO / img.getWidth(), (float) LADO / img.getHeight());
@@ -207,13 +224,13 @@ public class ReproductorService extends Service {
     private static final Typeface MANUSCRITA = Typeface.create("cursive", Typeface.NORMAL);
 
     /** Dibuja la línea centrada, un poco debajo de la mitad, en letra manuscrita blanca con sombra suave. */
-    private static void dibujarLetra(Canvas c, String actual, float alfa, float dy) {
+    private static void dibujarLetra(Canvas c, String actual, float alfa, float dy, float luz) {
         if (actual.isEmpty() || alfa <= 0.01f) return;
         int ancho = (int) (LADO * 0.80f);
         TextPaint tp = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         tp.setTypeface(MANUSCRITA);
         tp.setColor(Color.argb((int) (255 * alfa), 255, 255, 255));
-        tp.setShadowLayer(10, 0, 2, Color.argb((int) (140 * alfa), 0, 0, 0));
+        tp.setShadowLayer(14, 0, 2, Color.argb((int) ((150 + 80 * luz) * alfa), 0, 0, 0));
         float tam = 70;
         StaticLayout l;
         do {
@@ -222,6 +239,17 @@ public class ReproductorService extends Service {
             tam -= 4;
         } while (l.getHeight() > LADO * 0.3f && tam > 32);
         float y = LADO * 0.53f - l.getHeight() / 2f + dy;
+        // Halo oscuro y suave detrás de la letra: más fuerte cuanto más clara es la portada
+        int fuerza = (int) (255 * (0.28f + 0.5f * luz) * alfa);
+        Paint halo = new Paint(Paint.ANTI_ALIAS_FLAG);
+        float cx = LADO / 2f, cy = y + l.getHeight() / 2f, rx = ancho * 0.72f, ry = Math.max(l.getHeight(), LADO * 0.08f) * 1.25f;
+        halo.setShader(new RadialGradient(0, 0, 1, new int[]{Color.argb(fuerza, 0, 0, 0), Color.argb(fuerza * 6 / 10, 0, 0, 0), 0},
+                new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
+        c.save();
+        c.translate(cx, cy);
+        c.scale(rx, ry);
+        c.drawCircle(0, 0, 1, halo);
+        c.restore();
         c.save();
         c.translate((LADO - ancho) / 2f, y);
         l.draw(c);
@@ -239,9 +267,14 @@ public class ReproductorService extends Service {
         velo.setShader(new LinearGradient(0, 0, 0, LADO, new int[]{0x1A000000, 0x1F000000, 0x6B000000, 0xC7000000},
                 new float[]{0f, 0.38f, 0.62f, 1f}, Shader.TileMode.CLAMP));
         c.drawRect(new Rect(0, 0, LADO, LADO), velo);
+        // Sombra en las cuatro esquinas (viñeta) para que la letra resalte también en portadas claras
+        Paint vineta = new Paint();
+        vineta.setShader(new RadialGradient(LADO / 2f, LADO / 2f, LADO * 0.72f,
+                new int[]{0, 0, Color.argb((int) (255 * (0.4f + 0.2f * luzPortada)), 0, 0, 0)}, new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
+        c.drawRect(new Rect(0, 0, LADO, LADO), vineta);
         float salto = LADO * 0.03f;
-        dibujarLetra(c, deL, 1 - e, -salto * e);
-        dibujarLetra(c, aL, e, salto * (1 - e));
+        dibujarLetra(c, deL, 1 - e, -salto * e, luzPortada);
+        dibujarLetra(c, aL, e, salto * (1 - e), luzPortada);
         return b;
     }
 
@@ -253,22 +286,17 @@ public class ReproductorService extends Service {
         siguienteMostrada = aS;
         final int mia = ++animacion;
         if (portada == null) return;
-        final float[] pasos = {0.2f, 0.4f, 0.6f, 0.8f, 1f};
-        for (int k = 0; k < pasos.length; k++) {
-            final float p = pasos[k];
-            ui.postDelayed(() -> {
-                if (mia != animacion) return;
-                arte = aL.isEmpty() && p >= 1f ? null : cuadro(deL, deS, aL, aS, p);
-                MediaMetadata.Builder m = new MediaMetadata.Builder()
-                        .putString(MediaMetadata.METADATA_KEY_TITLE, titulo)
-                        .putString(MediaMetadata.METADATA_KEY_ARTIST, artista)
-                        .putString(MediaMetadata.METADATA_KEY_ALBUM, album)
-                        .putLong(MediaMetadata.METADATA_KEY_DURATION, duracionMs);
-                Bitmap img = arte != null ? arte : portada;
-                if (img != null) m.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, img);
-                sesion.setMetadata(m.build());
-            }, k * 70L);
-        }
+        // Un solo cambio por verso: muchos cuadros seguidos se veían a saltos en la pantalla de bloqueo
+        arte = aL.isEmpty() ? null : cuadro("", "", aL, aS, 1f);
+        MediaMetadata.Builder m = new MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_TITLE, titulo)
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, artista)
+                .putString(MediaMetadata.METADATA_KEY_ALBUM, album)
+                .putLong(MediaMetadata.METADATA_KEY_DURATION, duracionMs);
+        Bitmap img = arte != null ? arte : portada;
+        if (img != null) m.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, img);
+        sesion.setMetadata(m.build());
+    }
     }
 
     @SuppressWarnings("deprecation")

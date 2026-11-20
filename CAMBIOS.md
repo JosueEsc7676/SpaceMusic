@@ -1,6 +1,10 @@
 # Registro de cambios
 
 
+## Versión 3.11.2
+- **Cambio de verso fluido**: la pantalla bloqueada no muestra bien muchos cuadros seguidos (la transición se veía a saltos). Ahora la imagen cambia una sola vez por verso y el sistema hace el fundido; en el iPhone la imagen del verso siguiente se dibuja de antemano para cambiar justo a tiempo.
+- **Letra legible con portadas claras**: viñeta (sombra en las cuatro esquinas de lo que se ve) y halo oscuro ovalado detrás de la letra; los dos se ajustan a la luz de la portada donde va la letra (más oscuro cuanto más clara). Sombra de la letra más marcada. Android 2.5 (código 16) igual.
+
 ## Versión 3.11.1
 - **Letra en la pantalla bloqueada con el diseño de referencia**: portada nítida a pantalla completa con degradado oscuro abajo y la línea que suena centrada al 53 % del alto, en letra manuscrita blanca con sombra suave (iPhone: Savoye; Android 2.4, código 15: fuente «cursive» del sistema). Solo la línea actual. Misma transición entre versos.
 - iPhone (rama `app-ios`): la imagen vuelve a ser cuadrada (1500 px): iOS solo la pone a pantalla completa si es cuadrada (la vertical se mostraba como tarjeta); la letra va dentro de la columna central que queda visible.
