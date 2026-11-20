@@ -44,6 +44,8 @@ public class JuntosService {
     static final class Sala {
         final long id;
         final long anfitrion;
+        /** Código para unirse (como Spotify Jam): 6 letras y números fáciles de dictar. */
+        final String codigo;
         final Set<Long> dentro = ConcurrentHashMap.newKeySet();
         final Set<Long> invitados = ConcurrentHashMap.newKeySet();
         final List<long[]> cola = new ArrayList<>(); // [cancionId, quién]
@@ -55,7 +57,7 @@ public class JuntosService {
         long marca = System.currentTimeMillis(); // hora del servidor en la que vale «segundo»
         volatile long actividad = System.currentTimeMillis();
         Map<String, Object> ultimaAccion;
-        Sala(long id, long anfitrion) { this.id = id; this.anfitrion = anfitrion; dentro.add(anfitrion); }
+        Sala(long id, long anfitrion, String codigo) { this.id = id; this.anfitrion = anfitrion; this.codigo = codigo; dentro.add(anfitrion); }
 
         /** Segundo actual (si está sonando, avanza con el reloj del servidor). */
         synchronized double segundoAhora() {
@@ -65,6 +67,55 @@ public class JuntosService {
     }
 
     private final Map<Long, Sala> salas = new ConcurrentHashMap<>();
+    /** Sin letras ni números que se confunden (0/O, 1/I/L). */
+    private static final String ALFABETO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    private final java.security.SecureRandom azar = new java.security.SecureRandom();
+    /** Intentos de código por persona en los últimos minutos (para que no se pueda adivinar probando). */
+    private final Map<Long, Deque<Long>> intentos = new ConcurrentHashMap<>();
+    static final int MAX_INTENTOS = 10;
+    static final long VENTANA_INTENTOS_MS = 10 * 60_000L;
+
+    private String codigoNuevo() {
+        for (;;) {
+            StringBuilder b = new StringBuilder(6);
+            for (int i = 0; i < 6; i++) b.append(ALFABETO.charAt(azar.nextInt(ALFABETO.length())));
+            String c = b.toString();
+            if (salas.values().stream().noneMatch(s -> s.codigo.equals(c))) return c;
+        }
+    }
+
+    private Sala nueva(long uid) {
+        Sala s = new Sala(secuencia.incrementAndGet(), uid, codigoNuevo());
+        salas.put(s.id, s);
+        return s;
+    }
+
+    /**
+     * Unirse con el código (como Spotify Jam): no hace falta invitación. Hasta 10 intentos cada 10 minutos por persona.
+     * Espacios, guiones y minúsculas no importan.
+     */
+    public Map<String, Object> unirseConCodigo(long uid, String codigo) {
+        long ahora = System.currentTimeMillis();
+        Deque<Long> mios = intentos.computeIfAbsent(uid, k -> new ArrayDeque<>());
+        synchronized (mios) {
+            while (!mios.isEmpty() && ahora - mios.peekFirst() > VENTANA_INTENTOS_MS) mios.pollFirst();
+            if (mios.size() >= MAX_INTENTOS) throw new IllegalArgumentException("Demasiados intentos. Espera unos minutos y vuelve a probar");
+            mios.addLast(ahora);
+        }
+        String c = codigo == null ? "" : codigo.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
+        if (c.length() != 6) throw new IllegalArgumentException("El código tiene 6 letras y números");
+        Sala s = salas.values().stream().filter(x -> x.codigo.equals(c)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No hay ningún SyncPlay con ese código"));
+        if (s.dentro.size() >= MAX_PERSONAS && !s.dentro.contains(uid)) throw new IllegalArgumentException("Este SyncPlay está lleno");
+        // Estar en otro SyncPlay a la vez no tiene sentido: se sale del anterior
+        for (Sala otra : salas.values()) if (otra != s && otra.dentro.contains(uid)) salir(otra.id, uid);
+        s.invitados.remove(uid);
+        s.dentro.add(uid);
+        s.actividad = ahora;
+        synchronized (mios) { mios.clear(); }
+        avisar(s);
+        return ver(s.id, uid);
+    }
     private final AtomicLong secuencia = new AtomicLong(System.currentTimeMillis() % 100_000);
     private final UsuarioRepository usuarios;
     private final SeguimientoRepository seguimientos;
@@ -106,8 +157,7 @@ public class JuntosService {
         Sala s = salas.values().stream().filter(x -> x.anfitrion == uid).findFirst().orElse(null);
         if (s == null) {
             if (salas.size() > 200) throw new IllegalStateException("Hay demasiados SyncPlay abiertos; inténtalo en un rato");
-            s = new Sala(secuencia.incrementAndGet(), uid);
-            salas.put(s.id, s);
+            s = nueva(uid);
         }
         if (s.dentro.size() + s.invitados.size() >= MAX_PERSONAS) throw new IllegalArgumentException("Este SyncPlay está lleno (máximo " + MAX_PERSONAS + ")");
         if (!s.dentro.contains(otro.getId())) s.invitados.add(otro.getId());
@@ -119,7 +169,10 @@ public class JuntosService {
     /** SyncPlay propio nuevo sin invitar a nadie todavía. */
     public Map<String, Object> abrir(long uid) {
         Sala s = salas.values().stream().filter(x -> x.anfitrion == uid).findFirst().orElse(null);
-        if (s == null) { s = new Sala(secuencia.incrementAndGet(), uid); salas.put(s.id, s); }
+        if (s == null) {
+            if (salas.size() > 200) throw new IllegalStateException("Hay demasiados SyncPlay abiertos; inténtalo en un rato");
+            s = nueva(uid);
+        }
         return ver(s.id, uid);
     }
 
@@ -307,6 +360,8 @@ public class JuntosService {
             r.put("version", s.version.get());
             r.put("soyAnfitrion", s.anfitrion == uid);
             r.put("dentro", s.dentro.contains(uid));
+            // El código solo lo ven quienes ya están dentro (para compartirlo)
+            if (s.dentro.contains(uid)) r.put("codigo", s.codigo);
             r.put("anfitrion", persona(s.anfitrion));
             r.put("personas", s.dentro.stream().map(this::persona).filter(Objects::nonNull).toList());
             r.put("invitados", s.invitados.stream().map(this::persona).filter(Objects::nonNull).toList());

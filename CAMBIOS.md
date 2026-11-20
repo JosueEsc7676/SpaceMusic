@@ -1,6 +1,13 @@
 # Registro de cambios
 
 
+## Versión 3.10
+- **Reproducir en otro dispositivo como Spotify Connect, sin pantallas extra** (`js/remoto.js`, `js/dispositivos.js`): se quitó la ventana «Controlar…». En Dispositivos → «Reproducir en» se elige este dispositivo u otro (`elegirDispositivo`, `elegirEste`); si aquí sonaba algo pasa allá desde el mismo segundo. Mientras se controla otro, los controles de siempre (`player.play/toggle/resume/pause/next/prev/seek/setVolume/playNext/addToQueue`) le mandan la orden y la barra del reproductor muestra su canción, tiempo y volumen. Se toma solo el dispositivo activo cuando aquí no suena nada; al elegir «Este dispositivo» no se vuelve a tomar hasta que el otro vuelva a empezar a sonar. Las órdenes que llegan siempre actúan en este dispositivo.
+- **Orden «cola»** (`ControlRemotoService`): cambia «A continuación» del otro dispositivo sin tocar la canción que suena (web y iPhone la ejecutan).
+- **SyncPlay con código, como Spotify Jam** (`JuntosService.unirseConCodigo`, `POST /api/juntos/codigo`): cada SyncPlay tiene un código de 6 letras y números sin caracteres confusos (solo lo ven quienes están dentro); con él se entra sin invitación. Máximo 10 intentos cada 10 minutos por persona. Web: código en la sala (toca para copiar), «Unirme con código» en SyncPlay y en Dispositivos, y el código en el enlace compartido. Pruebas: `ExperienciasTest` (13).
+- Pruebas del navegador: `control-remoto.mjs` 14/14 (sin ventana aparte; los controles de siempre manejan el otro dispositivo), `syncplay-sincronia.mjs` 8/8, `navegador.mjs` 11/11. Servidor: 81 pruebas.
+- iPhone (rama `app-ios`): el mismo reproductor controla el otro dispositivo (también la letra sigue su tiempo), sin pantalla de control aparte; SyncPlay con código; letra en la pantalla bloqueada dibujada sobre la portada.
+
 ## Versión 3.9
 - **Portada original en HD** (`PortadaEnLineaService`, `PortadaEnLineaController`; web: menú de canción → «Buscar portada original (HD)»; iPhone: Editar canción): busca en iTunes y Deezer (gratis, sin claves) con el título limpio (sin «| Álbum», «(Official Video)»…), ordena por coincidencia de título y artista y la persona elige. Solo descarga de `*.mzstatic.com` y `*.dzcdn.net` por https (también tras redirecciones), máximo 10 MB, guardada a 1200 px. `GET /api/canciones/{id}/portada/buscar?q=` y `POST /api/canciones/{id}/portada/en-linea {url}` (admin y colaboradores). Pruebas: `PortadaEnLineaTest` (3).
 - **Dedicatorias**: borrar también las enviadas (`ocultaDe`, solo de tu lista) y «Borrar todas» (`DELETE /api/dedicatorias?tipo=recibidas|enviadas`; las guardadas y las programadas se quedan). Web con pestañas Recibidas/Enviadas, botón de borrar en cada una y tarjetas más ordenadas. Pruebas: `ExperienciasTest` (12).

@@ -266,6 +266,29 @@ class ExperienciasTest {
     }
 
     @Test
+    void syncPlayConCodigoComoJam() {
+        Usuario ivo = u("ivo_exp"), juli = u("juli_exp"), kari = u("kari_exp");
+        Map<String, Object> sala = juntos.abrir(ivo.getId());
+        String codigo = (String) sala.get("codigo");
+        assertNotNull(codigo);
+        assertTrue(codigo.matches("[A-Z0-9]{6}"));
+        // Sin seguir a nadie ni invitación: con el código se entra (minúsculas y espacios no importan)
+        Map<String, Object> dentro = juntos.unirseConCodigo(juli.getId(), " " + codigo.substring(0, 3).toLowerCase() + " " + codigo.substring(3) + " ");
+        assertEquals(true, dentro.get("dentro"));
+        assertEquals(sala.get("id"), dentro.get("id"));
+        // Quien no está dentro no ve el código
+        assertThrows(NoSuchElementException.class, () -> juntos.ver(((Number) sala.get("id")).longValue(), kari.getId()));
+        // Código equivocado y límite de intentos
+        assertThrows(IllegalArgumentException.class, () -> juntos.unirseConCodigo(kari.getId(), "ZZZZZZ"));
+        for (int i = 0; i < JuntosService.MAX_INTENTOS; i++) {
+            try { juntos.unirseConCodigo(kari.getId(), "ZZZZZ" + i); } catch (IllegalArgumentException ignored) { }
+        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> juntos.unirseConCodigo(kari.getId(), codigo));
+        assertTrue(e.getMessage().contains("Demasiados intentos"));
+        juntos.salir(((Number) sala.get("id")).longValue(), ivo.getId());
+    }
+
+    @Test
     void escucharJuntosSalaConInvitacionControlYCola() {
         Long c1 = lista.get(3).getId(), c2 = lista.get(4).getId();
         // Solo a quien te sigue

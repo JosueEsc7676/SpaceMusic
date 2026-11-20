@@ -170,6 +170,11 @@ function aplicarCluster(c) {
   if (c.version != null) version = c.version;
   if (c.activo !== undefined) activo = c.activo;
   dispositivos = c.dispositivos || [];
+  if (ignorado) {
+    const d = dispositivos.find((x) => x.id === ignorado);
+    if (!d) ignorado = null;
+    else { if (d.sonando && !ignoradoSonaba) ignorado = null; else ignoradoSonaba = !!d.sonando; }
+  }
   marcarBoton();
   bus.emit('remoto:lista', dispositivos);
 }
@@ -197,7 +202,7 @@ function recibir(m) {
 function ponerCanciones(o) {
   if (!o.canciones?.length) return;
   player.play(o.canciones, o.indice || 0, { type: 'remoto', label: 'Desde ' + nombreDe(o.de) });
-  if (o.segundo > 1) player.audio.addEventListener('loadedmetadata', () => player.seek(o.segundo), { once: true });
+  if (o.segundo > 1) player.audio.addEventListener('loadedmetadata', () => aqui(() => player.seek(o.segundo)), { once: true });
 }
 
 /** Ejecuta una orden para este dispositivo y la confirma (por WebSocket; las de la vía anterior no se confirman). */
@@ -205,6 +210,17 @@ let quitarGuardaPausa = null;
 
 function ejecutar(o, porWs) {
   if (!o || o.para !== miDispositivo()) return;
+  if (o.accion === 'reproducir' || o.accion === 'transferir') {
+    // Traen la música a este dispositivo: se deja de controlar el otro
+    const d = controlandoA();
+    elegido = null;
+    if (d) ignorar(d.id);
+  }
+  aquiMismo = true;
+  try { ejecutarAqui(o, porWs); } finally { aquiMismo = false; }
+}
+
+function ejecutarAqui(o, porWs) {
   if (o.accion !== 'pause') quitarGuardaPausa?.(); // otra orden (reproducir, siguiente…) anula la protección de la pausa
   // La pausa automática del servidor (otro dispositivo empezó a sonar) no aplica dentro de SyncPlay
   if (o.de === 'servidor' && enSyncPlay()) { if (porWs && o.id) enviar({ tipo: 'ack', id: o.id, ok: true }); return; }
@@ -230,6 +246,11 @@ function ejecutar(o, porWs) {
       case 'prev': player.prev(); break;
       case 'seek': player.seek(Number(o.segundo) || 0); break;
       case 'volumen': player.setVolume(Number(o.volumen)); break;
+      case 'cola':
+        // «A continuación» cambiada desde otro dispositivo (la canción actual sigue igual)
+        player.clearUpcoming();
+        if (o.canciones?.length) player.addToQueue(o.canciones);
+        break;
       case 'reproducir':
       case 'transferir':
         ponerCanciones(o);
@@ -290,10 +311,13 @@ export const dispositivoActivo = () => activo;
 /** Trae a este dispositivo lo que suena en otro (desde el mismo segundo) y lo pausa allá. */
 export async function escucharAqui(d) {
   if (!d.cancion) return;
+  elegido = null;
+  ignorar(d.id);
   const lista = [d.cancion, ...(d.cola || [])];
   const seg = posicion(d);
-  player.play(lista, 0, { type: 'remoto', label: 'Desde ' + d.nombre });
-  if (seg > 1) player.audio.addEventListener('loadedmetadata', () => player.seek(seg), { once: true });
+  aqui(() => player.play(lista, 0, { type: 'remoto', label: 'Desde ' + d.nombre }));
+  if (seg > 1) player.audio.addEventListener('loadedmetadata', () => aqui(() => player.seek(seg)), { once: true });
+  pintarBarra();
   // Al empezar a sonar aquí, el servidor pausa el otro (un solo dispositivo activo); por si acaso se pide también
   if (d.sonando) await ordenar(d.id, 'pause').catch(() => { });
 }
@@ -303,8 +327,81 @@ export async function pasarA(d) {
   if (!player.current) { toast('No hay nada sonando en este dispositivo'); return; }
   const lista = player.items.slice(player.index, player.index + 100);
   await ordenar(d.id, 'transferir', { cancionIds: lista.map((c) => c.id), indice: 0, segundo: player.audio.currentTime || 0 });
-  player.pause();
+  aqui(() => player.pause());
+  elegido = d.id;
+  ignorado = null;
   toast('Ahora suena en ' + d.nombre);
+  pintarBarra();
+}
+
+/**
+ * «Dispositivos» → otro dispositivo (como Spotify Connect): si aquí suena algo pasa allá; si no, se controla
+ * lo que tiene. Desde ese momento el reproductor de siempre (barra, botones, canciones que toques) actúa allá.
+ */
+export async function elegirDispositivo(id) {
+  const d = otrosDispositivos().find((x) => x.id === id);
+  if (!d) { toast('Ese dispositivo ya no está conectado'); return; }
+  if (player.current && (player.playing || !d.cancion)) { await pasarA(d); return; }
+  elegido = d.id;
+  ignorado = null;
+  pintarBarra();
+  toast('Controlando ' + d.nombre);
+}
+
+/** «Dispositivos» → este dispositivo: la música vuelve aquí (desde el mismo segundo si allá sonaba). */
+export async function elegirEste() {
+  const d = controlandoA();
+  elegido = null;
+  if (!d) return;
+  ignorar(d.id);
+  if (d.sonando) await escucharAqui(d);
+  pintarBarra();
+}
+
+// ── Mientras se controla otro dispositivo, los controles de siempre le mandan las órdenes ──
+
+let elegido = null, ignorado = null, ignoradoSonaba = true, aquiMismo = false;
+/**
+ * Se dejó de controlar ese dispositivo a propósito: no se vuelve a tomar solo hasta que vuelva a empezar a sonar
+ * (pasa de pausa a sonando), por ejemplo porque alguien le dio play allá.
+ */
+function ignorar(id) { ignorado = id; ignoradoSonaba = true; }
+/** Ejecuta algo en el reproductor de este dispositivo aunque se esté controlando otro. */
+function aqui(fn) { const antes = aquiMismo; aquiMismo = true; try { return fn(); } finally { aquiMismo = antes; } }
+
+function interceptarControles() {
+  if (player.__remoto) return;
+  player.__remoto = true;
+  const o = {};
+  for (const k of ['play', 'toggle', 'resume', 'pause', 'next', 'prev', 'seek', 'setVolume', 'playNext', 'addToQueue']) o[k] = player[k].bind(player);
+  const destino = () => (aquiMismo ? null : controlandoA());
+  const mandar = (d, accion, datos) => ordenar(d.id, accion, datos).catch(errorToast).finally(() => setTimeout(pintarBarra, 300));
+  player.play = (songs, start = 0, context = null, opts = {}) => {
+    const d = destino();
+    if (!d || context?.type === 'juntos-oyente') return o.play(songs, start, context, opts);
+    const lista = (songs || []).slice(start, start + 100);
+    if (lista.length) mandar(d, 'reproducir', { cancionIds: lista.map((c) => c.id), indice: 0, segundo: 0 });
+  };
+  player.toggle = () => { const d = destino(); return d ? mandar(d, d.sonando ? 'pause' : 'play') : o.toggle(); };
+  player.resume = () => { const d = destino(); return d ? mandar(d, 'play') : o.resume(); };
+  player.pause = () => { const d = destino(); return d ? mandar(d, 'pause') : o.pause(); };
+  player.next = (auto) => { const d = destino(); return d && !auto ? mandar(d, 'next') : o.next(auto); };
+  player.prev = () => { const d = destino(); return d ? mandar(d, 'prev') : o.prev(); };
+  player.seek = (t) => { const d = destino(); return d ? mandar(d, 'seek', { segundo: Number(t) || 0 }) : o.seek(t); };
+  player.setVolume = (v) => { const d = destino(); return d ? mandar(d, 'volumen', { volumen: Math.max(0, Math.min(1, Number(v))) }) : o.setVolume(v); };
+  // «Reproducir a continuación» / «Agregar a la cola» van a la cola del otro dispositivo
+  player.playNext = (songs) => {
+    const d = destino();
+    if (!d) return o.playNext(songs);
+    const ids = [...(songs || []).map((c) => c.id), ...(d.cola || []).map((c) => c.id)];
+    mandar(d, 'cola', { cancionIds: [...new Set(ids)] }).then(() => toast('Agregada a la cola de ' + d.nombre));
+  };
+  player.addToQueue = (songs) => {
+    const d = destino();
+    if (!d) return o.addToQueue(songs);
+    const ids = [...(d.cola || []).map((c) => c.id), ...(songs || []).map((c) => c.id)];
+    mandar(d, 'cola', { cancionIds: [...new Set(ids)] }).then(() => toast('Agregada a la cola de ' + d.nombre));
+  };
 }
 
 // ═══════════════════ Pantallas ═══════════════════
@@ -318,9 +415,16 @@ let barra = null, relojBarra = null;
 
 /** El dispositivo que se está controlando desde la barra (o null si suena aquí o en ninguno). */
 export function controlandoA() {
-  if (player.playing) return null;
+  if (enSyncPlay()) return null;
   const yo = miDispositivo();
-  const act = dispositivos.find((d) => d.id === activo && d.id !== yo) || dispositivos.find((d) => d.id !== yo && d.sonando);
+  if (elegido) {
+    const d = dispositivos.find((x) => x.id === elegido && x.id !== yo);
+    if (d) return d;
+    elegido = null;
+  }
+  if (player.playing) return null;
+  const act = dispositivos.find((d) => d.id === activo && d.id !== yo && d.id !== ignorado)
+    || dispositivos.find((d) => d.id !== yo && d.sonando && d.id !== ignorado);
   return act && act.cancion ? act : null;
 }
 
@@ -338,6 +442,7 @@ function crearBarra() {
       <button class="br-play" data-br="toggle" aria-label="Reproducir o pausar"></button>
       <button class="icon-btn" data-br="next" aria-label="Siguiente">${icon('next')}</button>
     </div>
+    <label class="br-vol hide-m">${icon('volMax', 'sm')}<input type="range" data-br-vol min="0" max="100" value="100" aria-label="Volumen del otro dispositivo"></label>
     <input type="range" class="br-seek" data-br-seek min="0" max="1" step="1" value="0" aria-label="Posición en el otro dispositivo">`;
   pb.prepend(barra);
   barra.addEventListener('click', async (e) => {
@@ -345,8 +450,12 @@ function crearBarra() {
     if (!d) return;
     const b = e.target.closest('[data-br], [data-br-abrir]');
     if (!b) return;
-    if (b.matches('[data-br-abrir]')) { controlar(d.id); return; }
+    if (b.matches('[data-br-abrir]')) { import('./dispositivos.js').then((m) => m.abrirDispositivos()); return; }
     try { await ordenar(d.id, b.dataset.br); } catch (err) { errorToast(err); }
+  });
+  barra.querySelector('[data-br-vol]').addEventListener('change', (e) => {
+    const d = controlandoA();
+    if (d) ordenar(d.id, 'volumen', { volumen: Number(e.target.value) / 100 }).catch(errorToast);
   });
   barra.querySelector('[data-br-seek]').addEventListener('change', (e) => {
     const d = controlandoA();
@@ -378,6 +487,8 @@ function pintarBarra() {
   const play = barra.querySelector('[data-br="toggle"]');
   play.innerHTML = icon(d.sonando ? 'pause' : 'play');
   play.setAttribute('aria-label', d.sonando ? 'Pausar en ' + d.nombre : 'Reproducir en ' + d.nombre);
+  const v = barra.querySelector('[data-br-vol]');
+  if (document.activeElement !== v) v.value = Math.round((d.volumen ?? 1) * 100);
   const s = barra.querySelector('[data-br-seek]');
   s.max = Math.max(1, Math.round(d.duracion || 0));
   if (document.activeElement !== s) s.value = Math.round(posicion(d));
@@ -404,91 +515,21 @@ function marcarBoton() {
 
 const iconoDe = (d) => (d.plataforma === 'ios' || d.plataforma === 'android' ? 'speaker' : 'devices');
 
-/** Filas de los otros dispositivos para el panel «Dispositivos». */
+/**
+ * «Reproducir en» del panel «Dispositivos» (como Spotify Connect): este dispositivo y los demás de la cuenta.
+ * Al tocar uno la música suena allá y se sigue controlando con el reproductor de siempre.
+ */
 export function htmlOtros(lista) {
-  if (!lista.length) {
-    return `<p class="muted disp-nota">Abre SpaceMusic con tu cuenta en otro teléfono, tablet o computadora y podrás controlarlo desde aquí.</p>`;
-  }
-  return `<div class="remoto-lista">${lista.map((d) => `<button class="remoto-fila" data-remoto="${esc(d.id)}">
-      <span class="remoto-ico ${d.sonando ? 'sonando' : ''}">${icon(iconoDe(d))}</span>
-      <span class="ellipsis"><b>${esc(d.nombre)}${d.activo ? ' <span class="remoto-activo">Activo</span>' : ''}</b><small class="muted ellipsis">${d.cancion ? `${d.sonando ? 'Sonando' : 'En pausa'}: ${esc(d.cancion.nombre)} · ${esc(d.cancion.artista)}` : 'Sin música'}</small></span>
-      ${icon('right', 'sm')}</button>`).join('')}</div>`;
-}
-
-/** Control de un dispositivo: portada, tiempo, botones, volumen y lo que sigue; se actualiza en vivo. */
-export async function controlar(id) {
-  let d = dispositivos.find((x) => x.id === id);
-  if (!d) { await cargarDispositivos(); d = dispositivos.find((x) => x.id === id); }
-  if (!d) { toast('Ese dispositivo ya no está conectado'); return; }
-  let quitar = null, reloj = null;
-  await modal({
-    title: 'Controlar ' + d.nombre,
-    body: '<div class="remoto" data-remoto-box></div>',
-    actions: [{ label: 'Listo', value: null }],
-    onOpen: (m, cerrar) => {
-      const box = m.querySelector('[data-remoto-box]');
-      let ocupado = false;
-      const pintar = () => {
-        const c = d.cancion;
-        box.innerHTML = `${c ? `<div class="remoto-cancion">${coverImg(c.portadaUrl, 320, c.nombre, 'remoto-portada')}
-            <div class="ellipsis"><b class="ellipsis">${esc(c.nombre)}</b><span class="muted ellipsis">${esc(c.artista)}</span></div></div>
-          <input type="range" class="remoto-seek" data-seek min="0" max="${Math.max(1, Math.round(d.duracion || 0))}" step="1" value="${Math.round(posicion(d))}" aria-label="Posición">
-          <div class="remoto-tiempos"><span data-cur>${fmtTime(posicion(d))}</span><span>${fmtTime(d.duracion || 0)}</span></div>`
-          : `<p class="muted">No suena nada en ${esc(d.nombre)}. Puedes pasarle tu música.</p>`}
-          <div class="remoto-ctrls">
-            <button class="np-cb" data-o="prev" aria-label="Anterior" ${c ? '' : 'disabled'}>${icon('rew')}</button>
-            <button class="np-cb big" data-o="toggle" aria-label="${d.sonando ? 'Pausar' : 'Reproducir'}" ${c ? '' : 'disabled'}>${icon(d.sonando ? 'pause' : 'play')}</button>
-            <button class="np-cb" data-o="next" aria-label="Siguiente" ${c ? '' : 'disabled'}>${icon('fwd')}</button>
-          </div>
-          <label class="remoto-vol">${icon('volMin', 'sm')}<input type="range" data-vol min="0" max="100" value="${Math.round((d.volumen ?? 1) * 100)}" aria-label="Volumen de ${esc(d.nombre)}">${icon('volMax', 'sm')}</label>
-          <p class="muted remoto-estado" data-estado aria-live="polite"></p>
-          <div class="row wrap remoto-acc">
-            ${c ? `<button class="btn sm" data-aqui>${icon('download', 'sm')} Escuchar aquí</button>` : ''}
-            ${player.current ? `<button class="btn sm primary" data-pasar>${icon('send', 'sm')} Pasar mi música a ${esc(d.nombre)}</button>` : ''}
-          </div>
-          ${d.cola?.length ? `<h4 class="disp-h">A continuación en ${esc(d.nombre)}</h4><div class="remoto-cola">${d.cola.slice(0, 5).map((x) => `<div class="ellipsis"><b>${esc(x.nombre)}</b> <span class="muted">· ${esc(x.artista)}</span></div>`).join('')}</div>` : ''}`;
-        box.querySelector('[data-vol]').addEventListener('change', (e) => mandar('volumen', { volumen: e.target.value / 100 }));
-        box.querySelector('[data-seek]')?.addEventListener('change', (e) => mandar('seek', { segundo: Number(e.target.value) }));
-      };
-      /** Envía la orden y muestra si se confirmó (como en Spotify: el botón espera la respuesta del dispositivo). */
-      const mandar = async (accion, datos) => {
-        if (ocupado) return;
-        ocupado = true;
-        const est = box.querySelector('[data-estado]');
-        box.classList.add('esperando');
-        try {
-          const r = await ordenar(d.id, accion, datos);
-          if (est) est.textContent = r.legado ? 'Enviado' : '';
-        } catch (err) {
-          if (est) est.textContent = err.message;
-          errorToast(err);
-        } finally { ocupado = false; box.classList.remove('esperando'); }
-      };
-      box.addEventListener('click', async (e) => {
-        const b = e.target.closest('button');
-        if (!b) return;
-        if (b.dataset.o) { mandar(b.dataset.o); return; }
-        try {
-          if (b.matches('[data-aqui]')) { await escucharAqui(d); cerrar(null); }
-          else if (b.matches('[data-pasar]')) { await pasarA(d); cerrar(null); }
-        } catch (err) { errorToast(err); }
-      });
-      // El cluster nuevo llega en vivo: se repinta con el estado confirmado
-      quitar = bus.on('remoto:lista', (l) => {
-        const x = l.find((y) => y.id === id);
-        if (!x) { box.innerHTML = `<p class="muted">${esc(d.nombre)} se desconectó.</p>`; return; }
-        if (document.activeElement?.closest?.('[data-remoto-box] input')) { d = x; return; } // no mover el control que se está arrastrando
-        d = x; pintar();
-      });
-      reloj = setInterval(() => {
-        const c = box.querySelector('[data-cur]'); const s = box.querySelector('[data-seek]');
-        if (c && document.activeElement !== s) { const p = posicion(d); c.textContent = fmtTime(p); if (s) s.value = Math.round(p); }
-      }, 500);
-      pintar();
-    },
-  });
-  quitar?.();
-  clearInterval(reloj);
+  const destino = controlandoA();
+  const fila = (id, nombre, ico, detalle, sel) => `<button class="remoto-fila ${sel ? 'sel' : ''}" data-remoto="${esc(id)}" aria-pressed="${sel}">
+      <span class="remoto-ico ${sel ? 'sonando' : ''}">${icon(ico)}</span>
+      <span class="ellipsis"><b>${esc(nombre)}</b><small class="muted ellipsis">${detalle}</small></span>
+      ${sel ? icon('check', 'sm') : ''}</button>`;
+  const este = fila('este', 'Este dispositivo · ' + miNombre(), 'devices',
+    destino ? 'Toca para que la música vuelva a sonar aquí' : (player.current ? esc(player.current.nombre) : 'Aquí'), !destino);
+  const otros = lista.map((d) => fila(d.id, d.nombre, iconoDe(d),
+    d.cancion ? `${d.sonando ? 'Sonando' : 'En pausa'}: ${esc(d.cancion.nombre)} · ${esc(d.cancion.artista)}` : 'Sin música', destino?.id === d.id)).join('');
+  return `<div class="remoto-lista">${este}${otros}</div>${lista.length ? '' : `<p class="muted disp-nota">Abre SpaceMusic con tu cuenta en otro teléfono, tablet o computadora y aparecerá aquí.</p>`}`;
 }
 
 /** Cambiar el nombre con el que este dispositivo aparece en los demás. */
@@ -505,6 +546,7 @@ export async function renombrar() {
 export function iniciarRemoto() {
   if (!session.token) return;
   marcarInicios();
+  interceptarControles();
   conectar();
   informar(true);
   cargarDispositivos();

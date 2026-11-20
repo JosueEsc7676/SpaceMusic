@@ -190,6 +190,12 @@ public class ExperienciasController {
     @GetMapping("/juntos/{id}")
     public Map<String, Object> sala(@PathVariable Long id) { return juntos.ver(id, CurrentUser.id()); }
 
+    /** Unirse a un SyncPlay con su código de 6 letras y números: {codigo}. */
+    @PostMapping("/juntos/codigo")
+    public Map<String, Object> unirseConCodigo(@RequestBody Map<String, Object> b) {
+        return juntos.unirseConCodigo(CurrentUser.id(), Objects.toString(b.get("codigo"), ""));
+    }
+
     @PostMapping("/juntos/{id}/unirse")
     public Map<String, Object> unirse(@PathVariable Long id) { return juntos.unirse(id, CurrentUser.id()); }
 

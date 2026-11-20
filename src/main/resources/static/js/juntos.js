@@ -11,7 +11,7 @@ import { esc, bus, coverImg, cover, debounce, fmtTime } from './util.js';
 import { icon } from './icons.js';
 import { player } from './player.js';
 import { setHero, setTitle } from './router.js';
-import { toast, errorToast, emptyState, modal } from './ui.js';
+import { toast, errorToast, emptyState, modal, promptDialog } from './ui.js';
 import { avatarPersona } from './views/people.js';
 import { enlaceSala, textoInvitacion } from './syncplay-enlace.js';
 import { ahoraServidor } from './remoto.js';
@@ -196,9 +196,11 @@ export async function invitarPorMensaje(username) {
 export async function compartirEnlace(id) {
   const url = enlaceSala(id);
   if (!url) return;
-  if (window.SpaceMusicApp?.compartir) { window.SpaceMusicApp.compartir('Escucha conmigo en SyncPlay\n' + url); return; }
+  const codigo = motor.sala === id ? motor.estado?.codigo : null;
+  const texto = 'Escucha conmigo en SyncPlay' + (codigo ? ` (código ${codigo})` : '');
+  if (window.SpaceMusicApp?.compartir) { window.SpaceMusicApp.compartir(texto + '\n' + url); return; }
   if (navigator.share) {
-    try { await navigator.share({ title: 'SyncPlay', text: 'Escucha conmigo en SyncPlay', url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+    try { await navigator.share({ title: 'SyncPlay', text: texto, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
   }
   try { await navigator.clipboard.writeText(url); toast('Enlace copiado'); }
   catch { await modal({ title: 'Enlace de SyncPlay', body: `<input class="input" readonly value="${esc(url)}" style="width:100%" onfocus="this.select()">` }); }
@@ -285,7 +287,9 @@ function pintarSala(el, d) {
     <div class="juntos-fondo" ${c ? `style="background-image:url('${esc(cover(c.portadaUrl, 640))}')"` : ''}></div>
     <header class="juntos-cab"><span class="sop-chip warn juntos-vivo">En vivo</span>
       <h1>${d.soyAnfitrion ? 'Tu SyncPlay' : `SyncPlay de ${esc(d.anfitrion?.nombre || '')}`}</h1>
-      <p class="muted">Todos controlan la música: reproducir, pausar, cambiar de canción y mover la posición. Suena igual para todos, en el mismo segundo.</p></header>
+      <p class="muted">Todos controlan la música: reproducir, pausar, cambiar de canción y mover la posición. Suena igual para todos, en el mismo segundo.</p>
+      ${d.codigo ? `<button class="juntos-codigo" data-copiar-codigo title="Copiar el código" aria-label="Código para unirse: ${esc(d.codigo.split('').join(' '))}. Toca para copiarlo">
+        <small>Código para unirse</small><b>${esc(d.codigo.slice(0, 3))} ${esc(d.codigo.slice(3))}</b></button>` : ''}</header>
     <div class="juntos-ahora">${c ? `${coverImg(c.portadaUrl, 320, c.nombre, 'juntos-portada')}
       <div class="juntos-ahora-txt"><span class="muted">${d.sonando ? 'Sonando ahora' : 'En pausa'}</span><h2>${esc(c.nombre)}</h2><p class="muted">${esc(c.artista)}</p></div>`
       : `<div class="juntos-vacia">${icon('note')}<p>${d.dentro ? 'Elige una canción y empezará a sonar para todos.' : 'Únete para escuchar y controlar la música.'}</p></div>`}</div>
@@ -315,6 +319,9 @@ function pintarSala(el, d) {
       : `<p class="muted">${d.dentro ? 'La cola está vacía. Toca «Elegir canción» para sumar o poner canciones.' : 'Únete para sumar canciones.'}</p>`}
   </section>`;
   const id = d.id;
+  el.querySelector('[data-copiar-codigo]')?.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(d.codigo); toast('Código copiado: ' + d.codigo); } catch { toast('Código: ' + d.codigo); }
+  });
   el.querySelector('[data-unirse]')?.addEventListener('click', async () => {
     try { const r = await api(`/api/juntos/${id}/unirse`, { method: 'POST' }); activar(r); pintarSala(el, r); } catch (e) { errorToast(e); }
   });
@@ -363,7 +370,8 @@ export async function juntosView(el, params, _q, isStale) {
     <p class="muted" style="max-width:640px">Inicia SyncPlay e invita a tus amigos: escucharán la misma canción en el mismo segundo
       y todos podrán reproducir, pausar, cambiar de canción y mover la posición.</p>
     <div class="row wrap" style="gap:10px;margin:16px 0 24px"><button class="btn primary" data-abrir>${icon('headphones', 'sm')} Iniciar SyncPlay</button>
-      <button class="btn" data-invitar-amigo>${icon('send', 'sm')} Invitar a un amigo</button></div>
+      <button class="btn" data-invitar-amigo>${icon('send', 'sm')} Invitar a un amigo</button>
+      <button class="btn" data-con-codigo>${icon('users', 'sm')} Unirme con código</button></div>
     ${salas.length ? `<h3 class="juntos-h">Tus SyncPlay e invitaciones</h3><div class="juntos-lista">${salas.map((s) => `<a class="juntos-item" href="#/juntos/${s.id}">
         ${s.cancion ? coverImg(s.cancion.portadaUrl, 64) : `<span class="juntos-item-ico">${icon('users')}</span>`}
         <span class="ellipsis"><b>${s.soyAnfitrion ? 'Tu SyncPlay' : 'SyncPlay de ' + esc(s.anfitrion?.nombre || '')}</b><br>
@@ -373,4 +381,17 @@ export async function juntosView(el, params, _q, isStale) {
     try { const d = await crearSala(); location.hash = '#/juntos/' + d.id; } catch (e) { errorToast(e); }
   };
   el.querySelector('[data-invitar-amigo]').onclick = () => invitar(null);
+  el.querySelector('[data-con-codigo]').onclick = () => unirseConCodigo();
+}
+
+/** Unirse a un SyncPlay con el código que te pasaron (como Spotify Jam): sin invitación. */
+export async function unirseConCodigo() {
+  const codigo = await promptDialog('Unirme a un SyncPlay', { label: 'Código de 6 letras y números', placeholder: 'ABC 123', ok: 'Unirme' });
+  if (!codigo) return;
+  try {
+    const d = await api('/api/juntos/codigo', { method: 'POST', body: { codigo } });
+    activar(d);
+    toast('Te uniste al SyncPlay de ' + (d.anfitrion?.nombre || 'tu amigo'));
+    location.hash = '#/juntos/' + d.id;
+  } catch (e) { errorToast(e); }
 }

@@ -60,7 +60,7 @@ async function htmlSyncPlay() {
     <div class="row wrap disp-sync-acc">
       ${!sala || sala.anfitrion ? `<button class="btn sm" data-sync-crear>${icon('plus', 'sm')} ${sala ? 'Abrir mi SyncPlay' : 'Iniciar SyncPlay'}</button>
       <button class="btn sm" data-sync-invitar>${icon('send', 'sm')} Invitar a un amigo</button>` : ''}
-      ${sala ? `<button class="btn sm" data-sync-compartir>${icon('share', 'sm')} Compartir enlace</button>` : ''}
+      ${sala ? `<button class="btn sm" data-sync-compartir>${icon('share', 'sm')} Compartir enlace</button>` : `<button class="btn sm" data-sync-codigo>${icon('users', 'sm')} Unirme con código</button>`}
       <a class="btn sm ghost" href="#/juntos" data-cerrar-ir>Mis SyncPlay</a></div>`;
 }
 
@@ -70,7 +70,7 @@ export async function abrirDispositivos() {
     title: 'Dispositivos',
     body: `<div class="disp">
       <h4 class="disp-h">Escuchando en</h4><div data-salida><p class="muted">Buscando…</p></div>
-      <h4 class="disp-h disp-h-fila">Tus otros dispositivos <button class="btn sm ghost" data-renombrar title="Cambiar el nombre de este dispositivo">Este: <span data-mi-nombre></span></button></h4>
+      <h4 class="disp-h disp-h-fila">Reproducir en <button class="btn sm ghost" data-renombrar title="Cambiar el nombre de este dispositivo">Este: <span data-mi-nombre></span></button></h4>
       <div data-otros><p class="muted">Buscando…</p></div>
       <h4 class="disp-h">Escuchar en compañía</h4><div data-sync><p class="muted">Cargando…</p></div></div>`,
     actions: [{ label: 'Listo', value: null }],
@@ -92,10 +92,9 @@ export async function abrirDispositivos() {
         try {
           if (b.matches('[data-remoto]')) {
             cerrar(null);
-            // Como Spotify Connect: si aquí suena música, se pasa a ese dispositivo y sigues controlándola desde aquí
-            const d = remoto.otrosDispositivos().find((x) => x.id === b.dataset.remoto);
-            if (d && player.playing) await remoto.pasarA(d);
-            else remoto.controlar(b.dataset.remoto);
+            // Como Spotify Connect: la música suena en el dispositivo elegido y se controla con el reproductor de siempre
+            if (b.dataset.remoto === 'este') await remoto.elegirEste();
+            else await remoto.elegirDispositivo(b.dataset.remoto);
           } else if (b.matches('[data-renombrar]')) {
             await remoto.renombrar();
             pintarOtros(await remoto.cargarDispositivos());
@@ -127,6 +126,9 @@ export async function abrirDispositivos() {
           } else if (b.matches('[data-sync-compartir]')) {
             const j = await import('./juntos.js');
             j.compartirEnlace(j.salaActiva()?.id);
+          } else if (b.matches('[data-sync-codigo]')) {
+            cerrar(null);
+            (await import('./juntos.js')).unirseConCodigo();
           }
         } catch (err) {
           if (err?.name === 'NotAllowedError' || err?.name === 'AbortError') return; // el usuario canceló

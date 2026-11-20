@@ -111,12 +111,25 @@ await prueba('A ve al dispositivo B sonando en «Tus otros dispositivos»', asyn
   return `«${d.nombre}» sonando «${d.cancion.nombre}»`;
 });
 
-await prueba('Desde A: abrir el control de B', async () => {
+await prueba('Desde A: elegir B en «Reproducir en» (sin pantalla aparte: el reproductor de A pasa a controlar B)', async () => {
   await a.js(`document.querySelector('[data-remoto="${idB}"]').click(); return 1;`);
-  await a.hasta(`return !!document.querySelector('[data-remoto-box] [data-o="toggle"]');`);
+  await a.hasta(`const pb = document.getElementById('playerBar'); return pb?.classList.contains('remoto') && !document.querySelector('.modal');`, 6000);
   await espera(600);
   await a.captura('remoto-02-control');
-  return 'pantalla de control abierta';
+  return 'la barra del reproductor de A controla B; no se abrió ninguna ventana';
+});
+
+await prueba('Los controles de siempre de A actúan en B (siguiente canción, reproducir otra, agregar a la cola)', async () => {
+  const [c2, c3] = await a.js(`const r = await fetch('/api/canciones/top?limite=6', { headers: { Authorization: 'Bearer ' + ${JSON.stringify(A.token)} } }); return (await r.json()).filter((c) => c.id !== ${cancion.id}).slice(0, 2);`);
+  await a.js(`${MOD} P.player.play([${JSON.stringify(c2)}], 0, { type: 'prueba' }); return 1;`);
+  await b.hasta(`${MOD} return P.player.playing && P.player.current?.id === ${c2.id};`, 10000);
+  afirmar(!(await a.js(`${MOD} return P.player.playing;`)), 'A no debería sonar: solo controla');
+  await a.js(`${MOD} P.player.addToQueue([${JSON.stringify(c3)}]); return 1;`);
+  await b.hasta(`${MOD} return P.player.items.slice(P.player.index + 1).some((c) => c.id === ${c3.id});`, 6000);
+  // Vuelve la canción de las pruebas siguientes
+  await a.js(`${MOD} P.player.play([${JSON.stringify(cancion)}], 0, { type: 'prueba' }); return 1;`);
+  await b.hasta(`${MOD} return P.player.playing && P.player.current?.id === ${cancion.id};`, 10000);
+  return 'reproducir y agregar a la cola desde A llegaron a B';
 });
 
 await prueba('Pausar y reanudar B desde A (llega en menos de 3 s)', async () => {
@@ -146,7 +159,8 @@ await prueba('A ve el estado nuevo de B al instante (evento en vivo)', async () 
 await prueba('«Escuchar aquí»: la música de B pasa a A y B se pausa', async () => {
   await b.js(`${MOD} P.player.seek(${OBJ}); P.player.pause(); P.player.resume(); return 1;`);
   await espera(1500);
-  await a.js(`document.querySelector('.modal [data-aqui]')?.click() ?? null; return 1;`);
+  // «Reproducir en» → este dispositivo: la música vuelve a A desde el mismo segundo
+  await a.js(`${MOD} await R.elegirEste(); return 1;`);
   await a.hasta(`${MOD} return P.player.playing && P.player.current?.id === ${cancion.id} && P.player.audio.currentTime >= ${OBJ - 1};`, 12000);
   await b.hasta(`${MOD} return !P.player.playing;`, 5000);
   return 'A suena desde el mismo segundo y B quedó en pausa';
@@ -168,7 +182,9 @@ await prueba('Un solo dispositivo suena a la vez: al poner música en A, B se pa
     for (const ev of ['play', 'playing', 'pause', 'ended', 'loadstart']) au.addEventListener(ev, () => window.__reg.push(Math.round(performance.now() - t0) + ' ' + ev + ' ' + Math.round(au.currentTime * 10) / 10));
     const orig = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { window.__reg.push(Math.round(performance.now() - t0) + ' play() ' + String(new Error().stack).replace(/\s+/g, ' ').slice(30, 260)); return orig.apply(this, arguments); };
     return 1;`);
-  await a.js(`${MOD} P.player.play([${JSON.stringify(cancion)}], 0, { type: 'prueba' }); return 1;`);
+  // Después de «Pasar mi música», A controla B: para que suene en A se elige «este dispositivo»
+  await a.js(`${MOD} await R.elegirEste(); return 1;`);
+  await a.js(`${MOD} if (!P.player.playing) P.player.play([${JSON.stringify(cancion)}], 0, { type: 'prueba' }); return 1;`);
   await a.hasta(`${MOD} return P.player.playing;`, 8000);
   await b.hasta(`${MOD} return !P.player.playing;`, 5000).catch(async (e) => {
     const reg = await b.js(`${MOD} return JSON.stringify([R.miDispositivo().slice(0, 6), P.player.playing, window.__reg]);`) + ' A=' + idA.slice(0, 6);
@@ -192,14 +208,15 @@ await prueba('Orden confirmada por el dispositivo (ack) y error si no existe', a
 
 await prueba('Como Spotify Connect: la barra de A muestra «Escuchando en B» y controla B', async () => {
   // B suena; A deja de sonar: la barra de A pasa a controlar B
-  await b.js(`${MOD} P.player.play([${JSON.stringify(cancion)}], 0, { type: 'prueba' }); return 1;`);
+  // (B estaba mostrando A, que sonaba: como en Spotify, primero elige «este dispositivo» para que suene en B)
+  await b.js(`${MOD} await R.elegirEste(); if (!P.player.playing) P.player.play([${JSON.stringify(cancion)}], 0, { type: 'prueba' }); return 1;`);
   await b.hasta(`${MOD} return P.player.playing;`, 8000);
   await a.hasta(`${MOD} await R.cargarDispositivos(); return R.dispositivoActivo() === ${JSON.stringify(idB)};`, 6000).catch(async (e) => {
     const diag = await a.js(`${MOD} return JSON.stringify({ activo: R.dispositivoActivo(), yo: R.miDispositivo(), b: ${JSON.stringify(idB)}, aSuena: P.player.playing,
       lista: R.otrosDispositivos().map((d) => d.id.slice(0, 6) + ':' + (d.sonando ? 'suena' : 'pausa') + (d.activo ? ':activo' : '')) });`);
     throw new Error('B empezó a sonar pero no pasó a ser el activo · ' + diag);
   });
-  await a.js(`${MOD} P.player.pause(); return 1;`);
+  // A quedó en pausa sola (un solo dispositivo suena a la vez) y su barra pasa a controlar B
   const txt = await a.hasta(`const pb = document.getElementById('playerBar'); return pb?.classList.contains('remoto') && document.querySelector('[data-br-donde]')?.textContent;`, 8000);
   await a.captura('remoto-04-barra-escuchando-en');
   // Pausar desde la barra de A pausa B

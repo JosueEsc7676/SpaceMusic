@@ -36,7 +36,7 @@ public class ControlRemotoService {
     /** Tras cerrarse el WebSocket, el dispositivo sigue en la lista unos segundos (recargar la página no lo hace parpadear). */
     static final long GRACIA_CIERRE_MS = 15_000;
     private static final Pattern ID = Pattern.compile("[A-Za-z0-9_-]{8,64}");
-    static final Set<String> ACCIONES = Set.of("play", "pause", "toggle", "next", "prev", "seek", "volumen", "reproducir", "transferir");
+    static final Set<String> ACCIONES = Set.of("play", "pause", "toggle", "next", "prev", "seek", "volumen", "reproducir", "transferir", "cola");
     private static final int MAX_DISPOSITIVOS = 12, MAX_COLA = 10;
 
     /** Por dónde se le habla a un dispositivo conectado por WebSocket (en las pruebas, una lista en memoria). */
@@ -275,6 +275,18 @@ public class ControlRemotoService {
                 o.put("canciones", canciones);
                 o.put("indice", (int) Math.max(0, Math.min(canciones.size() - 1, numero(datos.get("indice"), 0))));
                 o.put("segundo", Math.max(0, numero(datos.get("segundo"), 0)));
+            }
+            // «A continuación» del otro dispositivo (sin tocar la canción que suena); puede quedar vacía
+            case "cola" -> {
+                List<CancionDTO> canciones = new ArrayList<>();
+                if (datos.get("cancionIds") instanceof List<?> l) {
+                    for (Object x : l) {
+                        if (canciones.size() >= 200) break;
+                        Long id = idCancion(x);
+                        if (id != null) biblioteca.porId(id).ifPresent(canciones::add);
+                    }
+                }
+                o.put("canciones", canciones);
             }
             default -> { }
         }
