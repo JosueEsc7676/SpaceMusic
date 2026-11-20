@@ -352,10 +352,25 @@ struct ReproductorVista: View {
                 Text(e).font(.caption).foregroundStyle(Tema.peligro).multilineTextAlignment(.center).padding(.bottom, 6)
             }
 
+            if let d = r.remoto {
+                // Suena en otro dispositivo: el mismo reproductor lo controla (también su volumen)
+                VolumenRemoto()
+                    .padding(.bottom, 8)
+                Button { dispositivos = true } label: {
+                    Label("Sonando en \(d.nombre)", systemImage: IconoDispositivo.de(d.plataforma))
+                        .font(.footnote.weight(.semibold))
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(Capsule().fill(Color.white.opacity(0.14)))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .padding(.bottom, 4)
+            }
+
             HStack(spacing: 0) {
                 botonPanel(.letra, icono: "quote.bubble", nombre: "Letra")
                 Button { dispositivos = true } label: {
-                    Image(systemName: "airplayaudio").frame(width: 44, height: 44).frame(maxWidth: .infinity)
+                    Image(systemName: r.remoto != nil ? "hifispeaker.fill" : "airplayaudio").frame(width: 44, height: 44).frame(maxWidth: .infinity)
                 }
                 .accessibilityLabel("Dispositivos y SyncPlay")
                 botonPanel(.cola, icono: "list.bullet", nombre: "A continuación")
@@ -1043,5 +1058,26 @@ private extension View {
         listRowInsets(EdgeInsets(top: arriba, leading: 26, bottom: abajo, trailing: 26))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
+    }
+}
+
+/// Volumen del otro dispositivo cuando el reproductor lo controla (se manda al soltar el control).
+struct VolumenRemoto: View {
+    @State private var r = Reproductor.compartido
+    @State private var valor: Double = 1
+    @State private var moviendo = false
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "speaker.fill").font(.caption).foregroundStyle(.white.opacity(0.6))
+            Slider(value: $valor, in: 0...1) { editando in
+                moviendo = editando
+                if !editando { r.fijarVolumen(valor) }
+            }
+            .tint(.white)
+            Image(systemName: "speaker.wave.3.fill").font(.caption).foregroundStyle(.white.opacity(0.6))
+        }
+        .onAppear { valor = r.volumenRemoto }
+        .onChange(of: r.volumenRemoto) { _, v in if !moviendo { valor = v } }
+        .accessibilityLabel("Volumen de \(r.remoto?.nombre ?? "el otro dispositivo")")
     }
 }

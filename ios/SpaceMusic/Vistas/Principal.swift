@@ -93,18 +93,15 @@ struct Principal: View {
                     .onTapGesture { avisos.ejecutarAccion() }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                if eventos.chatAbierto == nil, let d = ControlRemoto.compartido.controlando {
-                    MiniRemoto(d: d)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else if reproductor.actual != nil, eventos.chatAbierto == nil {
+                if reproductor.actual != nil, eventos.chatAbierto == nil {
                     MiniReproductor()
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .padding(.vertical, avisos.texto != nil || ((reproductor.actual != nil || ControlRemoto.compartido.controlando != nil) && eventos.chatAbierto == nil) ? 4 : 0)
+            .padding(.vertical, avisos.texto != nil || (reproductor.actual != nil && eventos.chatAbierto == nil) ? 4 : 0)
             // Fondo hasta la barra de pestañas: las filas ya no asoman entre el mini reproductor y las pestañas.
             .background(alignment: .bottom) {
-                if reproductor.actual != nil || ControlRemoto.compartido.controlando != nil, eventos.chatAbierto == nil {
+                if reproductor.actual != nil, eventos.chatAbierto == nil {
                     LinearGradient(stops: [.init(color: .black.opacity(0), location: 0), .init(color: .black.opacity(0.92), location: 0.35),
                                            .init(color: .black, location: 1)], startPoint: .top, endPoint: .bottom)
                         .allowsHitTesting(false)
@@ -119,70 +116,6 @@ struct Principal: View {
 private struct AltoBarraInferior: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
-}
-
-/// Mini reproductor que controla otro de tus dispositivos («Escuchando en Laptop»), como Spotify Connect:
-/// reproducir/pausar y siguiente le mandan la orden; al tocarlo se abre el control completo.
-struct MiniRemoto: View {
-    let d: DispositivoRemoto
-    @State private var control = ControlRemoto.compartido
-    @State private var abierto = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 5) {
-                Button { abierto = true } label: {
-                    HStack(spacing: 10) {
-                        Portada(ruta: d.cancion?.portadaUrl, tamano: 42, radio: 6)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(d.cancion?.nombre ?? "").font(.subheadline.weight(.semibold)).lineLimit(1)
-                            Label("\(d.sonando ? "Escuchando" : "En pausa") en \(d.nombre)", systemImage: "hifispeaker.and.homepod")
-                                .font(.caption.weight(.semibold)).foregroundStyle(Tema.celeste).lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Controlar \(d.nombre): \(d.cancion?.nombre ?? "")")
-                Button { ordenar("toggle") } label: {
-                    Image(systemName: d.sonando ? "pause.fill" : "play.fill").font(.title3).frame(width: 40, height: 40)
-                }
-                .accessibilityLabel(d.sonando ? "Pausar en \(d.nombre)" : "Reproducir en \(d.nombre)")
-                Button { ordenar("next") } label: {
-                    Image(systemName: "forward.fill").font(.body).frame(width: 36, height: 40)
-                }
-                .accessibilityLabel("Siguiente en \(d.nombre)")
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            TimelineView(.periodic(from: .now, by: 1)) { _ in
-                ProgressView(value: d.duracion > 0 ? min(control.posicion(d) / d.duracion, 1) : 0)
-                    .progressViewStyle(.linear)
-                    .tint(Tema.celeste)
-                    .scaleEffect(x: 1, y: 0.6)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 4)
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(white: 0.13))
-                .shadow(color: .black.opacity(0.5), radius: 12, y: 4)
-        )
-        .padding(.horizontal, 8)
-        .sheet(isPresented: $abierto) {
-            NavigationStack { ControlRemotoVista(dispositivoId: d.id) }
-                .presentationDetents([.medium, .large])
-        }
-    }
-
-    private func ordenar(_ accion: String) {
-        Task {
-            do { try await control.ordenar(d.id, accion) }
-            catch { Avisos.compartido.mostrar(error.localizedDescription) }
-        }
-    }
 }
 
 /// Barra pequeña con la canción que suena.
@@ -200,7 +133,13 @@ struct MiniReproductor: View {
                             Portada(ruta: c.portadaUrl, tamano: 42, radio: 6)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(c.nombre).font(.subheadline.weight(.semibold)).lineLimit(1)
-                                Text(c.artista).font(.caption).foregroundStyle(Tema.secundario).lineLimit(1)
+                                if let d = r.remoto {
+                                    // Como Spotify Connect: la música suena en otro dispositivo y se controla desde aquí
+                                    Label("En \(d.nombre)", systemImage: "hifispeaker.fill")
+                                        .font(.caption.weight(.semibold)).foregroundStyle(.white).lineLimit(1)
+                                } else {
+                                    Text(c.artista).font(.caption).foregroundStyle(Tema.secundario).lineLimit(1)
+                                }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -208,10 +147,10 @@ struct MiniReproductor: View {
                     }
                     .accessibilityLabel("Abrir reproductor: \(c.nombre)")
                     Button { dispositivos = true } label: {
-                        Image(systemName: "airplayaudio").frame(width: 36, height: 40)
+                        Image(systemName: r.remoto != nil ? "hifispeaker.fill" : "airplayaudio").frame(width: 36, height: 40)
                             // Punto: está sonando música en otro de tus dispositivos (se puede controlar desde aquí)
                             .overlay(alignment: .topTrailing) {
-                                if ControlRemoto.compartido.sonandoEnOtro != nil {
+                                if r.remoto == nil, ControlRemoto.compartido.sonandoEnOtro != nil {
                                     Circle().fill(Tema.celeste).frame(width: 7, height: 7).offset(x: -4, y: 6)
                                 }
                             }

@@ -38,6 +38,7 @@ final class Reproductor {
     var actual: Cancion? { cola.indices.contains(indice) ? cola[indice] : nil }
     /// Tiempo exacto del audio para la letra palabra a palabra. Es una lectura directa: no provoca redibujos.
     var tiempoExacto: Double {
+        if remoto != nil { return tiempoRemoto }
         let t = jugador.currentTime().seconds
         return t.isFinite ? t : tiempo
     }
@@ -137,8 +138,9 @@ final class Reproductor {
     private func marcarInicio() { inicioUsuario = Date().timeIntervalSince1970 * 1000 }
 
     private func externo(_ a: AccionExterna) -> Bool {
-        guard !aplicandoExterno, let c = controlExterno else { return false }
-        return c(a)
+        guard !aplicandoExterno else { return false }
+        if let c = controlExterno, c(a) { return true }
+        return ordenRemota(a)
     }
 
     /// Ejecuta acciones del reproductor sin que se conviertan en órdenes para el SyncPlay.
@@ -147,6 +149,186 @@ final class Reproductor {
         aplicandoExterno = true
         fn()
         aplicandoExterno = antes
+    }
+
+    // MARK: - Otro dispositivo (como Spotify Connect)
+
+    /// Dispositivo de la cuenta que este reproductor controla. La interfaz es la misma de siempre: muestra su canción,
+    /// tiempo, letra y cola, y los botones (reproducir, pausa, siguiente, anterior, mover, volumen y cola) le mandan
+    /// la orden. Mientras tanto en este iPhone no suena nada.
+    private(set) var remoto: DispositivoRemoto?
+    /// Volumen del otro dispositivo (0 a 1).
+    private(set) var volumenRemoto: Double = 1
+    @ObservationIgnored private var anclaRemota: (segundo: Double, cuando: Date) = (0, .distantPast)
+    /// Tras una orden propia se muestra el resultado esperado al instante y no se pisa hasta que llegue la confirmación.
+    @ObservationIgnored private var optimistaHasta = Date.distantPast
+    @ObservationIgnored private var relojRemoto: Task<Void, Never>?
+    /// Lo que había aquí antes de controlar el otro dispositivo (vuelve si se deja de controlar sin traer la música).
+    @ObservationIgnored private var guardadoLocal: (cola: [Cancion], indice: Int, tiempo: Double, contexto: String)?
+
+    /// Segundo en que va el otro dispositivo ahora (con el reloj del servidor).
+    private var tiempoRemoto: Double {
+        let t = anclaRemota.segundo + (sonando ? Date().timeIntervalSince(anclaRemota.cuando) : 0)
+        return duracion > 0 ? min(t, duracion) : t
+    }
+
+    /// Lo llama `ControlRemoto` cada vez que cambia el estado de la cuenta: refleja el dispositivo (o nil para dejarlo).
+    func reflejar(_ d: DispositivoRemoto?) {
+        guard let d, let c = d.cancion else {
+            if remoto != nil { salirDeRemoto(restaurar: true) }
+            return
+        }
+        let entrando = remoto == nil
+        remoto = d
+        if entrando { entrarEnRemoto() }
+        guard entrando || Date() >= optimistaHasta else { return }
+        let colaNueva = [c] + (d.cola ?? [])
+        if actual?.id != c.id || cola.map(\.id) != colaNueva.map(\.id) {
+            let otraCancion = actual?.id != c.id
+            cola = colaNueva
+            indice = 0
+            if otraCancion { Letras.compartido.cargar(c) }
+        }
+        duracion = d.duracion > 0 ? d.duracion : Double(c.duracionSegundos)
+        sonando = d.sonando
+        cargando = false
+        volumenRemoto = d.volumen
+        anclaRemota = (ControlRemoto.compartido.posicion(d), Date())
+        tiempo = anclaRemota.segundo
+    }
+
+    private func entrarEnRemoto() {
+        if !cola.isEmpty { guardadoLocal = (cola, indice, tiempo, contexto) }
+        vigilante?.cancel()
+        intencionSonar = false
+        jugador.pause()
+        itemActual = nil
+        itemSiguiente = nil
+        indiceSiguiente = nil
+        jugador.removeAllItems()
+        error = nil
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        relojRemoto?.cancel()
+        relojRemoto = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.remoto != nil else { return }
+                self.tiempo = self.tiempoRemoto
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
+    }
+
+    /// Deja de controlar el otro dispositivo. `restaurar`: vuelve lo que había aquí (en pausa); si no, queda vacío
+    /// para que quien llama ponga la música aquí (por ejemplo «Escuchar en este iPhone»).
+    func salirDeRemoto(restaurar: Bool) {
+        guard remoto != nil else { return }
+        relojRemoto?.cancel()
+        relojRemoto = nil
+        remoto = nil
+        optimistaHasta = .distantPast
+        sonando = false
+        cargando = false
+        let g = guardadoLocal
+        guardadoLocal = nil
+        if restaurar, let g, g.cola.indices.contains(g.indice) {
+            cola = g.cola
+            indice = g.indice
+            contexto = g.contexto
+            restaurando = true
+            cargarActual(reproducir: false)
+            restaurando = false
+            let t = g.tiempo
+            Task { @MainActor [weak self] in
+                for _ in 0..<40 {
+                    guard let self, self.remoto == nil else { return }
+                    if self.listaParaBuscar { self.buscar(t); return }
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
+            }
+        } else {
+            cola = []
+            indice = 0
+            tiempo = 0
+            duracion = 0
+            actualizarNowPlaying()
+        }
+    }
+
+    private func anclarRemoto(_ segundo: Double, sonando nuevo: Bool) {
+        sonando = nuevo
+        anclaRemota = (segundo, Date())
+        tiempo = segundo
+    }
+
+    /// Manda al otro dispositivo lo que se tocó en el reproductor. Devuelve true si la acción era para él.
+    private func ordenRemota(_ a: AccionExterna) -> Bool {
+        guard let d = remoto else { return false }
+        let id = d.id
+        func mandar(_ accion: String, _ datos: [String: Any] = [:]) {
+            optimistaHasta = Date().addingTimeInterval(2)
+            Task { @MainActor in
+                do { try await ControlRemoto.compartido.ordenar(id, accion, datos) }
+                catch {
+                    self.optimistaHasta = .distantPast
+                    Avisos.compartido.error(error)
+                    ControlRemoto.compartido.reflejar()
+                }
+            }
+        }
+        switch a {
+        case .poner(let canciones, let desde, _):
+            guard !canciones.isEmpty else { return true }
+            let lista = Array(canciones[min(max(desde, 0), canciones.count - 1)...].prefix(100))
+            cola = lista
+            indice = 0
+            if let c = lista.first { duracion = Double(c.duracionSegundos); Letras.compartido.cargar(c) }
+            anclarRemoto(0, sonando: true)
+            mandar("reproducir", ["cancionIds": lista.map(\.id), "indice": 0, "segundo": 0])
+        case .continuar:
+            anclarRemoto(tiempoRemoto, sonando: true)
+            mandar("play")
+        case .pausar:
+            anclarRemoto(tiempoRemoto, sonando: false)
+            mandar("pause")
+        case .alternar:
+            let nuevo = !sonando
+            anclarRemoto(tiempoRemoto, sonando: nuevo)
+            mandar(nuevo ? "play" : "pause")
+        case .siguiente:
+            if indice + 1 < cola.count {
+                cola.removeFirst(indice + 1)
+                indice = 0
+                if let c = actual { duracion = Double(c.duracionSegundos); Letras.compartido.cargar(c) }
+                anclarRemoto(0, sonando: true)
+            }
+            mandar("next")
+        case .anterior:
+            mandar("prev")
+        case .buscar(let t):
+            anclarRemoto(max(0, t), sonando: sonando)
+            mandar("seek", ["segundo": max(0, t)])
+        case .retomarLocal:
+            return false
+        }
+        return true
+    }
+
+    /// Cambios de «A continuación» hechos aquí (agregar, quitar, mover, borrar) se mandan al otro dispositivo.
+    private func enviarColaRemota() {
+        guard let d = remoto else { return }
+        optimistaHasta = Date().addingTimeInterval(2)
+        let ids = siguientes.prefix(100).map(\.id)
+        Task { @MainActor in
+            do { try await ControlRemoto.compartido.ordenar(d.id, "cola", ["cancionIds": ids]) }
+            catch { Avisos.compartido.error(error) }
+        }
+    }
+
+    /// Orden «cola» que llega de otro dispositivo: cambia lo que sigue sin tocar la canción actual.
+    func reemplazarSiguientes(_ canciones: [Cancion]) {
+        guard remoto == nil, actual != nil else { return }
+        cola = Array(cola[...indice]) + canciones
+        prepararSiguiente()
     }
 
     /// Pausa solo en este iPhone (llamada, audífonos desconectados, temporizador, fallo al cargar).
@@ -159,8 +341,8 @@ final class Reproductor {
     }
     func quitarPausaLocal() { pausaLocal = false }
 
-    /// La línea de la letra que suena aparece en la pantalla bloqueada (y en el Centro de control, la isla dinámica
-    /// y CarPlay) en lugar del título; debajo queda «Canción · Artista». Se puede apagar desde el menú de la letra.
+    /// La letra que suena aparece en la pantalla bloqueada dibujada sobre la portada (grande y legible): la línea
+    /// actual en blanco y la siguiente atenuada. El título y el artista quedan normales. Se apaga en el menú de la letra.
     var letraEnBloqueo: Bool = UserDefaults.standard.object(forKey: "letraEnBloqueo") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(letraEnBloqueo, forKey: "letraEnBloqueo")
@@ -169,14 +351,77 @@ final class Reproductor {
         }
     }
     @ObservationIgnored private var lineaBloqueo: String?
+    @ObservationIgnored private var siguienteBloqueo: String?
+    /// Portada original (para dibujar la letra encima) y la última imagen con letra.
+    @ObservationIgnored private var portadaImagen: (id: Int, img: UIImage)?
+    @ObservationIgnored private var arteLetra: (clave: String, arte: MPMediaItemArtwork)?
 
-    /// Línea de la letra sincronizada que suena ahora (nil en las pausas o si la canción no tiene letra con tiempos).
-    private func lineaActualLetra(_ t: Double) -> String? {
+    /// Línea de la letra sincronizada que suena ahora y la siguiente (nil en las pausas o sin letra con tiempos).
+    private func lineaActualLetra(_ t: Double) -> (actual: String, siguiente: String?)? {
         let letras = Letras.compartido
         guard let c = actual, letras.cancionId == c.id, letras.sincronizada,
               let i = letras.indice(en: letras.tiempoLetra(t)), letras.lineas.indices.contains(i) else { return nil }
         let texto = letras.lineas[i].texto.trimmingCharacters(in: .whitespaces)
-        return texto.isEmpty ? nil : texto
+        guard !texto.isEmpty else { return nil }
+        let siguiente = letras.lineas[(i + 1)...].first { !$0.texto.trimmingCharacters(in: .whitespaces).isEmpty }?.texto
+        return (texto, siguiente)
+    }
+
+    /// Portada con la letra encima (800 × 800): portada desenfocada y oscurecida, línea actual grande y la siguiente
+    /// más tenue. Se ve en la pantalla bloqueada a buen tamaño, a diferencia del título, que se corta.
+    private static func portadaConLetra(_ linea: String, siguiente: String?, portada: UIImage?) -> UIImage {
+        let lado: CGFloat = 800
+        let marco = CGRect(x: 0, y: 0, width: lado, height: lado)
+        let formato = UIGraphicsImageRendererFormat.default()
+        formato.scale = 1
+        return UIGraphicsImageRenderer(size: marco.size, format: formato).image { ctx in
+            UIColor.black.setFill()
+            ctx.fill(marco)
+            if let portada {
+                // Desenfoque barato: la portada a 36 px y después estirada
+                let chica = UIGraphicsImageRenderer(size: CGSize(width: 36, height: 36), format: formato).image { _ in
+                    portada.draw(in: CGRect(x: 0, y: 0, width: 36, height: 36))
+                }
+                chica.draw(in: marco.insetBy(dx: -40, dy: -40))
+                UIColor(white: 0, alpha: 0.5).setFill()
+                ctx.fill(marco)
+            }
+            func fuente(_ tam: CGFloat, _ peso: UIFont.Weight) -> UIFont {
+                let f = UIFont.systemFont(ofSize: tam, weight: peso)
+                return f.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: tam) } ?? f
+            }
+            let estilo = NSMutableParagraphStyle()
+            estilo.alignment = .left
+            estilo.lineBreakMode = .byWordWrapping
+            estilo.lineSpacing = 4
+            let margen: CGFloat = 70
+            let ancho = lado - margen * 2
+            func medir(_ t: String, _ a: [NSAttributedString.Key: Any]) -> CGFloat {
+                ceil((t as NSString).boundingRect(with: CGSize(width: ancho, height: .greatestFiniteMagnitude),
+                                                  options: .usesLineFragmentOrigin, attributes: a, context: nil).height)
+            }
+            // La línea actual lo más grande que quepa
+            var tam: CGFloat = 78
+            var a: [NSAttributedString.Key: Any] = [:]
+            var alto: CGFloat = 0
+            repeat {
+                a = [.font: fuente(tam, .heavy), .foregroundColor: UIColor.white, .paragraphStyle: estilo]
+                alto = medir(linea, a)
+                tam -= 4
+            } while alto > lado * 0.52 && tam > 34
+            let b: [NSAttributedString.Key: Any] = [.font: fuente(max(30, tam * 0.55), .bold),
+                                                    .foregroundColor: UIColor(white: 1, alpha: 0.5), .paragraphStyle: estilo]
+            let altoSig = siguiente.map { min(medir($0, b), lado * 0.22) } ?? 0
+            let espacio: CGFloat = siguiente == nil ? 0 : 30
+            var y = max(margen, (lado - alto - espacio - altoSig) / 2)
+            (linea as NSString).draw(with: CGRect(x: margen, y: y, width: ancho, height: alto),
+                                     options: .usesLineFragmentOrigin, attributes: a, context: nil)
+            y += alto + espacio
+            if let siguiente {
+                (siguiente as NSString).draw(with: CGRect(x: margen, y: y, width: ancho, height: altoSig),
+                                             options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: b, context: nil)
+            }
+        }
     }
 
     /// Dentro de SyncPlay se guarda más audio por adelantado: los cortes de red no detienen la música.
@@ -206,6 +451,15 @@ final class Reproductor {
     private(set) var volumen: Double = 1
 
     func fijarVolumen(_ v: Double) {
+        if let d = remoto {
+            volumenRemoto = min(1, max(0, v))
+            optimistaHasta = Date().addingTimeInterval(2)
+            let nuevo = volumenRemoto
+            Task { @MainActor in
+                do { try await ControlRemoto.compartido.ordenar(d.id, "volumen", ["volumen": nuevo]) } catch { Avisos.compartido.error(error) }
+            }
+            return
+        }
         volumen = min(1, max(0, v))
         jugador.volume = Float(volumen)
     }
@@ -225,7 +479,7 @@ final class Reproductor {
     }
 
     func guardarEstado() {
-        guard !restaurando, !cola.isEmpty else { return }
+        guard !restaurando, !cola.isEmpty, remoto == nil else { return }
         let estado = EstadoGuardado(cola: cola, original: ordenOriginal, indice: indice, tiempo: tiempo,
                                     contexto: contexto, aleatorio: aleatorio, repetir: repetir.rawValue)
         if let datos = try? JSONEncoder().encode(estado) { CopiaLocal.guardar(datos, en: CopiaLocal.archivo("reproductor")) }
@@ -371,6 +625,7 @@ final class Reproductor {
 
     func saltarA(_ i: Int) {
         guard cola.indices.contains(i) else { return }
+        if remoto != nil { _ = ordenRemota(.poner(canciones: cola, desde: i, contexto: contexto)); return }
         registrarEscucha()
         indice = i
         cargarActual(reproducir: true)
@@ -571,6 +826,7 @@ final class Reproductor {
 
     /// Deja lista la siguiente canción dentro del reproductor.
     private func prepararSiguiente() {
+        if remoto != nil { enviarColaRemota(); return }
         guard contexto != "juntos-oyente" else { return }
         let restante = duracion > 0 ? duracion - tiempo : .infinity
         if jugador.currentItem != nil, itemActual != nil, !actualCompleta, restante >= 40, cola.count - indice > 1 {
@@ -652,7 +908,7 @@ final class Reproductor {
     /// Pide canciones parecidas al servidor y las agrega a la cola.
     func pedirRadio(cantidad: Int) async {
         let version = versionCola
-        guard pidiendoRadio != version, let semilla = cola.last ?? actual else { return }
+        guard remoto == nil, pidiendoRadio != version, let semilla = cola.last ?? actual else { return }
         pidiendoRadio = version
         defer { if pidiendoRadio == version { pidiendoRadio = nil } }
         let excluir = cola.suffix(150).map { String($0.id) }.joined(separator: ",")
@@ -684,7 +940,7 @@ final class Reproductor {
         obsControl = jugador.observe(\.timeControlStatus, options: [.new]) { [weak self] p, _ in
             let estado = p.timeControlStatus
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.remoto == nil else { return }
                 self.sonando = estado == .playing
                 self.cargando = estado == .waitingToPlayAtSpecifiedRate
                 self.actualizarNowPlaying()
@@ -762,7 +1018,11 @@ final class Reproductor {
         quizaPrecargar()
         if letraEnBloqueo {
             let linea = lineaActualLetra(t)
-            if linea != lineaBloqueo { lineaBloqueo = linea; actualizarNowPlaying() }
+            if linea?.actual != lineaBloqueo {
+                lineaBloqueo = linea?.actual
+                siguienteBloqueo = linea?.siguiente
+                actualizarNowPlaying()
+            }
         }
         if Date().timeIntervalSince(ultimoGuardado) >= 5 { guardarEstado(); ultimoGuardado = Date() }
     }
@@ -842,18 +1102,27 @@ final class Reproductor {
             return
         }
         MPRemoteCommandCenter.shared().likeCommand.isActive = Biblioteca.compartida.esFavorita(c.id)
-        // Con la letra en la pantalla bloqueada: la línea que suena arriba y «Canción · Artista» debajo
-        let linea = letraEnBloqueo ? lineaBloqueo : nil
         var info: [String: Any] = [
-            MPMediaItemPropertyTitle: linea ?? c.nombre,
-            MPMediaItemPropertyArtist: linea == nil ? c.artista : "\(c.nombre) · \(c.artista)",
+            MPMediaItemPropertyTitle: c.nombre,
+            MPMediaItemPropertyArtist: c.artista,
             MPMediaItemPropertyAlbumTitle: c.album,
             MPMediaItemPropertyPlaybackDuration: duracion,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: tiempo,
             MPNowPlayingInfoPropertyPlaybackRate: sonando ? 1.0 : 0.0,
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
-        if let p = portadaNowPlaying, p.id == c.id { info[MPMediaItemPropertyArtwork] = p.arte }
+        if letraEnBloqueo, let linea = lineaBloqueo {
+            // La letra dibujada sobre la portada (se rehace solo cuando cambia la línea)
+            let clave = "\(c.id)|\(linea)"
+            if arteLetra?.clave != clave {
+                let img = Reproductor.portadaConLetra(linea, siguiente: siguienteBloqueo,
+                                                      portada: portadaImagen?.id == c.id ? portadaImagen?.img : nil)
+                arteLetra = (clave, MPMediaItemArtwork(boundsSize: img.size) { _ in img })
+            }
+            info[MPMediaItemPropertyArtwork] = arteLetra?.arte
+        } else if let p = portadaNowPlaying, p.id == c.id {
+            info[MPMediaItemPropertyArtwork] = p.arte
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
@@ -863,6 +1132,8 @@ final class Reproductor {
             guard let img = await CacheImagenes.compartida.imagen(ruta), actual?.id == c.id else { return }
             let arte = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
             portadaNowPlaying = (c.id, arte)
+            portadaImagen = (c.id, img)
+            arteLetra = nil
             actualizarNowPlaying()
         }
     }

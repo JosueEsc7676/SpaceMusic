@@ -49,11 +49,67 @@ final class ControlRemoto {
     var otros: [DispositivoRemoto] { dispositivos.filter { $0.id != id } }
     /// Otro dispositivo donde está sonando música ahora.
     var sonandoEnOtro: DispositivoRemoto? { otros.first { $0.sonando } }
-    /// Como Spotify Connect: si aquí no suena nada y la música está en otro dispositivo, el mini reproductor lo controla.
-    var controlando: DispositivoRemoto? {
-        guard !Reproductor.compartido.sonando, !EscuchaJuntos.compartida.enSyncPlay else { return nil }
-        let candidato = otros.first { $0.id == activo } ?? otros.first { $0.sonando }
-        return candidato?.cancion == nil ? nil : candidato
+    /// Dispositivo que se controla con el reproductor de siempre (como Spotify Connect), o nil si la música es de aquí.
+    var controlando: DispositivoRemoto? { Reproductor.compartido.remoto }
+
+    /// Elegido en «Dispositivos». Sin elección, se controla solo el dispositivo activo de la cuenta cuando aquí no suena nada.
+    @ObservationIgnored private var elegido: String?
+    /// Dispositivo que se dejó de controlar a propósito («Este iPhone»): no se vuelve a tomar solo hasta que vuelva a sonar.
+    @ObservationIgnored private var ignorado: String? { didSet { if ignorado != nil { ignoradoSonaba = true } } }
+    /// Si el ignorado estaba sonando en el último estado: vuelve a tomarse solo cuando pasa de pausa a sonando.
+    @ObservationIgnored private var ignoradoSonaba = true
+
+    /// A qué dispositivo apunta el reproductor ahora.
+    var destino: DispositivoRemoto? {
+        guard Sesion.compartida.conectado, !EscuchaJuntos.compartida.enSyncPlay else { return nil }
+        let r = Reproductor.compartido
+        if let elegido, let d = otros.first(where: { $0.id == elegido }) { return d }
+        // Si aquí suena música, la música es de aquí
+        guard r.remoto != nil || !r.sonando else { return nil }
+        guard let a = activo, a != id, a != ignorado, let d = otros.first(where: { $0.id == a }), d.cancion != nil else { return nil }
+        return d
+    }
+
+    /// Pone el reproductor en el dispositivo que corresponde (o lo devuelve a este iPhone).
+    func reflejar() { Reproductor.compartido.reflejar(destino) }
+
+    /// «Dispositivos» → otro dispositivo: desde ahora la música suena allá y se controla con el mismo reproductor.
+    /// Si aquí estaba sonando algo, pasa allá desde el mismo segundo (y aquí se pausa).
+    func elegir(_ d: DispositivoRemoto) async {
+        let r = Reproductor.compartido
+        if r.remoto == nil, let actual = r.actual, r.sonando || d.cancion == nil {
+            let lista = [actual] + r.siguientes.prefix(99)
+            let segundo = r.tiempo
+            do {
+                try await ordenar(d.id, "transferir", ["cancionIds": lista.map(\.id), "indice": 0, "segundo": segundo])
+            } catch {
+                Avisos.compartido.error(error)
+                return
+            }
+            r.sinControlExterno { r.pausar() }
+        }
+        elegido = d.id
+        ignorado = nil
+        reflejar()
+        Avisos.compartido.mostrar("Ahora suena en \(d.nombre)")
+    }
+
+    /// «Dispositivos» → este iPhone: si el otro estaba sonando, la música sigue aquí desde el mismo segundo.
+    func elegirEsteIPhone() async {
+        elegido = nil
+        let r = Reproductor.compartido
+        guard let d = r.remoto else { return }
+        ignorado = d.id
+        if d.sonando, let c = d.cancion {
+            let lista = [c] + (d.cola ?? [])
+            let segundo = posicion(d)
+            r.salirDeRemoto(restaurar: false)
+            r.reproducir(lista, desde: 0, contexto: "remoto")
+            buscarCuandoEsteLista(segundo)
+            try? await ordenar(d.id, "pause")
+        } else {
+            r.salirDeRemoto(restaurar: true)
+        }
     }
 
     /// Identificador fijo de este iPhone (aleatorio, sin datos personales).
@@ -229,12 +285,27 @@ final class ControlRemoto {
         if let v { if v < version { return }; version = v }   // un cluster que llegó tarde no pisa al actual
         if let a { activo = a }
         dispositivos = lista
+        // El dispositivo que se dejó de controlar volvió a sonar: se vuelve a mostrar aquí
+        if let i = ignorado {
+            if let d = lista.first(where: { $0.id == i }) {
+                if d.sonando && !ignoradoSonaba { ignorado = nil } else { ignoradoSonaba = d.sonando }
+            } else {
+                ignorado = nil
+            }
+        }
+        if let e = elegido, !lista.contains(where: { $0.id == e }) { elegido = nil }
+        reflejar()
     }
 
     // MARK: Estado de este iPhone
 
     private func estado() -> [String: Any] {
         let r = Reproductor.compartido
+        // Controlando otro dispositivo aquí no suena nada: se informa vacío (si no, parecería que suena en dos)
+        if r.remoto != nil {
+            return ["dispositivo": id, "nombre": nombre, "plataforma": "ios", "segundo": 0, "duracion": 0,
+                    "volumen": r.volumen, "inicio": 0, "sonando": false, "cola": [Int]()]
+        }
         var e: [String: Any] = [
             "dispositivo": id, "nombre": nombre, "plataforma": "ios",
             "segundo": r.tiempo, "duracion": r.duracion, "volumen": r.volumen, "inicio": r.inicioUsuario,
@@ -261,6 +332,7 @@ final class ControlRemoto {
             cambio = true
         }
         if cambio { await informar() }
+        reflejar()
     }
 
     func informar(forzar: Bool = false) async {
@@ -319,7 +391,18 @@ final class ControlRemoto {
         let numero = { (k: String) -> Double in (o[k] as? NSNumber)?.doubleValue ?? 0 }
         var ok = true
         var error: String?
-        switch o["accion"] as? String {
+        let accion = o["accion"] as? String
+        if r.remoto != nil {
+            // Aquí no suena nada (se controla otro dispositivo): solo «reproducir aquí» trae la música
+            guard accion == "reproducir" || accion == "transferir" else {
+                if porWS, let idOrden = o["id"] as? String { Task { await enviar(["tipo": "ack", "id": idOrden, "ok": true]) } }
+                return
+            }
+            elegido = nil
+            ignorado = r.remoto?.id
+            r.salirDeRemoto(restaurar: false)
+        }
+        switch accion {
         case "play":
             if r.actual != nil { if !r.sonando { r.continuar() } } else { ok = false; error = "No hay nada para reproducir" }
         case "pause": if r.sonando { r.pausar() }
@@ -328,6 +411,8 @@ final class ControlRemoto {
         case "prev": r.anterior()
         case "seek": r.buscar(numero("segundo"))
         case "volumen": r.fijarVolumen(numero("volumen"))
+        case "cola":
+            r.reemplazarSiguientes((try? JSONDecoder().decode(OrdenCanciones.self, from: datos))?.canciones ?? [])
         case "reproducir", "transferir":
             if let canciones = (try? JSONDecoder().decode(OrdenCanciones.self, from: datos))?.canciones, !canciones.isEmpty {
                 let indice = min(max(0, Int(numero("indice"))), canciones.count - 1)
@@ -414,6 +499,9 @@ final class ControlRemoto {
     /// Trae a este iPhone lo que suena en otro dispositivo (desde el mismo segundo); el servidor pausa el otro.
     func escucharAqui(_ d: DispositivoRemoto) async {
         guard let c = d.cancion else { return }
+        elegido = nil
+        ignorado = d.id
+        Reproductor.compartido.salirDeRemoto(restaurar: false)
         Reproductor.compartido.reproducir([c] + (d.cola ?? []), desde: 0, contexto: "remoto")
         buscarCuandoEsteLista(posicion(d))
         if d.sonando { try? await ordenar(d.id, "pause") }

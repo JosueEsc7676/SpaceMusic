@@ -22,6 +22,8 @@ struct SalaJuntos: Decodable, Identifiable {
     var hayAnterior: Bool
     /// Lo último que hizo alguien (para avisar «Ana pausó»).
     var ultimaAccion: [String: String]?
+    /// Código para unirse (solo lo ven quienes están dentro), como Spotify Jam.
+    var codigo: String?
     init(from decoder: Decoder) throws {
         let c = try decoder.campos()
         id = c.entero("id") ?? 0; dentro = c.bool("dentro") ?? false
@@ -30,6 +32,7 @@ struct SalaJuntos: Decodable, Identifiable {
         personas = c.lista("personas"); invitados = c.lista("invitados"); cola = c.lista("cola")
         ts = c.numero("ts"); version = c.entero("version") ?? -1; hayAnterior = c.bool("hayAnterior") ?? false
         ultimaAccion = c.v("ultimaAccion")
+        codigo = c.texto("codigo")
     }
 }
 
@@ -85,6 +88,8 @@ struct SalaJuntos: Decodable, Identifiable {
         if sala?.id != s.id { version = -1; aplicada = -1; ajuste = AjusteSincronia() }
         Reproductor.compartido.controlExterno = { [weak self] a in self?.interceptar(a) ?? false }
         Reproductor.compartido.bufferAmplio = true
+        // En SyncPlay la música suena aquí: se deja de controlar otro dispositivo
+        Reproductor.compartido.salirDeRemoto(restaurar: false)
         recibir(s)
         revision?.cancel()
         let cuenta = Sesion.compartida.usuario?.id
@@ -133,6 +138,7 @@ struct SalaJuntos: Decodable, Identifiable {
         r.bufferAmplio = false
         r.quitarPausaLocal()
         r.ajustarVelocidad(1)
+        ControlRemoto.compartido.reflejar()
     }
 
     // MARK: Seguir el estado del servidor

@@ -1,5 +1,10 @@
 # Registro de cambios
 
+## iPhone: el mismo reproductor controla tus otros dispositivos, SyncPlay con código y letra sobre la portada
+- **Como Spotify Connect, sin pantallas extra** (`Reproductor.remoto`, `reflejar`, `ordenRemota`; `ControlRemoto.destino`, `elegir`, `elegirEsteIPhone`): se quitaron la pantalla «Controlar…» y el mini reproductor aparte. Al elegir otro dispositivo en Dispositivos → «Reproducir en», el reproductor de siempre (mini y completo, letra incluida) muestra su canción, tiempo y cola, y reproducir, pausar, anterior/siguiente, mover, volumen, elegir canciones y la cola («cola», agregar, quitar, mover) le mandan la orden. Aquí no suena nada mientras tanto y se informa vacío. Se toma solo el dispositivo activo cuando aquí no suena nada; «Este iPhone» trae la música desde el mismo segundo. Las órdenes que traen música («reproducir», «transferir») salen de ese modo.
+- **SyncPlay con código** (`JuntosVista`): código grande para copiar en la sala, «Unirme con código» y el código en el enlace compartido.
+- **Letra en la pantalla bloqueada sobre la portada** (`Reproductor.portadaConLetra`): en vez de poner la línea en el título (se cortaba), se dibuja grande sobre la portada desenfocada, con la siguiente línea atenuada; el título y el artista quedan normales.
+
 ## iPhone: versos desde la letra, traductor, letra en la pantalla bloqueada y dedicatorias ordenadas
 - **Versos desde la letra** (`LetraCompleta` en `ReproductorVista.swift`): botón «Versos» arriba de la letra; se tocan los versos (hasta 8) y «Crear imagen» abre la imagen con Compartir y Guardar en Fotos (`NSPhotoLibraryAddUsageDescription`). Ya no se abre otra ventana para elegir. «Compartir versos como imagen» del menú y de la letra ampliada usan lo mismo.
 - **Traductor de la letra** (`TraducirLetra.swift`): traducción del propio iPhone (Apple Translation, sin mandar la letra a otros servicios). iOS 18: la traducción aparece debajo de cada línea; iOS 17.4: hoja de traducción del sistema; antes de 17.4 no aparece el botón. Las líneas que ya están en español no se repiten.

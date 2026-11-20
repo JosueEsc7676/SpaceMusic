@@ -14,6 +14,8 @@ struct JuntosVista: View {
     @State private var salaElegida: Int?
     @State private var posicion: Double?
     @State private var ahora = Date()
+    @State private var pidiendoCodigo = false
+    @State private var codigo = ""
     @Environment(\.dismiss) private var cerrar
 
     var body: some View {
@@ -25,6 +27,7 @@ struct JuntosVista: View {
                 Section {
                     CabeceraExperiencia(icono: "headphones", titulo: "SyncPlay", texto: "Escuchen la misma canción en el mismo segundo. Todos pueden reproducir, pausar, cambiar de canción y mover la posición.")
                     Button { ejecutar { let s = try await motor.crear(); salaElegida = s.id } } label: { Label("Iniciar SyncPlay", systemImage: "person.2.wave.2") }
+                    Button { codigo = ""; pidiendoCodigo = true } label: { Label("Unirme con código", systemImage: "number") }
                 }
                 ForEach(salas) { s in
                     NavigationLink { JuntosVista(id: s.id) } label: {
@@ -41,6 +44,13 @@ struct JuntosVista: View {
         .task { await cargar() }
         .refreshable { await cargar() }
         .sheet(isPresented: $invitando) { elegirPersona }
+        .alert("Unirme a un SyncPlay", isPresented: $pidiendoCodigo) {
+            TextField("ABC 123", text: $codigo)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+            Button("Unirme") { unirseConCodigo() }
+            Button("Cancelar", role: .cancel) {}
+        } message: { Text("Escribe el código de 6 letras y números que te pasaron.") }
         .sheet(isPresented: $agregando) {
             ElegirCancionHoja(titulo: "Sumar a la cola de SyncPlay") { c in
                 guard let id else { return }
@@ -52,6 +62,17 @@ struct JuntosVista: View {
     @ViewBuilder private func contenido(_ s: SalaJuntos) -> some View {
         Section {
             Text(s.soyAnfitrion ? "Tu SyncPlay" : "SyncPlay de \(s.anfitrion?.nombre ?? "tu amigo")").font(.title2.bold())
+            if s.dentro, let c = s.codigo, c.count == 6 {
+                // Como Spotify Jam: quien tenga el código se une sin invitación
+                Button { UIPasteboard.general.string = c; Avisos.compartido.mostrar("Código copiado") } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Código para unirse").font(.caption).foregroundStyle(Tema.secundario).textCase(.uppercase)
+                        Text("\(c.prefix(3)) \(c.suffix(3))").font(.system(size: 28, weight: .heavy, design: .rounded)).tracking(4)
+                            .foregroundStyle(.white)
+                    }
+                }
+                .accessibilityLabel("Código para unirse: \(c.map(String.init).joined(separator: " ")). Toca para copiarlo")
+            }
             if let c = s.cancion {
                 HStack(spacing: 12) {
                     Portada(ruta: c.portadaUrl, tamano: 68, radio: 12)
@@ -66,7 +87,9 @@ struct JuntosVista: View {
                 Button("Sumar canción a la cola") { agregando = true }
             }
             if s.dentro, let enlace = InvitacionSyncPlay.enlace(sala: s.id, servidor: Sesion.compartida.servidor) {
-                ShareLink(item: enlace) { Label("Compartir enlace de SyncPlay", systemImage: "square.and.arrow.up") }
+                ShareLink(item: enlace, message: Text(s.codigo.map { "Escucha conmigo en SyncPlay (código \($0))" } ?? "Escucha conmigo en SyncPlay")) {
+                    Label("Compartir enlace de SyncPlay", systemImage: "square.and.arrow.up")
+                }
             }
             if s.soyAnfitrion {
                 Button("Enviar invitación a un amigo") { ejecutar { personas = try await API.get("/api/mensajes/amigos"); invitando = true } }
@@ -173,6 +196,18 @@ struct JuntosVista: View {
             error = nil
         } catch { self.error = error.localizedDescription }
     }
+    /// Unirse con el código (sin invitación), como Spotify Jam.
+    private func unirseConCodigo() {
+        let c = codigo
+        ejecutar {
+            let nueva: SalaJuntos = try await API.enviar("POST", "/api/juntos/codigo", ["codigo": c])
+            motor.activar(nueva)
+            detalle = nueva
+            salaElegida = nueva.id
+            Avisos.compartido.mostrar("Te uniste al SyncPlay de \(nueva.anfitrion?.nombre ?? "tu amigo")")
+        }
+    }
+
     private func ejecutar(_ tarea: @escaping @MainActor () async throws -> Void) {
         guard !ocupada else { return }
         ocupada = true
