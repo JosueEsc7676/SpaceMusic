@@ -1,6 +1,16 @@
 # Registro de cambios
 
 
+## Versión 3.12
+- **Mensajes con fotos y voz cifradas** (`MensajesService.enviarArchivo`, `POST /api/mensajes/{u}/archivo`, `GET /api/mensajes/adjunto/{id}`): el tipo se detecta por el contenido (imagen hasta 12 MB, audio hasta 20 MB) y el archivo se guarda cifrado con AES-256-GCM (`CifradoMensajes.cifrarBytes`). **Eliminar** (`DELETE /api/mensajes/item/{id}`: el propio se borra para los dos, el recibido solo se oculta para ti) y **bloquear** (`/api/mensajes/bloqueos`). Web, Android (micrófono en la vista web) e iPhone. Pruebas: `MensajesArchivosTest` (4).
+- **Foto de perfil en las notificaciones de mensajes**: Android (ícono grande redondo) e iPhone (adjunto de la notificación).
+- **Los mix siguen a la IA** (`EstilosService.estilosDeIa`): antes los mix automáticos ignoraban los estilos que propuso/aceptó la IA; ahora se usan antes que el género.
+- **Más fuentes de letras** (`LetrasService.buscarTodas`): LRCLIB exacta → aproximada y búsqueda → NetEase (comprueba título, artista, versión y duración ±12 s) → syncedlyrics (Musixmatch, Megalobiz). Mejoras: título limpio, artista principal, rechazo de versiones distintas, control de duración y LRC limpio. Pruebas: `LetrasFuentesTest` (2).
+- **Descargas**: `CompletarDescargasService` completa cada 10 min las bajadas de YouTube (letra, portada HD si la actual es miniatura, álbum y año). Script `descargar`: pausas, cookies opcionales (`~/.config/spacemusic/youtube-cookies.txt`), IPv4, otros clientes de YouTube, respaldo en SoundCloud y Spotify, enlaces de Apple Music, Deezer, Tidal y Amazon (`convertir-enlace.py`) y archivos de audio directos.
+- **Inicio de sesión con Google, Facebook y Apple** (`OAuthService`, `OAuthController`): los botones solo aparecen si el servidor tiene las claves; las cuentas nuevas quedan pendientes de aprobación. Web, Android 2.6 (código 17, vuelve con `spacemusic://oauth`) e iPhone. Pruebas: `OAuthTest` (3).
+- Pantalla bloqueada: sombra pareja y suave sobre toda la portada (sin halo). Prueba `control-remoto.mjs`: B se elige como activo antes de sonar (14/14).
+- iPhone (rama `app-ios`): botón de traducir con ícono, sin botón «Versos» (compartir versos abre la selección por bloques en la letra), perfil con vibras en tarjetas y gráfica de géneros en dona, sin «escuchas».
+
 ## Versión 3.11.2
 - **Cambio de verso fluido**: la pantalla bloqueada no muestra bien muchos cuadros seguidos (la transición se veía a saltos). Ahora la imagen cambia una sola vez por verso y el sistema hace el fundido; en el iPhone la imagen del verso siguiente se dibuja de antemano para cambiar justo a tiempo.
 - **Letra legible con portadas claras**: viñeta (sombra en las cuatro esquinas de lo que se ve) y halo oscuro ovalado detrás de la letra; los dos se ajustan a la luz de la portada donde va la letra (más oscuro cuanto más clara). Sombra de la letra más marcada. Android 2.5 (código 16) igual.

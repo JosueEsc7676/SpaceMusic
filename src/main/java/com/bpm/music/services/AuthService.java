@@ -190,6 +190,9 @@ public class AuthService {
         return sesion(u);
     }
 
+    /** Sesión para quien entró con Google, Facebook o Apple (ver {@code OAuthService}). */
+    public Map<String, Object> sesionPara(Usuario u) { return sesion(u); }
+
     private Map<String, Object> sesion(Usuario u) {
         Map<String, Object> r = new HashMap<>();
         r.put("ok", true);

@@ -1,12 +1,25 @@
 {
-  "version": "3.11.2",
-  "titulo": "Novedades: la letra en la pantalla bloqueada se lee mejor",
+  "version": "3.12",
+  "titulo": "Novedades: fotos y voz en mensajes, más letras y descargas que no fallan",
   "puntos": [
-    "Cambio de verso limpio y a tiempo en la pantalla bloqueada (antes se veía a saltos).",
-    "Sombra en las esquinas y un halo oscuro detrás de la letra, más fuerte en portadas claras: la letra se lee con cualquier álbum.",
-    "Android 2.5 con las mismas mejoras."
+    "Mensajes: envía fotos y notas de voz (cifradas), elimina mensajes y bloquea a quien quieras.",
+    "Las notificaciones de mensajes muestran la foto de perfil de quien escribe (Android e iPhone).",
+    "Los mix automáticos ahora siguen los estilos que ordenó la IA.",
+    "Letras de más fuentes (NetEase, Musixmatch, Megalobiz) y búsqueda más precisa.",
+    "Descargas de YouTube con letra, portada HD, álbum y año; menos bloqueos y respaldo en SoundCloud/Spotify; enlaces de Apple Music, Deezer, Tidal y Amazon.",
+    "Inicio de sesión con Google, Facebook y Apple (cuando el administrador lo active).",
+    "Android 2.6 e iPhone con la sombra de la letra pareja sobre toda la portada."
   ],
   "anteriores": [
+    {
+      "version": "3.11.2",
+      "titulo": "Novedades: la letra en la pantalla bloqueada se lee mejor",
+      "puntos": [
+        "Cambio de verso limpio y a tiempo en la pantalla bloqueada (antes se veía a saltos).",
+        "Sombra en las esquinas y un halo oscuro detrás de la letra, más fuerte en portadas claras: la letra se lee con cualquier álbum.",
+        "Android 2.5 con las mismas mejoras."
+      ]
+    },
     {
       "version": "3.11.1",
       "titulo": "Novedades: nuevo diseño de la letra en la pantalla bloqueada",

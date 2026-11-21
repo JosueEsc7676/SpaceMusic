@@ -101,7 +101,7 @@ await prueba('Cada navegador es un dispositivo distinto', async () => {
 });
 
 await prueba('A ve al dispositivo B sonando en «Tus otros dispositivos»', async () => {
-  await b.js(`${MOD} P.player.play([${JSON.stringify(cancion)}], 0, { type: 'prueba' }); return 1;`);
+  await b.js(`${MOD} await R.elegirEste(); P.player.play([${JSON.stringify(cancion)}], 0, { type: 'prueba' }); return 1;`);
   await b.hasta(`${MOD} return P.player.playing && P.player.audio.currentTime > 0.5;`);
   const d = await a.hasta(`${MOD} const l = await R.cargarDispositivos(); const x = l.find((y) => y.id === ${JSON.stringify(idB)}); return x && x.sonando && x.cancion?.id === ${cancion.id} && x;`);
   await a.js(`(await import(location.origin + '/js/dispositivos.js')).abrirDispositivos(); return 1;`);

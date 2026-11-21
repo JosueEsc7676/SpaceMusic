@@ -58,3 +58,10 @@ input::placeholder { color: #5c5c6c; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 a.btn { text-decoration: none; }
 .btn.recover { margin-top: 12px; font-weight: 700; font-size: 14px; height: 46px; }
+
+/* Continuar con Google, Facebook o Apple */
+.oauth { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; }
+.oauth-sep { display: flex; align-items: center; gap: 12px; color: var(--text-2); font-size: 13px; margin: 2px 0 4px; }
+.oauth-sep::before, .oauth-sep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.oauth-btn { display: flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none; }
+.oauth-btn svg { flex: none; }

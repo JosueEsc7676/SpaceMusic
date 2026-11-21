@@ -126,6 +126,11 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
                 Uri base = Uri.parse(servidor());
+                // Google no deja iniciar sesión dentro de una app: «Continuar con…» se abre en el navegador
+                if (u.getHost() != null && u.getHost().equals(base.getHost()) && u.getPath() != null && u.getPath().startsWith("/api/auth/oauth/")) {
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception ignored) { }
+                    return true;
+                }
                 if (u.getHost() != null && u.getHost().equals(base.getHost())) return false;
                 // Enlaces externos: se abren en el navegador
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception ignored) { }
@@ -220,7 +225,19 @@ public class MainActivity extends Activity {
         web.postDelayed(() -> getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON), 10 * 60_000L);
     }
 
+    /** Vuelta del inicio de sesión con Google, Facebook o Apple: la web termina de entrar con el token. */
+    private boolean volverDeOAuth(Intent intent) {
+        Uri d = intent == null ? null : intent.getData();
+        if (d == null || !"spacemusic".equals(d.getScheme()) || !"oauth".equals(d.getHost()) || web == null) return false;
+        String token = d.getQueryParameter("token"), error = d.getQueryParameter("error");
+        String q = token != null && token.matches("[A-Za-z0-9._-]{20,4096}") ? "token=" + Uri.encode(token)
+                : "error=" + Uri.encode(error == null ? "No se pudo iniciar sesión" : error.length() > 300 ? error.substring(0, 300) : error);
+        web.loadUrl(servidor() + "/login.html#oauth&" + q);
+        return true;
+    }
+
     private void abrirRuta(Intent intent) {
+        if (volverDeOAuth(intent)) return;
         String ruta = intent == null ? null : intent.getStringExtra("ruta");
         if (ruta == null || ruta.isEmpty() || web == null) return;
         // Solo pantallas de la app ("#/mensajes/ana"…): nada de código desde otras apps

@@ -29,6 +29,13 @@ async function post(url, body) {
   return data;
 }
 
+/** Logos de los botones «Continuar con…» (en blanco y negro, como el resto de la app). */
+const LOGOS = {
+  google: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M21.35 11.1H12v2.98h5.35c-.23 1.4-1.66 4.1-5.35 4.1-3.22 0-5.85-2.67-5.85-5.96S8.78 6.26 12 6.26c1.83 0 3.06.78 3.76 1.45l2.56-2.47C16.68 3.7 14.55 2.75 12 2.75 6.9 2.75 2.75 6.9 2.75 12S6.9 21.25 12 21.25c5.34 0 8.88-3.75 8.88-9.04 0-.6-.07-1.06-.15-1.51z"/></svg>',
+  facebook: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M13.5 21v-7.5h2.5l.4-3h-2.9V8.6c0-.87.24-1.46 1.49-1.46h1.59V4.46A21 21 0 0 0 14.27 4.3c-2.3 0-3.87 1.4-3.87 3.98v2.22H7.8v3h2.6V21h3.1z"/></svg>',
+  apple: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.87-.76-1.47.02-2.83.86-3.59 2.17-1.53 2.66-.39 6.6 1.1 8.75.73 1.05 1.6 2.24 2.73 2.2 1.1-.05 1.51-.71 2.84-.71s1.7.71 2.86.69c1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.4 1.2-2.46-.03-.01-2.3-.88-2.33-3.5zM14.2 6.13c.6-.73 1.01-1.75.9-2.76-.87.04-1.92.58-2.54 1.31-.56.64-1.05 1.68-.92 2.67.97.08 1.96-.49 2.56-1.22z"/></svg>',
+};
+
 function busy(btn, on, label) {
   btn.disabled = on;
   if (on) { btn.dataset.label = btn.textContent; btn.innerHTML = '<span class="spinner"></span>'; }
@@ -114,6 +121,33 @@ if (page === 'login') {
 
   fetch('/api/auth/estado').then((r) => r.json()).then((e) => {
     if (e.necesitaAdmin) $('#setupBanner').classList.add('show');
+  }).catch(() => { });
+
+  // Vuelta de «Continuar con Google / Facebook / Apple»: #oauth&token=… o #oauth&error=…
+  if (location.hash.startsWith('#oauth')) {
+    const h = new URLSearchParams(location.hash.slice(1));
+    history.replaceState(null, '', location.pathname + location.search);
+    if (h.get('error')) msg(h.get('error'));
+    else if (h.get('token')) {
+      const token = h.get('token');
+      fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+        .then((usuario) => { saveSession({ token, usuario }); entrarConIntro('/' + (params.get('next') || '')); })
+        .catch(() => msg('No se pudo terminar el inicio de sesión. Inténtalo otra vez.'));
+    }
+  }
+
+  // Botones de Google, Facebook y Apple (solo los configurados en el servidor)
+  fetch('/api/auth/oauth/proveedores').then((r) => r.json()).then((p) => {
+    const caja = $('#oauth');
+    if (!caja) return;
+    const app = window.SpaceMusicApp ? 'android' : 'web';
+    const nombres = { google: 'Google', facebook: 'Facebook', apple: 'Apple' };
+    const botones = Object.keys(nombres).filter((k) => p[k]).map((k) =>
+      `<a class="btn ghost oauth-btn oauth-${k}" href="/api/auth/oauth/${k}/inicio?app=${app}">${LOGOS[k]}Continuar con ${nombres[k]}</a>`);
+    if (!botones.length) return;
+    caja.innerHTML = `<div class="oauth-sep"><span>o</span></div>${botones.join('')}`;
+    caja.hidden = false;
   }).catch(() => { });
 
   $('#form').addEventListener('submit', async (e) => {
