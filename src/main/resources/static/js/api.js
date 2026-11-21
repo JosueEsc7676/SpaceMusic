@@ -120,7 +120,7 @@ export function calidadAudio() {
     || (n.downlink && n.downlink < 1.5) || (n.rtt && n.rtt > 500)) ? 'ligera' : 'alta';
 }
 export const audioUrl = (id, calidad = calidadAudio()) =>
-  `/api/canciones/${id}/audio?v=4&t=${encodeURIComponent(session.token || '')}${calidad === 'ligera' ? '&calidad=ligera' : ''}`;
+  `/api/canciones/${id}/audio?v=314&t=${encodeURIComponent(session.token || '')}${calidad === 'ligera' ? '&calidad=ligera' : ''}`;
 export const downloadUrl = (id) => `/api/canciones/${id}/descargar?t=${encodeURIComponent(session.token || '')}`;
 
 /** Subida con progreso (fetch no informa el progreso de envío). */

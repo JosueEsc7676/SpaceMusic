@@ -1,6 +1,14 @@
 # Registro de cambios
 
 
+## Versión 3.14
+- El error de audio de la web pausa y conserva la canción, la cola y la posición. Reproducir recarga la misma pista; no queda ningún salto automático pendiente. Una selección sin copia offline tampoco se sustituye por otra.
+- La restauración de posición ignora los metadatos de intentos anteriores si la persona ya eligió otra canción.
+- Las descargas manuales en el service worker ceden su conexión al iniciar reproducción y retoman sin gastar intentos ni almacenar datos incompletos.
+- Revisión estable v=314 de la URL de streaming para usar las copias rápidas del servidor y evitar originales guardados antes de prepararlas; no borra descargas.
+- Los dos archivos locales de diagnóstico quedan excluidos del jar.
+- iPhone, rama app-ios: inicio con 1 segundo de audio continuo y luego búfer de 5 segundos; SyncPlay conserva su reloj y sus 30 segundos. Los errores no avanzan, solo los finales normales; reintento en la misma posición.
+
 ## Versión 3.13
 - **Notas de voz** (web): reproductor propio (botón, barra para saltar, tiempo) en vez del `<audio>` del navegador; un solo audio a la vez. Al terminar de grabar se escucha antes de enviar (descartar / escuchar / enviar). Servidor: lo grabado en el navegador (WebM/Ogg) se convierte a AAC `.m4a` con ffmpeg (`MensajesService.aM4a`) para que suene en el iPhone, y `/api/mensajes/adjunto/{id}` responde por partes (`Range`, 206).
 - **Fotos sin marco blanco** (web): la foto sola va sin burbuja, con la hora encima (`.bubble.solo-foto`).

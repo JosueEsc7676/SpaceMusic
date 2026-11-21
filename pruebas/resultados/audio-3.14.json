@@ -1,0 +1,33 @@
+{
+  "fecha": "2026-11-21",
+  "web": {
+    "preparada": "3.14",
+    "publicada": "3.13",
+    "jar_sha256": "5b02d8629ffd14c96569d52822a2d42f46ecb75166d9213113ebb1eb1efc7b4f",
+    "despliegue": "pendiente: SSH a la dirección local y al dominio agotó conexión; ubuntuserver no resuelve"
+  },
+  "ios": {
+    "version": "1.42",
+    "codigo": 42,
+    "commit": "113ff10",
+    "sha256": "d81e976caeb983b8a30b69253edf107be373db4fc3a909bc883ca9aae62c75f2",
+    "publicado": true,
+    "ipa_http": 200,
+    "bytes": 4112592,
+    "ci": "https://github.com/JosueEsc7676/SpaceMusic/actions/runs/44941962398"
+  },
+  "pruebas": {
+    "motor_controlado": 6,
+    "cache": 10,
+    "modelos_ios": "aprobados en CI",
+    "compilacion_ios": "aprobada en CI",
+    "jar": "integridad y exclusión de diagnósticos verificadas",
+    "audio_sin_sesion_http": 401,
+    "java": "suite interrumpida por recursos; AudioPreparacionTest agotó su espera. No se modificó esa prueba."
+  },
+  "limites": {
+    "iphone_fisico": false,
+    "medicion_acustica": false,
+    "api_java_modificada": false
+  }
+}

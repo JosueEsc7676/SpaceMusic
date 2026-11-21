@@ -212,8 +212,12 @@ async function descargar(url, id) {
   const auto = await (await caches.open(AUDIO)).match(clave);
   if (auto) { await c.put(clave, auto); await recargarIndice(); return true; }
   for (let intento = 1; intento <= 3; intento++) {
+    await esperarPrioridad();
+    const ctrl = new AbortController();
+    enVuelo.add(ctrl);
+    let aplazada = false;
     try {
-      const r = await fetch(url, { credentials: 'same-origin' });
+      const r = await fetch(url, { credentials: 'same-origin', signal: ctrl.signal });
       if (!r.ok || r.status !== 200 || !r.body) throw new Error('respuesta');
       // Se lee por partes para avisar el progreso (círculo en la canción) y comprobar que llegó completa
       const total = Number(r.headers.get('Content-Length')) || 0;
@@ -234,7 +238,12 @@ async function descargar(url, id) {
       await (await caches.open(INICIO)).delete(clave);
       await recargarIndice();
       return true;
-    } catch { /* se reintenta */ }
+    } catch {
+      // Elegir una canción libera su conexión inmediatamente; la descarga se retoma
+      // sin perder un intento ni guardar un archivo incompleto.
+      aplazada = ctrl.signal.aborted;
+    } finally { enVuelo.delete(ctrl); }
+    if (aplazada) { intento--; continue; }
     await new Promise((res) => setTimeout(res, intento * 2000));
   }
   return false;

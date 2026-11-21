@@ -105,3 +105,13 @@ Android carga la web: **toda función nueva de la web ya está en Android**. El 
   - `JwtFilter` acepta `?t=` solo en rutas permitidas (adjuntos, audio);
   - las fotos de los avisos solo se bajan del mismo servidor.
 - **Publicar** (servidor, APK o IPA en el servidor) solo con el visto bueno explícito del dueño.
+
+## Continuación de audio: 21 de noviembre de 2026 (Codex)
+
+- iPhone 1.42 publicado en el servidor y verificado: commit app-ios 113ff10, CI 44941962398 correcto. Conserva la canción ante fallos, inicia con un segundo continuo y vuelve a cinco; SyncPlay mantiene 30 segundos y decide sus cambios.
+- Web 3.14 preparada en target/spacemusic.jar, pero NO desplegada: el servidor sigue en 3.13. SSH a 192.168.10.165 y al dominio agotó la conexión; el alias servidor apunta a ubuntuserver, que no resuelve. No cambiar claves ni abrir puertos para sortearlo.
+- Web: no salta por error ni por falta de copia offline; reintento en la misma posición; metadatos atrasados no mueven otra selección. Las descargas manuales ceden la conexión y retoman íntegras.
+- Validación: seis pruebas del motor controlado y diez del service worker aprobadas; pruebas de modelos y compilación iOS en CI aprobadas. La suite Java completa no se terminó por recursos del PC; AudioPreparacionTest agotó su espera. Su código se dejó intacto.
+- Jar SHA256: 5b02d8629ffd14c96569d52822a2d42f46ecb75166d9213113ebb1eb1efc7b4f. Los diagnósticos locales están excluidos del jar en pom.xml.
+- Pendiente: recuperar SSH y publicar el jar mediante desplegar-con-reversion.sh; comprobar web, API y conservación de /app/SpaceMusic-42.ipa. No se probó teléfono físico.
+- Evidencias: pruebas/resultados/audio-3.14.json.

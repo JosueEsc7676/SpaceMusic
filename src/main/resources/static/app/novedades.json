@@ -1,14 +1,23 @@
 {
-  "version": "3.13",
-  "titulo": "Novedades: escucha tus notas de voz y mensajes con la app cerrada",
+  "version": "3.14",
+  "titulo": "Reproducción sin saltos por errores de carga",
   "puntos": [
-    "Notas de voz: escúchala antes de enviarla y reproduce cualquiera, también las tuyas.",
-    "Las fotos en los mensajes se ven limpias, sin el marco blanco.",
-    "Android: los mensajes llegan aunque la app esté cerrada y la foto de quien escribe sale a la izquierda, como en las apps de chat.",
-    "iPhone: foto de quien escribe en el aviso, perfil más claro (vibras y géneros) y la barra de abajo siempre visible.",
-    "Descargas: más fuentes cuando YouTube bloquea (SoundCloud, Audius e Internet Archive) y los videos con restricción de edad se buscan en otro lado."
+    "Una canción que tarda o falla al cargar ya no se sustituye por otra: conserva su lugar y permite reintentar.",
+    "La reproducción tiene prioridad sobre las descargas en curso, que se retoman después sin guardar archivos incompletos.",
+    "Se actualiza la caché de streaming para aprovechar las copias preparadas de inicio rápido."
   ],
   "anteriores": [
+    {
+      "version": "3.13",
+      "titulo": "Novedades: escucha tus notas de voz y mensajes con la app cerrada",
+      "puntos": [
+        "Notas de voz: escúchala antes de enviarla y reproduce cualquiera, también las tuyas.",
+        "Las fotos en los mensajes se ven limpias, sin el marco blanco.",
+        "Android: los mensajes llegan aunque la app esté cerrada y la foto de quien escribe sale a la izquierda, como en las apps de chat.",
+        "iPhone: foto de quien escribe en el aviso, perfil más claro (vibras y géneros) y la barra de abajo siempre visible.",
+        "Descargas: más fuentes cuando YouTube bloquea (SoundCloud, Audius e Internet Archive) y los videos con restricción de edad se buscan en otro lado."
+      ]
+    },
     {
       "version": "3.12",
       "titulo": "Novedades: fotos y voz en mensajes, más letras y descargas que no fallan",

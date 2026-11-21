@@ -167,14 +167,11 @@ export const player = {
   resume() {
     if (!this.current) return;
     if (!this.disponible(this.current)) {
-      // Sin conexión y la canción no está descargada: se pasa a la siguiente que sí lo esté
-      const j = this.items.findIndex((x, k) => k > this.index && this.disponible(x));
-      if (j >= 0) return this._load(j, true);
       bus.emit('toast', { msg: 'Sin conexión: esta canción no está descargada' });
       return;
     }
     fx.resume();
-    if (!audio.src) { this._load(this.index, true); return; }
+    if (!audio.src || audio.error) { this._load(this.index, true, audio.currentTime || 0); return; }
     audio.play().catch((e) => this._playError(e));
   },
 
@@ -348,7 +345,10 @@ export const player = {
       audio.src = audioUrl(s.id);
     }
     if (startAt > 0) {
-      const onMeta = () => { audio.currentTime = Math.min(startAt, (audio.duration || startAt) - 1); audio.removeEventListener('loadedmetadata', onMeta); };
+      const onMeta = () => {
+        if (this.current?._uid === s._uid) audio.currentTime = Math.min(startAt, (audio.duration || startAt) - 1);
+        audio.removeEventListener('loadedmetadata', onMeta);
+      };
       audio.addEventListener('loadedmetadata', onMeta);
     }
     if (autoplay) {
@@ -522,11 +522,11 @@ audio.addEventListener('error', () => {
   const s = player.current;
   player.buffering = false;
   player._errors++;
+  // Un fallo de red o de decodificación no expresa la intención de cambiar de canción.
+  // Se conserva la pista y la posición; reproducir vuelve a cargar esta misma pista.
+  audio.pause();
   bus.emit('player:state');
-  bus.emit('toast', { msg: `No se pudo reproducir “${s.nombre}”`, error: true });
-  if (player._errors < 3 && player.index < player.items.length - 1) {
-    setTimeout(() => player.next(true), 1200);
-  }
+  bus.emit('toast', { msg: `No se pudo cargar “${s.nombre}”. Toca reproducir para reintentar.`, error: true });
 });
 
 window.addEventListener('pagehide', () => player._save());

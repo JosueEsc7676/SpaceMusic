@@ -7,12 +7,44 @@ import assert from 'node:assert/strict';
 
 const codigo = readFileSync(new URL('../src/main/resources/sw/sw.js', import.meta.url), 'utf8')
   .replaceAll('__VERSION__', 'sm-test').replaceAll('__SHELL__', '');
-const contexto = vm.createContext({ Response, Request, Headers, ReadableStream, AbortController, URL,
+const contexto = vm.createContext({ Response, Request, Headers, ReadableStream, AbortController, URL, Blob,
   setTimeout, clearTimeout, Date, console, self: { addEventListener() {}, navigator: { onLine: true } },
   caches: { async open() { return { async match() { return contexto.copia; } }; } } });
 vm.runInContext(codigo, contexto);
 const rango = (r, cabecera, total) => contexto.rangoGuardado(r, cabecera, total);
 const respuesta = () => new Response(new Uint8Array([0, 1, 2, 3, 4, 5]), { headers: { 'Content-Type': 'audio/mp4', 'Content-Length': '6' } });
+
+test('la descarga manual cede la conexión al reproducir y se retoma íntegra', async () => {
+  const original = contexto.caches, fetchOriginal = contexto.fetch;
+  const almacenes = new Map();
+  contexto.self.clients = { async matchAll() { return []; } };
+  contexto.caches = { async open(nombre) {
+    if (!almacenes.has(nombre)) almacenes.set(nombre, new Map());
+    const m = almacenes.get(nombre);
+    return { async match(k) { return m.get(k)?.clone(); }, async put(k,r) { m.set(k,r); },
+      async delete(k) { return m.delete(k); }, async keys() { return [...m.keys()].map(k => new Request('https://ejemplo.test'+k)); } };
+  } };
+  let llamadas = 0, cancelada = false, empezar;
+  const iniciada = new Promise(r => empezar = r);
+  contexto.fetch = (_url, opciones) => {
+    llamadas++;
+    if (llamadas === 1) return new Promise((_resolve, reject) => {
+      opciones.signal.addEventListener('abort', () => { cancelada = true; reject(new Error('aplazada')); });
+      empezar();
+    });
+    return Promise.resolve(new Response(new Uint8Array([1,2,3,4]), {headers:{'Content-Length':'4'}}));
+  };
+  try {
+    const tarea = contexto.descargar('https://ejemplo.test/api/canciones/1/audio', 1);
+    await iniciada;
+    contexto.darPrioridad(0);
+    assert.equal(cancelada, true);
+    assert.equal(await tarea, true);
+    assert.equal(llamadas, 2);
+    const guardada = almacenes.get('sm-descargas').get('/offline/audio/1');
+    assert.deepEqual([...new Uint8Array(await guardada.arrayBuffer())], [1,2,3,4]);
+  } finally { contexto.caches = original; contexto.fetch = fetchOriginal; }
+});
 
 test('los primeros bytes se entregan sin leer ni esperar al resto del audio', async () => {
   let lecturas = 0, cancelado = false;
