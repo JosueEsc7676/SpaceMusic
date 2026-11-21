@@ -1,5 +1,12 @@
 # Registro de cambios
 
+## iPhone 3.12: mensajes con fotos y voz, inicio con Google/Facebook/Apple y perfil nuevo
+- Mensajes: fotos (`PhotosPicker`) y notas de voz (`GrabadoraVoz`, AAC) cifradas en el servidor; borrar desde el menú de cada burbuja; bloquear o desbloquear desde el menú del chat. Las notificaciones de mensajes llevan la foto de quien escribe.
+- `Entrada`: botones «Continuar con Google / Facebook / Apple» (solo los activos en el servidor) con `webAuthenticationSession` efímera y vuelta por `spacemusic://oauth`.
+- Letra: botón de traducir con ícono, sin chip «Versos»; «Compartir versos a imagen» abre la selección por bloques desde la letra.
+- Pantalla bloqueada: sombra pareja y suave sobre toda la portada, sin halo.
+- Perfil: vibras en tarjetas con degradado (carrusel), géneros en gráfica de dona con leyenda; se quitó «escuchas».
+
 ## iPhone: pantalla bloqueada más fluida y legible
 - Un solo cambio de imagen por verso (el sistema hace el fundido) y la del verso siguiente se dibuja antes (`precargadas`), para cambiar justo a tiempo; antes 6 cuadros se veían a saltos.
 - `ArteBloqueo`: viñeta ovalada en las esquinas de la columna visible y halo oscuro detrás de la letra, más fuertes cuanto más clara es la portada en la zona de la letra (`luz`, medida en 8 × 8 píxeles); sombra de la letra más marcada.
