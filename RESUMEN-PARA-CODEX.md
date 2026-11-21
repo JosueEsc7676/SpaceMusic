@@ -1,6 +1,6 @@
 # SpaceMusic: resumen para quien continúe el trabajo (Codex u otra persona)
 
-Estado al 21 de noviembre de 2026, versión **3.13** (servidor y web), **Android 2.7** (código 18) e **iPhone 1.x** (rama `app-ios`, la compilación de GitHub numera la versión).
+Estado al 21 de noviembre de 2026, versión **3.14** (servidor y web), **Android 2.7** (código 18) e **iPhone 1.42** (rama `app-ios`, la compilación de GitHub numera la versión).
 El detalle de cada versión está en `CAMBIOS.md` (servidor, web y Android) y en `CAMBIOS.md` de la rama `app-ios` (iPhone).
 
 ## 1. Qué es y dónde está cada parte
@@ -109,9 +109,9 @@ Android carga la web: **toda función nueva de la web ya está en Android**. El 
 ## Continuación de audio: 21 de noviembre de 2026 (Codex)
 
 - iPhone 1.42 publicado en el servidor y verificado: commit app-ios 113ff10, CI 44941962398 correcto. Conserva la canción ante fallos, inicia con un segundo continuo y vuelve a cinco; SyncPlay mantiene 30 segundos y decide sus cambios.
-- Web 3.14 preparada en target/spacemusic.jar, pero NO desplegada: el servidor sigue en 3.13. SSH a 192.168.10.165 y al dominio agotó la conexión; el alias servidor apunta a ubuntuserver, que no resuelve. No cambiar claves ni abrir puertos para sortearlo.
+- Web 3.14 DESPLEGADA y verificada el 21 de noviembre: API pública 200, audio sin sesión 401, módulos nuevos publicados. SHA256 del jar confirmado en el servidor. Respaldo: ~/spacemusic/spacemusic.jar.antes-audio-3.14-20261121-codex.
 - Web: no salta por error ni por falta de copia offline; reintento en la misma posición; metadatos atrasados no mueven otra selección. Las descargas manuales ceden la conexión y retoman íntegras.
 - Validación: seis pruebas del motor controlado y diez del service worker aprobadas; pruebas de modelos y compilación iOS en CI aprobadas. La suite Java completa no se terminó por recursos del PC; AudioPreparacionTest agotó su espera. Su código se dejó intacto.
 - Jar SHA256: 5b02d8629ffd14c96569d52822a2d42f46ecb75166d9213113ebb1eb1efc7b4f. Los diagnósticos locales están excluidos del jar en pom.xml.
-- Pendiente: recuperar SSH y publicar el jar mediante desplegar-con-reversion.sh; comprobar web, API y conservación de /app/SpaceMusic-42.ipa. No se probó teléfono físico.
+- Despliegue cerrado: /app/SpaceMusic-42.ipa conserva HTTP 200 y 4 112 592 bytes; la revisión de audio publicada es v=314 y el salto automático antiguo fue retirado. No se probó teléfono físico.
 - Evidencias: pruebas/resultados/audio-3.14.json.
