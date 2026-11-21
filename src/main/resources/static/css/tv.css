@@ -386,3 +386,66 @@ h1.title { font-family: var(--display); font-size: 2.9rem; font-weight: 800; let
 .aj-fin { margin-top: 1.8rem; }
 .aj-nota { color: var(--text-2); font-size: .95rem; margin: .4rem 0 0; }
 .np.desorden .np-lyrics .l { margin-bottom: calc(1.9rem * var(--letra-escala)); line-height: 1.12; }
+
+/* ══════════ 3.17: colores de la portada, opciones de letra y verso suelto ══════════ */
+/* Fondo de Órbita: el color principal de la portada (oscurecido) con sus dos colores como resplandores */
+.np.orbita { --ob-base: #0c0b12; --ob-base2: #08070c; background: var(--ob-base); transition: opacity .35s, background-color 1s; }
+.np.orbita .ob-fondo { background:
+  radial-gradient(56rem 40rem at 88% 28%, var(--ob-glow1), transparent 68%),
+  radial-gradient(46rem 34rem at 4% 96%, var(--ob-glow2), transparent 70%),
+  radial-gradient(40rem 30rem at 30% 10%, color-mix(in srgb, var(--ob-glow1) 45%, transparent), transparent 70%),
+  linear-gradient(160deg, var(--ob-base), var(--ob-base2) 70%); }
+
+/* Color de la letra: el elegido o el de la portada (Órbita) / blanco (clásico) */
+.np .np-lyrics .l.active { color: var(--letra-color, #fff); }
+.np .np-lyrics .l.active .w { background-image: linear-gradient(90deg, var(--letra-color, #fff) var(--p, 0%), rgba(255,255,255,.4) var(--p, 0%)); }
+.np.orbita .np-lyrics .l.active { color: var(--letra-color, var(--ob-acento)); }
+.np.orbita .np-lyrics .l.active .w { background-image: linear-gradient(90deg, var(--letra-color, var(--ob-acento)) var(--p, 0%), rgba(255,255,255,.35) var(--p, 0%)); }
+.np.sin-brillo .np-lyrics .l.active, .np.sin-brillo .verso { text-shadow: none !important; }
+
+/* Separación entre líneas */
+.np { --letra-sep: 1; }
+.np .np-lyrics .l { margin-bottom: calc(1.5rem * var(--letra-sep) * var(--letra-escala)); }
+.np.orbita .np-lyrics .l { margin-bottom: calc(1.3rem * var(--letra-sep) * var(--letra-escala)); }
+.np.desorden .np-lyrics .l { margin-bottom: calc(1.9rem * var(--letra-sep) * var(--letra-escala)); }
+
+/* Al centro (por defecto): la letra queda centrada en su columna; la portada no se mueve */
+.np.centro .np-lyrics .inner { text-align: center; }
+.np.orbita.centro .np-lyrics .inner { padding: 0 2rem; }
+.np.centro .np-lyrics .l { margin-left: auto; margin-right: auto; transform-origin: center; }
+.np.centro.desorden .np-lyrics .l { --dxr: calc(var(--dx) - 18%); }
+.np.centro .np-lyrics .plain { text-align: center; }
+
+/* Pie de la letra más abajo, pegado a la barra */
+.np.orbita .ob-der { padding-bottom: .2rem; }
+.np.orbita .ob-pie { margin-top: auto; padding-top: .8rem; }
+.np.orbita .ob-barra { margin-top: .8vh; }
+
+/* Verso suelto: solo el que suena (quieto o flotante), siempre derecho y legible */
+.np-lyrics .verso { position: absolute; left: 50%; top: 42%; width: 88%; --tx: -50%; transform: translate(var(--tx), -50%); display: none;
+  font-weight: 800; font-size: calc(3.3rem * var(--letra-escala)); line-height: 1.15; letter-spacing: -.03rem; text-align: center;
+  color: var(--letra-color, #fff); text-shadow: 0 0 2.4rem rgba(255,255,255,.18); overflow-wrap: anywhere; }
+.np.orbita .np-lyrics .verso { font-family: "Bricolage Grotesque", var(--display); color: var(--letra-color, var(--ob-acento)); }
+.np:not(.centro) .np-lyrics .verso { left: 6%; --tx: 0; text-align: left; }
+.np[data-mostrar="verso"] .np-lyrics .inner, .np[data-mostrar="flotante"] .np-lyrics .inner { opacity: 0; pointer-events: none; }
+.np[data-mostrar="verso"] .np-lyrics .verso, .np[data-mostrar="flotante"] .np-lyrics .verso { display: block; }
+.np[data-mostrar="flotante"] .np-lyrics .verso { width: max-content; max-width: 62%; overflow-wrap: normal; font-size: calc(2.9rem * var(--letra-escala)); }
+.np.solo .np-lyrics .verso { font-size: calc(4.4rem * var(--letra-escala)); }
+.np.solo[data-mostrar="flotante"] .np-lyrics .verso { font-size: calc(3.8rem * var(--letra-escala)); max-width: 58%; }
+.np-lyrics .verso.entra { animation: versoEntra .65s cubic-bezier(.2,.8,.2,1); }
+@keyframes versoEntra { from { opacity: 0; transform: translate(var(--tx), calc(-50% + 1.2rem)); filter: blur(.4rem); } to { opacity: 1; transform: translate(var(--tx), -50%); filter: blur(0); } }
+.np[data-fuente="cursiva"] .np-lyrics .verso { font-family: "Dancing Script", cursive; font-weight: 700; letter-spacing: 0; }
+.np[data-fuente="elegante"] .np-lyrics .verso { font-family: "Playfair Display", Georgia, serif; font-style: italic; }
+
+/* Panel: puede ser más alto que la pantalla (se desplaza con las flechas) */
+.aj-caja { max-height: 88vh; overflow-y: auto; }
+.aj-caja::-webkit-scrollbar { display: none; }
+.aj-fila { flex-wrap: wrap; }
+.aj-colores .aj-op { padding: 0 1rem; }
+.aj-color { width: 1.2rem; height: 1.2rem; border-radius: 50%; display: inline-block; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
+/* La barra de controles flota abajo: el pie de la letra queda pegado a ella y, cuando se oculta, baja hasta el borde */
+.np.orbita { grid-template-rows: auto minmax(0, 1fr); }
+.np.orbita .ob-barra { position: absolute; left: 4rem; right: 4rem; bottom: 3vh; margin: 0; z-index: 3; }
+.np.orbita .ob-der { padding-bottom: calc(3vh + 10.4rem); transition: padding-bottom .6s cubic-bezier(.4,0,.2,1); }
+.np.orbita .ob-izq { padding-bottom: calc(3vh + 10.4rem); }
+.np.orbita.idle .ob-der { padding-bottom: 2.4rem; }

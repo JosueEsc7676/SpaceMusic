@@ -1,6 +1,12 @@
 # Registro de cambios
 
 
+## Versión 3.17
+- **Órbita con los colores de la portada** (`paleta()`, `colores()`): se sacan los colores de la portada agrupados por tono; el fondo es el color principal oscurecido, los resplandores son el primero y el segundo color, y el acento es el más vivo aclarado (portadas en gris: acento lima).
+- **Más opciones de letra** (panel «Estilo», `sm_tv_estilo`): mostrar varias líneas / solo el verso que suena / verso flotante (8 lugares fijos, nunca el mismo dos veces seguidas, siempre derecho); color (de la portada, blanco, lima, rosa, celeste, ámbar, lila); separación (más junta, normal, más separada); alineación (al centro por defecto, o izquierda); resplandor (con o sin brillo). El panel se desplaza con las flechas.
+- **Letra al centro** de su columna (horizontal y vertical) con la portada en su lugar; el pie «Letra sincronizada · N líneas» quedó abajo, pegado a la barra, y la barra de controles flota: al ocultarse, la letra usa toda la altura.
+- **Abrir el reproductor más fácil**: «Reproduciendo» es el primer elemento del menú lateral y ↑ desde la primera fila lleva al mini reproductor (antes había que bajar todo el inicio).
+
 ## Versión 3.16
 - **TV: reproductor «Órbita»** (`tv.js` `htmlOrbita`, `tv.css` `.np.orbita`): barra superior (modo letra y número en la cola), portada inclinada con su sombra y etiqueta (género o álbum), título grande, letra «a su manera» con la línea actual arriba en el color de acento, pie con líneas (n / total) y barra de controles abajo. Los colores salen de la portada (`colores()`: acento brillante y dos resplandores; portada gris → lima). Se elige entre «Clásico» y «Órbita» en el botón de estilo (deslizadores) del reproductor.
 - **Solo letra**: pantalla completa sin controles (botón de expandir o desde el panel), sincronizada; OK pausa/reanuda y Atrás sale.

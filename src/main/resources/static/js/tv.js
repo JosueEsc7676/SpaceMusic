@@ -26,15 +26,27 @@ if (navigator.onLine !== false && !document.querySelector('link[data-fuentes-tv]
 // ═══════════════════ Estilo del reproductor y de la letra (se guarda en esta TV) ═══════════════════
 // reproductor: «clasico» (el de siempre) u «orbita» (dinámico, con los colores de la portada)
 // fuente: normal | cursiva | elegante · tam: 70–160 (%) · orden: ordenada | desordenada
-const ESTILO_DEF = { reproductor: 'clasico', fuente: 'normal', tam: 100, orden: 'ordenada' };
+// mostrar: lineas (varias) | verso (solo el que suena) | flotante (el que suena, en distintas partes de la pantalla)
+// color: portada | blanco | lima | rosa | celeste | ambar | lila · sep: junta | normal | separada
+// alinear: centro | izquierda · brillo: si | no
+const ESTILO_DEF = { reproductor: 'clasico', fuente: 'normal', tam: 100, orden: 'ordenada',
+  mostrar: 'lineas', color: 'portada', sep: 'normal', alinear: 'centro', brillo: 'si' };
+const COLORES_LETRA = { blanco: '#ffffff', lima: '#d7ff4f', rosa: '#ff6fb5', celeste: '#7cd3ff', ambar: '#ffc24a', lila: '#b9a5ff' };
+const SEPARACION = { junta: 0.45, normal: 1, separada: 1.9 };
 let estilo = { ...ESTILO_DEF, ...(store.get('sm_tv_estilo', {}) || {}) };
 function aplicarEstilo() {
   const np = $('#np');
   if (!np) return;
   np.classList.toggle('orbita', estilo.reproductor === 'orbita');
   np.classList.toggle('desorden', estilo.orden === 'desordenada');
+  np.classList.toggle('centro', estilo.alinear === 'centro');
+  np.classList.toggle('sin-brillo', estilo.brillo === 'no');
   np.dataset.fuente = estilo.fuente;
+  np.dataset.mostrar = estilo.mostrar;
   np.style.setProperty('--letra-escala', String(estilo.tam / 100));
+  np.style.setProperty('--letra-sep', String(SEPARACION[estilo.sep] ?? 1));
+  if (COLORES_LETRA[estilo.color]) np.style.setProperty('--letra-color', COLORES_LETRA[estilo.color]);
+  else np.style.removeProperty('--letra-color');
 }
 function guardarEstilo() { store.set('sm_tv_estilo', estilo); aplicarEstilo(); }
 const $ = (s, r = document) => r.querySelector(s);
@@ -124,6 +136,7 @@ function enfocar(el, { scroll = true } = {}) {
   focused?.classList.remove('focused');
   focused = el;
   el.classList.add('focused');
+  if (panel) { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
   const enRail = !!el.closest('.rail');
   $('.rail')?.classList.toggle('open', enRail);
   if (!scroll || enRail) return;
@@ -201,7 +214,7 @@ function mover(dir) {
   if (mejor) enfocar(mejor);
   else if (dir === 'left' && !focused.closest('.rail') && !$('.np.open')) enfocar($('.nav.active') || $('.nav'));
   // Al final de una fila (→) o de la pantalla (↓) se llega al mini reproductor
-  else if ((dir === 'down' || dir === 'right') && !$('.np.open') && !focused.closest('.rail') && $('#mini:not(.hidden)')) enfocar($('#mini'));
+  else if ((dir === 'down' || dir === 'right' || dir === 'up') && !$('.np.open') && !focused.closest('.rail') && $('#mini:not(.hidden)')) enfocar($('#mini'));
 }
 
 function activar() {
@@ -289,8 +302,8 @@ function shell() {
     <div class="tv">
       <nav class="rail">
         <div class="logo"><img src="/img/icon.svg" alt=""><span>SpaceMusic</span></div>
-        ${SECCIONES.map(([k, ic, l]) => `<button class="nav f" data-go="${k}">${icon(ic)}<span>${l}</span></button>`).join('')}
         <button class="nav f hidden" data-go="np" id="nav-np">${icon('wave')}<span>Reproduciendo</span></button>
+        ${SECCIONES.map(([k, ic, l]) => `<button class="nav f" data-go="${k}">${icon(ic)}<span>${l}</span></button>`).join('')}
         ${nativo?.openSettings ? `<button class="nav f user" data-go="servidor">${icon('sliders')}<span>Servidor</span></button>` : ''}
         <button class="nav f ${nativo?.openSettings ? '' : 'user'}" data-go="salir">${icon('logout')}<span>Cerrar sesión</span></button>
         ${nativo?.cerrarApp ? `<button class="nav f" data-go="cerrar">${icon('power')}<span>Cerrar app</span></button>` : ''}
@@ -891,7 +904,8 @@ async function cargarLetra(s) {
     lineas = parseLrc(d.letraSincronizada);
     box.innerHTML = `<div class="inner">${lineas.map((l, i) => l.interlude
       ? `<div class="dots" data-i="${i}"><i></i><i></i><i></i></div>`
-      : `<p class="l" data-i="${i}" style="--dx:${desorden(i).x}%;--rot:${desorden(i).r}deg">${l.words ? l.words.map((w) => `<span class="w">${esc(w.w)}</span>`).join('') : esc(l.text)}</p>`).join('')}</div>`;
+      : `<p class="l" data-i="${i}" style="--dx:${desorden(i).x}%;--rot:${desorden(i).r}deg">${l.words ? l.words.map((w) => `<span class="w">${esc(w.w)}</span>`).join('') : esc(l.text)}</p>`).join('')}</div>
+      <div class="verso" data-verso></div>`;
     sintonia('sincronizada', lineas.filter((l) => !l.interlude).length);
     actualizarLetra(true);
   } else if (d.letra) {
@@ -924,8 +938,9 @@ function actualizarLetra(force) {
     const a = inner.querySelector(`[data-i="${Math.max(0, i)}"]`);
     // Línea actual: al centro (clásico y solo letra) o en el tercio de arriba (Órbita, como en la referencia)
     const np = $('#np');
-    const alto = np?.classList.contains('solo') ? 0.45 : np?.classList.contains('orbita') ? 0.22 : 0.5;
+    const alto = np?.classList.contains('solo') ? 0.45 : np?.classList.contains('orbita') ? 0.42 : 0.5;
     if (a) inner.style.transform = `translateY(${inner.parentElement.clientHeight * alto - (a.offsetTop + a.offsetHeight / 2)}px)`;
+    pintarVerso(i);
     const nl = $('[data-ob-linea]');
     if (nl) {
       const total = lineas.filter((x) => !x.interlude).length;
@@ -967,13 +982,60 @@ function hsl([r, g, b]) {
   return [h * 60, s, l];
 }
 
-/** Paleta de Órbita a partir del color de la portada: acento brillante y dos resplandores. */
-function colores(np, rgb) {
-  let [h, s] = hsl(rgb);
-  if (s < 0.12) { h = 75; s = 0.9; } // portada gris: acento lima como la referencia
-  np.style.setProperty('--ob-acento', `hsl(${h.toFixed(0)} 95% 68%)`);
-  np.style.setProperty('--ob-glow1', `hsl(${((h + 300) % 360).toFixed(0)} 70% 32%)`);
-  np.style.setProperty('--ob-glow2', `hsl(${((h + 200) % 360).toFixed(0)} 75% 36%)`);
+/** Colores de la portada (de más a menos presentes), agrupados por tono. */
+const paletas = new Map();
+function paleta(url) {
+  if (!url) return Promise.resolve([]);
+  if (paletas.has(url)) return Promise.resolve(paletas.get(url));
+  return new Promise((listo) => {
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = c.height = 32;
+        const x = c.getContext('2d', { willReadFrequently: true });
+        x.drawImage(im, 0, 0, 32, 32);
+        const d = x.getImageData(0, 0, 32, 32).data;
+        const grupos = new Map();
+        for (let i = 0; i < d.length; i += 4) {
+          const rgb = [d[i], d[i + 1], d[i + 2]], [h, s, l] = hsl(rgb);
+          if (l < 0.07 || l > 0.96) continue;
+          const k = s < 0.16 ? 'gris' : String(Math.round(h / 24) % 15);
+          const g = grupos.get(k) || { n: 0, r: 0, g: 0, b: 0 };
+          g.n++; g.r += rgb[0]; g.g += rgb[1]; g.b += rgb[2];
+          grupos.set(k, g);
+        }
+        const l = [...grupos.values()].sort((a, b) => b.n - a.n).map((g) => ({ rgb: [g.r / g.n, g.g / g.n, g.b / g.n], n: g.n }));
+        paletas.set(url, l);
+        listo(l);
+      } catch { listo([]); }
+    };
+    im.onerror = () => listo([]);
+    im.src = cover(url, 64);
+  });
+}
+
+/**
+ * Órbita toma los colores de la portada: el fondo es el color principal (oscurecido para que la letra se lea),
+ * los resplandores son el primero y el segundo color, y el acento es el más vivo, aclarado.
+ */
+async function colores(np, rgb) {
+  const s0 = player.current;
+  const lista = await paleta(s0?.portadaUrl);
+  if (player.current !== s0) return;
+  const colorPrincipal = lista.find((c) => hsl(c.rgb)[1] >= 0.16) || lista[0] || { rgb };
+  const segundo = lista.find((c) => c !== colorPrincipal && hsl(c.rgb)[1] >= 0.16 && Math.abs(hsl(c.rgb)[0] - hsl(colorPrincipal.rgb)[0]) > 25) || colorPrincipal;
+  const vivo = [...lista].sort((a, b) => hsl(b.rgb)[1] * Math.sqrt(b.n) - hsl(a.rgb)[1] * Math.sqrt(a.n))[0] || colorPrincipal;
+  const [h1, s1] = hsl(colorPrincipal.rgb), [h2, s2] = hsl(segundo.rgb);
+  let [hv, sv] = hsl(vivo.rgb);
+  const gris = s1 < 0.16;
+  if (sv < 0.16) { hv = 75; sv = 0.9; } // portada en blanco y negro: acento lima
+  const p = (h, s, l) => `hsl(${h.toFixed(0)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`;
+  np.style.setProperty('--ob-base', gris ? '#0c0c10' : p(h1, Math.min(0.55, s1), 0.11));
+  np.style.setProperty('--ob-base2', gris ? '#08080b' : p(h1, Math.min(0.45, s1), 0.06));
+  np.style.setProperty('--ob-glow1', gris ? '#24242c' : p(h1, Math.max(0.5, Math.min(0.85, s1)), 0.36));
+  np.style.setProperty('--ob-glow2', gris ? '#1a1a22' : p(h2, Math.max(0.45, Math.min(0.85, s2)), 0.32));
+  np.style.setProperty('--ob-acento', p(hv, Math.max(0.75, sv), 0.68));
 }
 
 function htmlOrbita(s) {
@@ -1024,6 +1086,35 @@ function sintonia(tipo, lineasN = 0) {
   if (m) m.textContent = tipo === 'sin' ? 'MODO MÚSICA' : 'MODO LETRA ACTIVADO';
 }
 
+// ═══════════════════ Verso suelto: solo el que suena, quieto o en distintas partes de la pantalla ═══════════════════
+
+// Lugares del verso flotante (siempre derecho y legible): [izquierda %, arriba %, alineación]
+const LUGARES = [[6, 16, 'left'], [50, 40, 'center'], [94, 22, 'right'], [8, 62, 'left'], [50, 72, 'center'], [92, 58, 'right'], [26, 34, 'left'], [74, 48, 'right']];
+let ultimoLugar = -1;
+function pintarVerso(i) {
+  const v = $('#lyr [data-verso]');
+  if (!v || estilo.mostrar === 'lineas') return;
+  const l = lineas[i];
+  const texto = !l ? (lineas[0]?.text ? '♪' : '') : l.interlude ? '♪ ♪ ♪' : l.text;
+  v.classList.remove('entra');
+  void v.offsetWidth; // reinicia la animación de entrada
+  v.textContent = texto;
+  if (estilo.mostrar === 'flotante') {
+    // Un lugar distinto al anterior en cada verso (el mismo verso cae siempre en el mismo sitio)
+    let k = Math.abs(Math.floor(Math.sin((i + 3) * 91.7) * 1000)) % LUGARES.length;
+    if (k === ultimoLugar) k = (k + 3) % LUGARES.length;
+    ultimoLugar = k;
+    const [x, y, a] = LUGARES[k];
+    v.style.left = x + '%';
+    v.style.top = y + '%';
+    v.style.textAlign = a;
+    v.style.setProperty('--tx', a === 'center' ? '-50%' : a === 'right' ? '-100%' : '0');
+  } else {
+    v.style.left = ''; v.style.top = ''; v.style.textAlign = ''; v.style.removeProperty('--tx');
+  }
+  v.classList.add('entra');
+}
+
 // ═══════════════════ Solo letra (pantalla completa, sin controles) ═══════════════════
 
 function soloLetra(on) {
@@ -1047,12 +1138,18 @@ function soloLetra(on) {
 function abrirAjustes() {
   const p = $('#ajustes');
   const op = (clave, valor, texto) => `<button class="aj-op f ${estilo[clave] === valor ? 'sel' : ''}" data-aj="${clave}:${valor}">${texto}</button>`;
+  const muestra = (c, txt) => op('color', c, `<i class="aj-color" style="background:${c === 'portada' ? 'conic-gradient(#ff6fb5,#ffc24a,#d7ff4f,#7cd3ff,#b9a5ff,#ff6fb5)' : COLORES_LETRA[c]}"></i>${txt}`);
   p.innerHTML = `<div class="aj-caja">
     <h2>Estilo</h2>
     <div class="aj-fila"><span>Reproductor</span>${op('reproductor', 'clasico', 'Clásico')}${op('reproductor', 'orbita', 'Órbita · dinámico')}</div>
+    <div class="aj-fila"><span>Mostrar</span>${op('mostrar', 'lineas', 'Varias líneas')}${op('mostrar', 'verso', 'Solo el verso que suena')}${op('mostrar', 'flotante', 'Verso flotante')}</div>
     <div class="aj-fila"><span>Letra</span>${op('fuente', 'normal', 'Normal')}${op('fuente', 'cursiva', '<i class="aj-cursiva">Cursiva</i>')}${op('fuente', 'elegante', '<i class="aj-elegante">Elegante</i>')}</div>
+    <div class="aj-fila aj-colores"><span>Color</span>${muestra('portada', 'De la portada')}${muestra('blanco', 'Blanco')}${muestra('lima', 'Lima')}${muestra('rosa', 'Rosa')}${muestra('celeste', 'Celeste')}${muestra('ambar', 'Ámbar')}${muestra('lila', 'Lila')}</div>
     <div class="aj-fila"><span>Tamaño</span><button class="aj-op f" data-aj="tam:-">A−</button><b class="aj-tam">${estilo.tam}%</b><button class="aj-op f" data-aj="tam:+">A+</button></div>
+    <div class="aj-fila"><span>Separación</span>${op('sep', 'junta', 'Más junta')}${op('sep', 'normal', 'Normal')}${op('sep', 'separada', 'Más separada')}</div>
     <div class="aj-fila"><span>Orden</span>${op('orden', 'ordenada', 'Ordenada')}${op('orden', 'desordenada', 'Desordenada')}</div>
+    <div class="aj-fila"><span>Alineación</span>${op('alinear', 'centro', 'Al centro')}${op('alinear', 'izquierda', 'A la izquierda')}</div>
+    <div class="aj-fila"><span>Resplandor</span>${op('brillo', 'si', 'Con brillo')}${op('brillo', 'no', 'Sin brillo')}</div>
     <div class="aj-fila aj-fin"><button class="aj-op f grande" data-aj="solo">${icon('expand')} Solo letra en pantalla completa</button><button class="aj-op f" data-aj="cerrar">Listo</button></div>
     <p class="aj-nota">La letra sigue sincronizada en todos los estilos. Se guarda en esta TV.</p></div>`;
   p.classList.add('open');
@@ -1077,6 +1174,7 @@ function cambiarAjuste(v) {
   guardarEstilo();
   if (otroReproductor) pintarNP(true);
   activa = -2;
+  ultimoLugar = -1;
   setTimeout(() => actualizarLetra(true), 60);
   abrirAjustes();
   if (antes) enfocar($(`[data-aj="${antes}"]`, $('#ajustes')), { scroll: false });

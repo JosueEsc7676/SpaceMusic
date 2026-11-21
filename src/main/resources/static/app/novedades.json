@@ -1,12 +1,22 @@
 {
-  "version": "3.16",
-  "titulo": "Novedades: nuevo reproductor «Órbita» en la TV",
+  "version": "3.17",
+  "titulo": "Novedades: la TV se pinta con tu portada y la letra a tu gusto",
   "puntos": [
-    "TV: elige entre el reproductor clásico y el nuevo «Órbita», más dinámico, que toma los colores de cada portada.",
-    "TV: modo «solo letra» a pantalla completa, sin controles, siempre sincronizado.",
-    "TV: la letra puede ser normal, cursiva o elegante, más grande o más chica, y ordenada o desordenada."
+    "TV «Órbita»: el fondo toma los colores reales de cada portada.",
+    "TV: muestra varias líneas, solo el verso que suena o el verso flotando por la pantalla (siempre derecho y legible).",
+    "TV: elige el color de la letra, más junta o más separada, al centro o a la izquierda y con o sin brillo.",
+    "TV: el reproductor se abre más fácil: «Reproduciendo» está primero en el menú y la flecha ↑ arriba del todo lleva al mini reproductor."
   ],
   "anteriores": [
+    {
+      "version": "3.16",
+      "titulo": "Novedades: nuevo reproductor «Órbita» en la TV",
+      "puntos": [
+        "TV: elige entre el reproductor clásico y el nuevo «Órbita», más dinámico, que toma los colores de cada portada.",
+        "TV: modo «solo letra» a pantalla completa, sin controles, siempre sincronizado.",
+        "TV: la letra puede ser normal, cursiva o elegante, más grande o más chica, y ordenada o desordenada."
+      ]
+    },
     {
       "version": "3.15",
       "titulo": "Novedades: SpaceMusic en tu TV, sin escribir la contraseña",
