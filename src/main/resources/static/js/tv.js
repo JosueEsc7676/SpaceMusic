@@ -977,7 +977,9 @@ function colores(np, rgb) {
 }
 
 function htmlOrbita(s) {
-  const etiqueta = s.genero || (s.album && s.album !== 'Single' ? s.album : 'Ahora suena');
+  // Etiqueta: el género (si no es uno genérico como «Music»), si no el álbum
+  const generico = /^(music|música|musica|other|otros?|desconocido|unknown)$/i.test((s.genero || '').trim());
+  const etiqueta = (!generico && s.genero) || (s.album && s.album !== 'Single' ? s.album : 'Ahora suena');
   const meta = [s.artista, s.album && s.album !== 'Single' ? s.album : null].filter(Boolean).map(esc).join(' · ');
   return `<div class="ob-fondo"></div>
     <header class="ob-top"><div class="ob-logo"><img src="/img/icon.svg" alt="">SpaceMusic<i>.</i></div>

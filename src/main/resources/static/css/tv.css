@@ -385,3 +385,4 @@ h1.title { font-family: var(--display); font-size: 2.9rem; font-weight: 800; let
 .aj-elegante { font-family: "Playfair Display", Georgia, serif; }
 .aj-fin { margin-top: 1.8rem; }
 .aj-nota { color: var(--text-2); font-size: .95rem; margin: .4rem 0 0; }
+.np.desorden .np-lyrics .l { margin-bottom: calc(1.9rem * var(--letra-escala)); line-height: 1.12; }
