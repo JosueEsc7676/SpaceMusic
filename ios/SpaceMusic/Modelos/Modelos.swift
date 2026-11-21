@@ -844,3 +844,15 @@ enum Formato {
         return f.string(from: d)
     }
 }
+
+
+/// Cuenta revisiones sin datos nuevos; la lentitud con progreso no agota la espera.
+struct VigilanciaCargaAudio {
+    private var cargado = 0.0
+    private var sinAvance = 0
+    mutating func debeReintentar(hasta segundos: Double) -> Bool {
+        if segundos.isFinite, segundos > cargado + 0.1 { cargado = segundos; sinAvance = 0 }
+        else { sinAvance += 1 }
+        return sinAvance >= 5
+    }
+}

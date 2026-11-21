@@ -77,3 +77,18 @@ final class ModelosTests: XCTestCase {
         XCTAssertTrue(LectorLRC.tiemposPalabras(LineaLetra(id: 0, tiempo: 0, texto: "")).isEmpty)
     }
 }
+
+
+final class VigilanciaCargaAudioTests: XCTestCase {
+    func testUnaRedLentaConProgresoNoSeTrataComoError() {
+        var vigilancia = VigilanciaCargaAudio()
+        for n in 1...50 { XCTAssertFalse(vigilancia.debeReintentar(hasta: Double(n) * 0.2)) }
+    }
+    func testReintentoAcotadoSinDatosYReinicioCuandoLlegan() {
+        var vigilancia = VigilanciaCargaAudio()
+        for _ in 0..<4 { XCTAssertFalse(vigilancia.debeReintentar(hasta: 0)) }
+        XCTAssertFalse(vigilancia.debeReintentar(hasta: 1))
+        for _ in 0..<4 { XCTAssertFalse(vigilancia.debeReintentar(hasta: 1)) }
+        XCTAssertTrue(vigilancia.debeReintentar(hasta: 1))
+    }
+}

@@ -50,6 +50,7 @@ final class Reproductor {
     @ObservationIgnored private var indiceSiguiente: Int?
     @ObservationIgnored private var obsItem: NSKeyValueObservation?
     @ObservationIgnored private var obsEstado: NSKeyValueObservation?
+    @ObservationIgnored private var obsBuffer: NSKeyValueObservation?
     @ObservationIgnored private var obsControl: NSKeyValueObservation?
     @ObservationIgnored private var obsTiempo: Any?
     @ObservationIgnored private var ordenOriginal: [Cancion] = []
@@ -73,7 +74,7 @@ final class Reproductor {
     private init() {
         radioAutomatica = UserDefaults.standard.object(forKey: "radioAutomatica") as? Bool ?? true
         ArteBloqueo.ajustarPantalla()
-        jugador.actionAtItemEnd = .advance
+        jugador.actionAtItemEnd = .pause
         jugador.automaticallyWaitsToMinimizeStalling = true
         configurarAudio()
         configurarControlesRemotos()
@@ -430,7 +431,7 @@ final class Reproductor {
 
     /// Dentro de SyncPlay se guarda más audio por adelantado: los cortes de red no detienen la música.
     @ObservationIgnored var bufferAmplio = false {
-        didSet { for item in jugador.items() { item.preferredForwardBufferDuration = bufferAmplio ? 30 : 5 } }
+        didSet { for item in jugador.items() { item.preferredForwardBufferDuration = bufferAmplio ? 30 : 1 } }
     }
 
     /// Hay audio de sobra cargado por delante: acelerar un poco no hará que se detenga a cargar.
@@ -567,12 +568,14 @@ final class Reproductor {
         pausaLocal = false
         marcarInicio()
         intencionSonar = true
-        if jugador.currentItem == nil, actual != nil {
+        if (jugador.currentItem == nil || jugador.currentItem?.status == .failed || error != nil), actual != nil {
+            let posicion = tiempo
             cargarActual(reproducir: true)
+            if posicion > 0 { jugador.seek(to: CMTime(seconds: posicion, preferredTimescale: 600)) }
             return
         }
         try? AVAudioSession.sharedInstance().setActive(true)
-        jugador.play()
+        jugador.playImmediately(atRate: 1)
         avisarActividad()
     }
 
@@ -726,7 +729,7 @@ final class Reproductor {
             return nil
         }
         let item = AVPlayerItem(asset: AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: false]))
-        item.preferredForwardBufferDuration = bufferAmplio ? 30 : 5
+        item.preferredForwardBufferDuration = bufferAmplio ? 30 : 1
         return item
     }
 
@@ -755,24 +758,23 @@ final class Reproductor {
     }
 
     /// Si la canción no avanza, reintenta una vez (renovando la sesión por si el permiso del audio venció) y,
-    /// si vuelve a fallar, salta a la siguiente con el motivo. Mientras sigan llegando datos se espera:
+    /// si vuelve a fallar, conserva la canción y muestra el motivo. Mientras sigan llegando datos se espera:
     /// una conexión lenta no es un fallo (antes se saltaban canciones que solo tardaban en cargar).
     private func vigilar(_ item: AVPlayerItem, cancion c: Cancion) {
         vigilante?.cancel()
         vigilante = Task { @MainActor [weak self] in
-            var cargado = 0.0, sinAvance = 0
+            var vigilancia = VigilanciaCargaAudio()
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(4))
                 guard let self, !Task.isCancelled, item === self.itemActual, item.status != .readyToPlay, self.intencionSonar else { return }
                 let ahora = item.loadedTimeRanges.map { $0.timeRangeValue.end.seconds }.max() ?? 0
-                if ahora > cargado + 0.1 { cargado = ahora; sinAvance = 0 } else { sinAvance += 1 }
-                if sinAvance >= 5 { break }   // 20 s sin recibir nada
+                if vigilancia.debeReintentar(hasta: ahora) { break }   // 20 s sin recibir nada
             }
             guard let self, !Task.isCancelled, item === self.itemActual, item.status != .readyToPlay, self.intencionSonar else { return }
             if self.reintentada != c.id {
                 self.reintentada = c.id
                 await Biblioteca.compartida.renovarSesionSiHaceFalta()
-                guard item === self.itemActual else { return }
+                guard item === self.itemActual, self.intencionSonar else { return }
                 self.cargarActual(reproducir: true)
             } else {
                 self.falloItem(item, motivo: "el servidor no respondió a tiempo")
@@ -964,6 +966,10 @@ final class Reproductor {
             let razon = (n.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt).flatMap(AVAudioSession.RouteChangeReason.init)
             if razon == .oldDeviceUnavailable { MainActor.assumeIsolated { self?.pausarLocal() } }
         }
+        centro.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] n in
+            let item = n.object as? AVPlayerItem
+            MainActor.assumeIsolated { self?.terminoNormalmente(item) }
+        }
         centro.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: nil, queue: .main) { [weak self] n in
             let item = n.object as? AVPlayerItem
             MainActor.assumeIsolated { self?.falloItem(item) }
@@ -971,6 +977,9 @@ final class Reproductor {
     }
 
     private func observarEstado(de item: AVPlayerItem) {
+        obsBuffer = item.observe(\.loadedTimeRanges, options: [.new]) { [weak self] it, _ in
+            Task { @MainActor in self?.iniciarConAudioDisponible(it) }
+        }
         obsEstado = item.observe(\.status, options: [.initial, .new]) { [weak self] it, _ in
             let estado = it.status
             let dur = it.duration.seconds
@@ -984,9 +993,57 @@ final class Reproductor {
                     self.actualizarNowPlaying()
                     ProcesadorAudio.compartido.conectar(it)
                     self.quizaPrecargar()
+                    self.iniciarConAudioDisponible(it)
                 }
             }
         }
+    }
+
+    /// Arrancar con un segundo continuo disponible, sin esperar la estimación conservadora de AVPlayer.
+    /// Después del inicio se vuelve al búfer normal; SyncPlay conserva su reloj y su búfer amplio.
+    private func iniciarConAudioDisponible(_ item: AVPlayerItem) {
+        guard item === itemActual, item.status == .readyToPlay, intencionSonar,
+              remoto == nil, !bufferAmplio, contexto != "juntos-oyente",
+              jugador.timeControlStatus == .waitingToPlayAtSpecifiedRate else { return }
+        let ahora = item.currentTime().seconds
+        guard ahora.isFinite, ahora < 0.5 else { return }
+        let disponible = item.loadedTimeRanges.map(\.timeRangeValue)
+            .filter { $0.start.seconds <= ahora + 0.1 && $0.end.seconds > ahora }
+            .map { $0.end.seconds - ahora }.max() ?? 0
+        if disponible >= 1 { jugador.playImmediately(atRate: 1) }
+    }
+
+    /// Solo un final real avanza automáticamente; un error o una espera no cambia la canción.
+    private func terminoNormalmente(_ item: AVPlayerItem?) {
+        guard let item, item === itemActual, item.status != .failed else { return }
+        if dormirAlTerminar {
+            dormirAlTerminar = false
+            pausar()
+            return
+        }
+        guard intencionSonar else { return }
+        if let j = calcularSiguiente(manual: false) {
+            if itemSiguiente != nil, indiceSiguiente == j {
+                jugador.advanceToNextItem()
+                jugador.playImmediately(atRate: 1)
+            } else {
+                registrarEscucha()
+                indice = j
+                cargarActual(reproducir: true)
+            }
+        } else if radioAutomatica {
+            let version = versionCola
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.pedirRadio(cantidad: 20)
+                guard version == self.versionCola, item === self.itemActual, self.intencionSonar else { return }
+                if let j = self.calcularSiguiente(manual: false) {
+                    self.registrarEscucha()
+                    self.indice = j
+                    self.cargarActual(reproducir: true)
+                } else { self.pausar() }
+            }
+        } else { pausar() }
     }
 
     private func falloItem(_ item: AVPlayerItem?, motivo explicado: String? = nil) {
@@ -994,20 +1051,23 @@ final class Reproductor {
         vigilante?.cancel()
         let causa = explicado ?? motivo(item)
         error = "No se pudo reproducir “\(actual?.nombre ?? "")”" + (causa.map { ": \($0)" } ?? "")
-        saltosSeguidos += 1
-        // Salta a la siguiente, sin entrar en un bucle si fallan todas
-        if saltosSeguidos < 4, calcularSiguiente(manual: true) != nil {
-            indice = calcularSiguiente(manual: true)!
-            cargarActual(reproducir: true)
-        } else {
-            pausarLocal()
-            cargando = false
-        }
+        // Mantener la canción y la cola: fallar no equivale a pedir la siguiente.
+        jugador.pause()
+        for pendiente in jugador.items() where pendiente !== item { jugador.remove(pendiente) }
+        itemSiguiente = nil
+        indiceSiguiente = nil
+        intencionSonar = false
+        sonando = false
+        cargando = false
+        guardarEstado()
+        actualizarNowPlaying()
     }
 
     private func tick(_ t: Double) {
         guard t.isFinite else { return }
         tiempo = t
+        if sonando, t > 1, !bufferAmplio, let item = jugador.currentItem,
+           item.preferredForwardBufferDuration < 5 { item.preferredForwardBufferDuration = 5 }
         if let d = jugador.currentItem?.duration.seconds, d.isFinite, d > 0 { duracion = d }
         if sonando, t > ultimoTick, t - ultimoTick < 2.5 { escuchado += t - ultimoTick }
         ultimoTick = t

@@ -39,7 +39,7 @@ enum API {
     /// URL del audio con el token (el reproductor no envía cabeceras).
     static func audioURL(_ id: Int, ligera: Bool? = nil) -> URL? {
         let calidad = (ligera ?? CalidadAudio.compartida.ligera) ? "&calidad=ligera" : ""
-        return url("/api/canciones/\(id)/audio?t=\(codificar(Sesion.compartida.token ?? ""))\(calidad)")
+        return url("/api/canciones/\(id)/audio?v=314&t=\(codificar(Sesion.compartida.token ?? ""))\(calidad)")
     }
 
     static func descargaURL(_ id: Int) -> URL? {

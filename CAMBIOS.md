@@ -1,3 +1,10 @@
+## Actualización 3.14: arranque y conservación de la canción
+- Inicio con 1 segundo continuo de audio; después vuelve al búfer de 5 s. SyncPlay conserva 30 s y su reloj.
+- Se reanuda el arranque cuando llegan datos suficientes en lugar de esperar la estimación conservadora de AVPlayer.
+- Solo el final normal avanza: los errores, las esperas agotadas y las pausas conservan la pista y la cola. Reintentar recarga la misma pista y conserva la posición.
+- La vigilancia no confunde una red lenta con progreso con un fallo. Pruebas de progreso y espera sin datos.
+- Se renueva la revisión de la URL de audio para usar las copias preparadas del servidor.
+
 # Registro de cambios
 
 ## iPhone 3.13: notas de voz, foto en los avisos, perfil más claro
