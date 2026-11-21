@@ -735,7 +735,9 @@ final class Reproductor {
         return item
     }
 
+    private var inicioMedido: Double?
     private func cargarActual(reproducir: Bool) {
+        inicioMedido = reproducir ? ProcessInfo.processInfo.systemUptime : nil
         esperandoRadioAlFinal = false
         intencionSonar = reproducir
         guard let c = actual, let item = elemento(para: c) else { return }
@@ -950,6 +952,13 @@ final class Reproductor {
             let estado = p.timeControlStatus
             Task { @MainActor in
                 guard let self, self.remoto == nil else { return }
+                if estado == .playing, let inicio = self.inicioMedido {
+                    self.inicioMedido = nil
+                    let ms = (ProcessInfo.processInfo.systemUptime - inicio) * 1000
+                    if ms >= 0 && ms <= 120000 {
+                        Task { await API.informarAudio(ms) }
+                    }
+                }
                 self.sonando = estado == .playing
                 self.cargando = estado == .waitingToPlayAtSpecifiedRate
                 self.actualizarNowPlaying()

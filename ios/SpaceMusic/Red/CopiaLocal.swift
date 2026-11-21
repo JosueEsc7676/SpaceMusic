@@ -25,7 +25,7 @@ enum CopiaLocal {
     }
     static func borrar() { if let url = carpeta() { try? FileManager.default.removeItem(at: url) } }
     static func admite(_ ruta: String) -> Bool {
-        ruta == "/api/inicio" || ruta == "/api/playlists" || ruta == "/api/albumes" ||
+        ruta.hasPrefix("/api/albumes/") || ruta.hasPrefix("/api/artistas/pagina") || ruta == "/api/inicio" || ruta == "/api/playlists" || ruta == "/api/albumes" ||
         ruta.hasPrefix("/api/usuario/favoritos") || ruta.hasPrefix("/api/usuario/guardados") ||
         ruta.hasPrefix("/api/mensajes") || ruta.hasPrefix("/api/letras/") ||
         ruta.hasPrefix("/api/playlists/") || ruta.hasPrefix("/api/albumes/detalle")

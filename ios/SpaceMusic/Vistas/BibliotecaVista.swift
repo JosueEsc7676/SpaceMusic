@@ -106,7 +106,7 @@ struct BibliotecaVista: View {
         // Playlists guardadas de otras personas: como la web, una sola petición a las públicas;
         // solo se piden una por una las guardadas que ya no aparecen ahí.
         let todas = biblioteca.playlistsGuardadas
-        let publicas: [Playlist] = (try? await API.get("/api/playlists/publicas")) ?? []
+        let publicas: [Playlist] = (try? await API.get("/api/playlists/guardadas")) ?? []
         let porId = Dictionary(publicas.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let ids = todas.filter { porId[$0] == nil }
         let sueltas = await withTaskGroup(of: (Int, Playlist?).self) { grupo in
@@ -131,7 +131,7 @@ struct BibliotecaVista: View {
         guardadas = todas.compactMap { porId[$0] ?? porIdSueltas[$0] }
         // Álbumes guardados: se leen de la lista de álbumes
         let nombres = biblioteca.albumesGuardados
-        if !nombres.isEmpty, let todos: [Album] = try? await API.get("/api/albumes") {
+        if !nombres.isEmpty, let todos: [Album] = try? await API.get("/api/albumes/guardados") {
             albumes = nombres.compactMap { n in todos.first { $0.nombre == n } }
         } else {
             albumes = []

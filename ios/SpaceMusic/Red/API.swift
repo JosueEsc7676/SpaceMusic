@@ -70,6 +70,14 @@ enum API {
         return r
     }
 
+    /// Telemetría opcional: nunca cambia sesión, conectividad ni reproducción si falla.
+    static func informarAudio(_ ms: Double) async {
+        guard var r = try? peticion("/api/usuario/rendimiento", metodo: "POST", tiempo: 3) else { return }
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.httpBody = try? JSONSerialization.data(withJSONObject: ["metrica": "audioInicio", "plataforma": "ios", "ms": ms])
+        _ = try? await sesionURL.data(for: r)
+    }
+
     // MARK: Peticiones
 
     static func get<T: Decodable>(_ ruta: String, tiempo: TimeInterval? = nil) async throws -> T {

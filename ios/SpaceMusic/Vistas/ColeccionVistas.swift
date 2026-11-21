@@ -708,20 +708,61 @@ struct DescargasVista: View {
 
 // MARK: - Todos los álbumes y artistas
 
+/// El servidor filtra antes de paginar. No se pierden resultados al buscar en páginas no cargadas.
+private struct CatalogoPorPaginas<Elemento: Decodable & Identifiable, Contenido: View>: View {
+    let ruta: String
+    let filtro: String
+    let contenido: ([Elemento]) -> Contenido
+    @State private var elementos: [Elemento] = []
+    @State private var pagina = 0
+    @State private var hayMas = true
+    @State private var cargando = false
+    @State private var error: String?
+    @State private var generacion = UUID()
+
+    var body: some View {
+        ScrollView {
+            contenido(elementos)
+            if let error { Text(error).font(.footnote).foregroundStyle(.secondary).padding() }
+            if cargando { ProgressView().padding() }
+            else if hayMas { Button(error == nil ? "Cargar más" : "Reintentar") { Task { await cargar(reiniciar: false) } }.padding() }
+            else if elementos.isEmpty { Text("No hay resultados").foregroundStyle(.secondary).padding() }
+        }
+        .task(id: filtro) {
+            generacion = UUID()
+            elementos = []; pagina = 0; hayMas = true; cargando = false
+            if !filtro.isEmpty { try? await Task.sleep(for: .milliseconds(300)) }
+            if !Task.isCancelled { await cargar(reiniciar: false) }
+        }
+        .refreshable { await cargar(reiniciar: true) }
+    }
+    @MainActor private func cargar(reiniciar: Bool) async {
+        if reiniciar { generacion = UUID(); elementos = []; pagina = 0; hayMas = true; cargando = false }
+        guard !cargando else { return }
+        let version = generacion
+        cargando = true; error = nil
+        defer { if generacion == version { cargando = false } }
+        do {
+            let nuevos: [Elemento] = try await API.get("\(ruta)?pagina=\(pagina)&tam=48&q=\(API.codificar(filtro))")
+            guard version == generacion, !Task.isCancelled else { return }
+            let vistos = Set(elementos.map(\.id))
+            elementos.append(contentsOf: nuevos.filter { !vistos.contains($0.id) })
+            pagina += 1; hayMas = nuevos.count == 48
+        } catch {
+            if version == generacion && !Task.isCancelled { self.error = error.localizedDescription }
+        }
+    }
+}
+
 struct TodosAlbumesVista: View {
     @State private var filtro = ""
     var body: some View {
-        Cargador(cargar: { () async throws -> [Album] in try await API.get("/api/albumes") }) { lista, recargar in
-            let vis = filtro.isEmpty ? lista : lista.filter { $0.nombre.localizedCaseInsensitiveContains(filtro) || $0.artista.localizedCaseInsensitiveContains(filtro) }
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 14)], spacing: 18) {
-                    ForEach(vis) { TarjetaAlbum(album: $0, ancho: 160) }
-                }
-                .padding()
-            }
-            .refreshable { await recargar() }
+        CatalogoPorPaginas(ruta: "/api/albumes/pagina", filtro: filtro) { (lista: [Album]) in
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 14)], spacing: 18) {
+                ForEach(lista) { TarjetaAlbum(album: $0, ancho: 160) }
+            }.padding()
         }
-        .searchable(text: $filtro, prompt: "Filtrar álbumes")
+        .searchable(text: $filtro, prompt: "Buscar álbumes")
         .navigationTitle("Álbumes")
     }
 }
@@ -729,17 +770,12 @@ struct TodosAlbumesVista: View {
 struct TodosArtistasVista: View {
     @State private var filtro = ""
     var body: some View {
-        Cargador(cargar: { () async throws -> [Artista] in try await API.get("/api/artistas") }) { lista, recargar in
-            let vis = filtro.isEmpty ? lista : lista.filter { $0.nombre.localizedCaseInsensitiveContains(filtro) }
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 14)], spacing: 18) {
-                    ForEach(vis) { TarjetaArtista(artista: $0, ancho: 105) }
-                }
-                .padding()
-            }
-            .refreshable { await recargar() }
+        CatalogoPorPaginas(ruta: "/api/artistas/pagina", filtro: filtro) { (lista: [Artista]) in
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 14)], spacing: 18) {
+                ForEach(lista) { TarjetaArtista(artista: $0, ancho: 105) }
+            }.padding()
         }
-        .searchable(text: $filtro, prompt: "Filtrar artistas")
+        .searchable(text: $filtro, prompt: "Buscar artistas")
         .navigationTitle("Artistas")
     }
 }

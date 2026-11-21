@@ -1,5 +1,12 @@
 ## iPhone 3.15: iniciar sesión en la TV
 
+## Versión 3.19
+- Biblioteca: pide solo álbumes y playlists guardados, con permisos comprobados en el servidor.
+- Álbumes y artistas: carga incremental de 48 elementos, búsqueda en todo el catálogo, recarga y reintento; conserva los endpoints anteriores para clientes instalados.
+- Medición opcional del inicio real de audio, sin contenido musical ni datos personales en la muestra. Un fallo de medición no modifica sesión ni reproducción.
+- API optimizada: rutas de audio en caché, playlists por lotes, cálculos de recomendaciones fuera de peticiones, estadísticas agregadas y tareas con prioridad del audio.
+
+
 ## Versión 3.18
 - Sincronía compartida mediante offset LRC: ADMIN/COLABORADOR pueden guardar ±60 s, con revisión SHA-256 y bloqueo transaccional para evitar sobrescrituras. Conserva texto y marcas de palabras. Sin migración.
 - Panel persistente de ajuste con vista previa y guardado explícito; usuarios conservan ajuste personal. Invalidación en vivo por el SSE existente en web, TV y iPhone.
