@@ -6,6 +6,7 @@ enum IconoDispositivo {
         switch plataforma {
         case "ios": return "iphone"
         case "android": return "smartphone"
+        case "tv": return "tv"
         default: return "laptopcomputer"
         }
     }

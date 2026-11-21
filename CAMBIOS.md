@@ -1,3 +1,7 @@
+## iPhone 3.15: iniciar sesión en la TV
+- Dispositivos → «Iniciar sesión en una TV»: aparecen las TVs de tu misma red wifi que esperan para entrar (`/api/auth/tv/cercanas`); al tocar una, o al escribir el código que muestra la TV, entra con tu cuenta (`POST /api/auth/tv/vinculo/{código}/aprobar`). El QR de la TV también se puede escanear con la cámara (abre la web).
+- Las TVs aparecen con su ícono en «Reproducir en».
+
 ## Actualización 3.14: arranque y conservación de la canción
 - Inicio con 1 segundo continuo de audio; después vuelve al búfer de 5 s. SyncPlay conserva 30 s y su reloj.
 - Se reanuda el arranque cuando llegan datos suficientes en lugar de esperar la estimación conservadora de AVPlayer.
