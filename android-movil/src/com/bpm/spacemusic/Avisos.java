@@ -6,6 +6,10 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ShortcutInfo;
+import android.content.pm.ShortcutManager;
+import android.graphics.drawable.Icon;
+import android.app.Person;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.BitmapShader;
@@ -19,6 +23,7 @@ import android.os.Looper;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Collections;
 
 /** Notificaciones de mensajes y avisos (nuevo seguidor, nuevos amigos…). */
 final class Avisos {
@@ -63,6 +68,17 @@ final class Avisos {
         return r;
     }
 
+    /** «#/mensajes/ana» → «ana» (solo los avisos de mensajes son conversaciones). */
+    private static String usuarioDeRuta(String ruta) {
+        if (ruta == null) return null;
+        String r = ruta.replace("#", "");
+        if (!r.startsWith("/mensajes/")) return null;
+        String u = r.substring("/mensajes/".length());
+        int q = u.indexOf('?');
+        if (q >= 0) u = u.substring(0, q);
+        return u.isEmpty() ? null : u;
+    }
+
     @SuppressWarnings("deprecation")
     private static void publicar(Context c, String titulo, String texto, String ruta, Bitmap foto) {
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -85,7 +101,29 @@ final class Avisos {
                 .setAutoCancel(true)
                 .setContentIntent(pi)
                 .setColor(0xFF000000);
-        if (foto != null) b.setLargeIcon(foto);
+        String usuario = usuarioDeRuta(ruta);
+        if (Build.VERSION.SDK_INT >= 30 && usuario != null) {
+            // Android 11+: notificación de conversación. La foto de quien escribe ocupa el lugar del ícono (izquierda).
+            Person.Builder pb = new Person.Builder().setName(titulo).setKey(usuario);
+            if (foto != null) pb.setIcon(Icon.createWithBitmap(foto));
+            Person persona = pb.build();
+            String atajo = "chat-" + usuario;
+            try {
+                ShortcutManager sm = c.getSystemService(ShortcutManager.class);
+                Intent abrirChat = new Intent(Intent.ACTION_VIEW, null, c, MainActivity.class).putExtra("ruta", ruta);
+                ShortcutInfo.Builder si = new ShortcutInfo.Builder(c, atajo)
+                        .setShortLabel(titulo)
+                        .setLongLived(true)
+                        .setPerson(persona)
+                        .setIntent(abrirChat);
+                si.setIcon(foto != null ? Icon.createWithAdaptiveBitmap(foto) : Icon.createWithResource(c, R.drawable.ic_nota));
+                sm.pushDynamicShortcut(si.build());
+                b.setShortcutId(atajo);
+            } catch (Exception ignored) { /* sin atajo: sale igual con el estilo de mensajes */ }
+            Notification.MessagingStyle estilo = new Notification.MessagingStyle(new Person.Builder().setName("Tú").build());
+            estilo.addMessage(texto, System.currentTimeMillis(), persona);
+            b.setStyle(estilo).setCategory(Notification.CATEGORY_MESSAGE);
+        } else if (foto != null) b.setLargeIcon(foto);
         if (Build.VERSION.SDK_INT < 26) b.setPriority(Notification.PRIORITY_HIGH).setDefaults(Notification.DEFAULT_ALL);
         try { nm.notify(id, b.build()); } catch (Exception ignored) { /* sin permiso de notificaciones */ }
     }

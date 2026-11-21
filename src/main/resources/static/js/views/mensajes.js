@@ -39,6 +39,60 @@ function filaConversacion(c, activa) {
 const urlArchivo = (m) => `${m.adjuntoUrl}?t=${encodeURIComponent(session.token || '')}`;
 const fmtDur = (s) => `${Math.floor((s || 0) / 60)}:${String(Math.round(s || 0) % 60).padStart(2, '0')}`;
 
+/** Nota de voz: botón de reproducir, barra de avance (se puede tocar para saltar) y duración. */
+function notaDeVoz(url, duracion) {
+  return `<div class="voz" data-voz="${esc(url)}" data-dur="${Number(duracion) || 0}">
+    <button type="button" class="voz-play" aria-label="Reproducir mensaje de voz">${icon('play', 'sm')}</button>
+    <span class="voz-barra" data-voz-barra><i></i></span><small data-voz-t>${fmtDur(duracion)}</small></div>`;
+}
+
+/** Un solo audio para todas las notas de voz de la pantalla (al tocar otra, la anterior se detiene). */
+const vozAudio = new Audio();
+let vozActual = null;
+function pintarVoz(el, sonando) {
+  if (!el) return;
+  el.classList.toggle('sonando', sonando);
+  const b = el.querySelector('.voz-play');
+  b.innerHTML = icon(sonando ? 'pause' : 'play', 'sm');
+  b.setAttribute('aria-label', sonando ? 'Pausar' : 'Reproducir mensaje de voz');
+}
+vozAudio.addEventListener('timeupdate', () => {
+  if (!vozActual?.isConnected) return;
+  const total = vozAudio.duration && isFinite(vozAudio.duration) ? vozAudio.duration : Number(vozActual.dataset.dur) || 0;
+  vozActual.querySelector('.voz-barra i').style.width = total ? `${Math.min(100, (vozAudio.currentTime / total) * 100)}%` : '0';
+  vozActual.querySelector('[data-voz-t]').textContent = fmtDur(vozAudio.currentTime);
+});
+vozAudio.addEventListener('ended', () => {
+  if (!vozActual) return;
+  pintarVoz(vozActual, false);
+  vozActual.querySelector('.voz-barra i').style.width = '0';
+  vozActual.querySelector('[data-voz-t]').textContent = fmtDur(Number(vozActual.dataset.dur));
+});
+vozAudio.addEventListener('pause', () => pintarVoz(vozActual, false));
+vozAudio.addEventListener('play', () => pintarVoz(vozActual, true));
+vozAudio.addEventListener('error', () => { if (vozActual) { pintarVoz(vozActual, false); toast('No se pudo reproducir el audio', { error: true }); } });
+
+/** Toques en una nota de voz: reproducir o pausar, o saltar tocando la barra. */
+function tocarVoz(e) {
+  const el = e.target.closest('[data-voz]');
+  if (!el) return false;
+  const barra = e.target.closest('[data-voz-barra]');
+  if (vozActual !== el) {
+    if (vozActual) { pintarVoz(vozActual, false); vozActual.querySelector('.voz-barra i').style.width = '0'; }
+    vozActual = el;
+    vozAudio.src = el.dataset.voz;
+  }
+  if (barra) {
+    const r = barra.getBoundingClientRect();
+    const total = vozAudio.duration && isFinite(vozAudio.duration) ? vozAudio.duration : Number(el.dataset.dur) || 0;
+    if (total) { vozAudio.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * total; }
+    if (vozAudio.paused) vozAudio.play().catch(() => { });
+    return true;
+  }
+  if (vozAudio.paused) vozAudio.play().catch(() => { }); else vozAudio.pause();
+  return true;
+}
+
 function burbuja(m) {
   const opc = `<button class="msg-opc" data-opc="${m.id}" data-mio="${m.mio ? 1 : 0}" aria-label="Opciones del mensaje">${icon('more', 'sm')}</button>`;
   if (m.borrado) {
@@ -49,7 +103,7 @@ function burbuja(m) {
   if (m.tipo === 'IMAGEN') {
     archivo = `<a class="msg-foto" href="${esc(urlArchivo(m))}" target="_blank" rel="noopener"><img src="${esc(urlArchivo(m))}" alt="Foto" loading="lazy"></a>`;
   } else if (m.tipo === 'AUDIO') {
-    archivo = `<div class="msg-voz">${icon('mic', 'sm')}<audio controls preload="none" src="${esc(urlArchivo(m))}"></audio>${m.duracion ? `<small>${fmtDur(m.duracion)}</small>` : ''}</div>`;
+    archivo = notaDeVoz(urlArchivo(m), m.duracion);
   }
   const textoArchivo = m.tipo && (m.texto === '📷 Foto' || m.texto === '🎤 Mensaje de voz');
   let cancion = '';
@@ -64,7 +118,8 @@ function burbuja(m) {
       <b>${icon('headphones')} SyncPlay</b><span>${m.mio ? 'Invitaste a escuchar juntos' : 'Te invitaron a escuchar juntos'}</span>
       <span class="ir">Abrir SyncPlay y unirme ${icon('right', 'sm')}</span></a>`
     : (m.cancion && m.texto === '🎵') || textoArchivo ? '' : `<p>${esc(m.texto)}</p>`;
-  return `<div class="bubble ${m.mio ? 'mine' : ''} ${sala ? 'sync' : ''} ${archivo ? 'con-archivo' : ''}" data-id="${m.id}">${opc}${archivo}${cancion}${texto}<time>${esc(hora(m.fecha))}${m.mio ? (m.leido ? ' · Visto' : '') : ''}</time></div>`;
+  const soloFoto = m.tipo === 'IMAGEN' && !texto && !cancion;
+  return `<div class="bubble ${m.mio ? 'mine' : ''} ${sala ? 'sync' : ''} ${archivo ? 'con-archivo' : ''} ${soloFoto ? 'solo-foto' : ''} ${m.tipo === 'AUDIO' ? 'con-voz' : ''}" data-id="${m.id}">${opc}${archivo}${cancion}${texto}<time>${esc(hora(m.fecha))}${m.mio ? (m.leido ? ' · Visto' : '') : ''}</time></div>`;
 }
 
 function htmlLista(convs, amigos, username) {
@@ -262,17 +317,44 @@ function pintarChat(box, d, isStale, copia) {
       const blob = new Blob(partes, { type: grabador.mimeType || 'audio/webm' });
       grabador = null;
       if (dur < 0.8 || !blob.size) { toast('Mensaje de voz muy corto'); return; }
-      enviarArchivo(blob, blob.type.includes('mp4') ? 'voz.m4a' : blob.type.includes('ogg') ? 'voz.ogg' : 'voz.webm', dur);
+      revisarAntesDeEnviar(blob, dur);
     };
     inicioGrab = Date.now();
     grabador.start();
     mic.classList.add('grabando');
-    mic.setAttribute('aria-label', 'Detener y enviar el mensaje de voz');
-    toast('Grabando… toca el micrófono otra vez para enviar', { ms: 2500 });
+    mic.setAttribute('aria-label', 'Detener la grabación');
+    toast('Grabando… toca el micrófono otra vez para terminar', { ms: 2500 });
     tope = setTimeout(() => grabador?.stop(), 5 * 60 * 1000);
   });
+  /** Vista previa de la nota de voz: escucharla, descartarla o enviarla. */
+  const revisarAntesDeEnviar = (blob, dur) => {
+    const url = URL.createObjectURL(blob);
+    const previa = document.createElement('div');
+    previa.className = 'dm-previa-voz';
+    previa.innerHTML = `<button type="button" class="icon-btn" data-descartar aria-label="Descartar">${icon('trash')}</button>
+      ${notaDeVoz(url, dur)}
+      <button type="button" class="send-btn" data-enviar-voz aria-label="Enviar mensaje de voz">${icon('send')}</button>`;
+    form.style.display = 'none';
+    form.after(previa);
+    const cerrar = () => {
+      if (vozActual && previa.contains(vozActual)) { vozAudio.pause(); vozActual = null; }
+      previa.remove();
+      form.style.display = '';
+      URL.revokeObjectURL(url);
+    };
+    previa.addEventListener('click', (e) => {
+      if (tocarVoz(e)) return;
+      if (e.target.closest('[data-descartar]')) cerrar();
+      else if (e.target.closest('[data-enviar-voz]')) {
+        const nombre = blob.type.includes('mp4') ? 'voz.m4a' : blob.type.includes('ogg') ? 'voz.ogg' : 'voz.webm';
+        cerrar();
+        enviarArchivo(blob, nombre, dur);
+      }
+    });
+  };
   // Opciones de cada mensaje: eliminar (el tuyo para los dos; el recibido, solo para ti)
   msgs.addEventListener('click', (e) => {
+    if (tocarVoz(e)) return;
     const b = e.target.closest('[data-opc]');
     if (!b) return;
     const id = Number(b.dataset.opc), mio = b.dataset.mio === '1';

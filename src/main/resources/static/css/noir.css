@@ -1281,8 +1281,21 @@ body.admin-mode .sop-lado, body.admin-mode .sop-contenido { min-width: 0; }
 .bubble.borrado p { font-style: italic; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
 .bubble.con-archivo { padding: 6px; }
 .msg-foto img { display: block; max-width: min(260px, 62vw); max-height: 320px; border-radius: 14px; object-fit: cover; background: rgba(255,255,255,.06); }
-.msg-voz { display: flex; align-items: center; gap: 8px; padding: 4px 6px; }
-.msg-voz audio { height: 36px; max-width: 220px; }
-.msg-voz small { color: var(--text-3); font-variant-numeric: tabular-nums; }
+/* Foto sola: sin la burbuja alrededor (antes quedaba un marco blanco); la hora va sobre la foto */
+.bubble.solo-foto { padding: 0; background: none; border-radius: 16px; flex-shrink: 0; line-height: 0; }
+.bubble.solo-foto .msg-foto { display: block; }
+.bubble.solo-foto .msg-foto img { border-radius: 16px; max-width: min(280px, 66vw); max-height: 360px; box-shadow: 0 6px 22px rgba(0,0,0,.35); }
+.bubble.solo-foto time { position: absolute; right: 8px; bottom: 8px; margin: 0; padding: 2px 8px; border-radius: 999px; background: rgba(0,0,0,.5); color: #fff; opacity: 1; backdrop-filter: blur(6px); }
+.bubble.con-voz { padding: 8px 12px 6px; min-width: 230px; }
+/* Nota de voz */
+.voz { display: flex; align-items: center; gap: 10px; min-width: 200px; cursor: default; }
+.voz-play { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; background: #fff; color: #000; }
+.bubble.mine .voz-play { background: #000; color: #fff; }
+.voz-barra { position: relative; flex: 1; height: 26px; cursor: pointer; display: flex; align-items: center; }
+.voz-barra::before { content: ""; position: absolute; inset: 11px 0; border-radius: 4px; background: currentColor; opacity: .22; }
+.voz-barra i { position: absolute; left: 0; top: 11px; height: 4px; width: 0; border-radius: 4px; background: currentColor; transition: width .2s linear; }
+.voz small { flex: none; min-width: 34px; text-align: right; font-size: 12px; opacity: .7; font-variant-numeric: tabular-nums; }
+.dm-previa-voz { display: flex; align-items: center; gap: 10px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--bg-elev); }
+.dm-previa-voz .voz { flex: 1; padding: 6px 12px 6px 6px; border-radius: 999px; background: rgba(255,255,255,.08); }
 .dm-mic.grabando { color: #ff6b6b; animation: grabar 1s ease-in-out infinite; }
 @keyframes grabar { 50% { opacity: .45; } }

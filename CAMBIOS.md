@@ -1,6 +1,14 @@
 # Registro de cambios
 
 
+## Versión 3.13
+- **Notas de voz** (web): reproductor propio (botón, barra para saltar, tiempo) en vez del `<audio>` del navegador; un solo audio a la vez. Al terminar de grabar se escucha antes de enviar (descartar / escuchar / enviar). Servidor: lo grabado en el navegador (WebM/Ogg) se convierte a AAC `.m4a` con ffmpeg (`MensajesService.aM4a`) para que suene en el iPhone, y `/api/mensajes/adjunto/{id}` responde por partes (`Range`, 206).
+- **Fotos sin marco blanco** (web): la foto sola va sin burbuja, con la hora encima (`.bubble.solo-foto`).
+- **Mensajes con la app cerrada en Android** (app 2.7, código 18): `Revisar` (JobScheduler cada ~15 min, sigue tras reiniciar) consulta `/api/notificaciones/resumen` con la sesión guardada al salir de la app; no repite lo que ya avisó la web.
+- **Foto de quien escribe a la izquierda**: Android 11+ usa notificación de conversación (`MessagingStyle` + atajo con `Person`); el resumen de avisos incluye `foto`.
+- **Descargas**: `buscar-audio.py` saca «Artista - Canción» por oEmbed (sirve aunque YouTube pida edad o sesión) y busca en Audius e Internet Archive; `descargar` rota más clientes de YouTube por ronda (`tv_simply`, `android_vr`, `tv_embedded`…), filtra avances de SoundCloud y rescata fuera de YouTube lo que Spotify no pudo bajar.
+- iPhone (rama `app-ios`): barra de pestañas con fondo, avisos de mensajes como conversación, notas de voz con vista previa, perfil nuevo y revisión de repetidas al subir.
+
 ## Versión 3.12
 - **Mensajes con fotos y voz cifradas** (`MensajesService.enviarArchivo`, `POST /api/mensajes/{u}/archivo`, `GET /api/mensajes/adjunto/{id}`): el tipo se detecta por el contenido (imagen hasta 12 MB, audio hasta 20 MB) y el archivo se guarda cifrado con AES-256-GCM (`CifradoMensajes.cifrarBytes`). **Eliminar** (`DELETE /api/mensajes/item/{id}`: el propio se borra para los dos, el recibido solo se oculta para ti) y **bloquear** (`/api/mensajes/bloqueos`). Web, Android (micrófono en la vista web) e iPhone. Pruebas: `MensajesArchivosTest` (4).
 - **Foto de perfil en las notificaciones de mensajes**: Android (ícono grande redondo) e iPhone (adjunto de la notificación).

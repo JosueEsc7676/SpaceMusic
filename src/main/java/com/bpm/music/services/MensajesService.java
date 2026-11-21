@@ -238,6 +238,31 @@ public class MensajesService {
         return null;
     }
 
+    @org.springframework.beans.factory.annotation.Value("${organizador.ffmpeg:ffmpeg}")
+    private String ffmpeg = "ffmpeg";
+
+    /** Convierte un audio a AAC en .m4a con ffmpeg (null si no se pudo: se guarda el original). */
+    byte[] aM4a(byte[] datos) {
+        java.nio.file.Path entrada = null, salida = null;
+        try {
+            entrada = java.nio.file.Files.createTempFile("voz-", ".in");
+            salida = java.nio.file.Files.createTempFile("voz-", ".m4a");
+            java.nio.file.Files.write(entrada, datos);
+            Process p = new ProcessBuilder(ffmpeg, "-nostdin", "-loglevel", "error", "-y", "-i", entrada.toString(),
+                    "-vn", "-ac", "1", "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", salida.toString())
+                    .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+            if (!p.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) { p.destroyForcibly(); return null; }
+            if (p.exitValue() != 0) return null;
+            byte[] r = java.nio.file.Files.readAllBytes(salida);
+            return r.length > 0 ? r : null;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            try { if (entrada != null) java.nio.file.Files.deleteIfExists(entrada); } catch (Exception ignored) { }
+            try { if (salida != null) java.nio.file.Files.deleteIfExists(salida); } catch (Exception ignored) { }
+        }
+    }
+
     /** Envía una imagen o un audio: se guarda cifrado (AES-256-GCM) y solo los dos lo pueden abrir. */
     public Map<String, Object> enviarArchivo(Long yo, String username, byte[] datos, Integer duracion, String texto) {
         Usuario otro = porUsername(username);
@@ -248,6 +273,11 @@ public class MensajesService {
         boolean imagen = mime.startsWith("image/");
         if (datos.length > (imagen ? MAX_IMAGEN : MAX_AUDIO))
             throw new IllegalArgumentException(imagen ? "La foto no puede pasar de 12 MB" : "El audio no puede pasar de 20 MB");
+        if (!imagen && !"audio/mp4".equals(mime) && !"audio/mpeg".equals(mime)) {
+            // Lo grabado en el navegador (WebM/Ogg) no suena en el iPhone: se pasa a AAC (.m4a), que suena en todos
+            byte[] m4a = aM4a(datos);
+            if (m4a != null) { datos = m4a; mime = "audio/mp4"; }
+        }
         String nombre = UUID.randomUUID() + ".bin";
         try {
             java.nio.file.Files.write(carpetaAdjuntos.resolve(nombre), cifrado.cifrarBytes(datos));
@@ -333,6 +363,7 @@ public class MensajesService {
         if (m != null) {
             usuarios.findById(m.getDeId()).ifPresent(u -> r.put("ultimoMensaje", Map.of(
                     "id", m.getId(), "de", u.getNombreVisible(), "username", u.getUsername(),
+                    "foto", Objects.toString(u.getFotoPerfil(), ""),
                     "texto", m.getCancionId() != null && "🎵".equals(m.getTexto()) ? "Te compartió una canción" : m.getTexto())));
         }
         Notificacion n = notificaciones.findFirstByUsuarioIdAndLeidaFalseOrderByIdDesc(yo);

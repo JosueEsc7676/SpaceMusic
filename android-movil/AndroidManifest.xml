@@ -59,6 +59,11 @@
             android:name=".ReproductorService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+        <!-- Revisión de mensajes y avisos con la app cerrada -->
+        <service
+            android:name=".Revisar"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
         <receiver
             android:name=".Despertador"
             android:exported="false">

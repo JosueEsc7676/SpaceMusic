@@ -8,6 +8,8 @@
 #   descargar --ver                         Muestra el progreso de la cola (Ctrl+C = dejar de mirar).
 #   descargar --reintentar                  Vuelve a poner en la cola lo que falló antes.
 #
+# Fuentes de respaldo sin YouTube (buscar-audio.py): SoundCloud, Audius e Internet Archive (APIs abiertas, sin
+#   claves ni bloqueos por IP); después, Spotify por nombre. Lo que falle en Spotify también se rescata así.
 # Entradas: Spotify (canción, álbum, playlist, artista), YouTube, YouTube Music, SoundCloud, Bandcamp,
 #           Apple Music, Deezer, Tidal y Amazon Music (se convierten con song.link), enlaces directos a un
 #           archivo de audio (.mp3, .m4a, .flac…) o "Artista - Canción".
@@ -217,7 +219,11 @@ spotify() {
 antibloqueo() {
   local args="--sleep-requests 1 --min-sleep-interval 1 --max-sleep-interval 4 --force-ipv4"
   [ -s "$DATOS/youtube-cookies.txt" ] && args="$args --cookies $DATOS/youtube-cookies.txt"
-  [ "${1:-1}" -ge 3 ] && args="$args --extractor-args youtube:player_client=tv,web_safari,mweb,web_music"
+  case "${1:-1}" in
+    2) args="$args --extractor-args youtube:player_client=tv_simply,android_vr,web_music" ;;
+    1) ;;
+    *) args="$args --extractor-args youtube:player_client=tv,web_safari,mweb,tv_embedded" ;;
+  esac
   echo "$args"
 }
 
@@ -238,20 +244,50 @@ otra() {
 # si tampoco, se deja para Spotify (búsqueda por nombre, con sus datos, portada y letra).
 respaldo() {
   local url=$1 nombre
-  nombre=$("$ENV/yt-dlp" "$url" $(antibloqueo 3) --skip-download --no-warnings \
+  # oEmbed de YouTube: da el nombre aunque el video pida edad o iniciar sesión (y no gasta peticiones de video)
+  nombre=$("$ENV/python" "$BASE/buscar-audio.py" nombre "$url" 2>/dev/null | head -1)
+  [ -z "$nombre" ] && nombre=$("$ENV/yt-dlp" "$url" $(antibloqueo 3) --skip-download --no-warnings \
             --print "%(artist,creator,uploader)s - %(track,title)s" 2>/dev/null | head -1 | \
            sed -E 's/\s*[\(\[](letra|lyrics?|official[^)\]]*|video[^)\]]*|audio[^)\]]*)[)\]]//Ig; s/ - Topic - / - /')
   [ -z "$nombre" ] || [ "$nombre" = "NA - NA" ] && return 1
-  amarillo "  Buscando «$nombre» en SoundCloud…"
-  if "$ENV/yt-dlp" "scsearch1:$nombre" -f "bestaudio/best" -x --audio-format m4a --embed-metadata --embed-thumbnail \
-       --convert-thumbnails jpg --no-overwrites --download-archive "$HISTORIAL_YT" \
-       -o "$DESTINO/%(uploader)s/%(title)s.%(ext)s" >/dev/null 2>&1; then
-    verde "  ✓ Bajada desde SoundCloud"
-    return 0
-  fi
+  sin_youtube "$nombre" && return 0
   amarillo "  Se buscará «$nombre» con Spotify."
   RESPALDO_SPOTIFY+=("$nombre")
   return 0
+}
+
+# «Artista - Canción» en fuentes que no son YouTube: SoundCloud, Audius e Internet Archive.
+sin_youtube() {
+  local nombre=$1 r
+  amarillo "  Buscando «$nombre» en SoundCloud…"
+  # Solo cuenta si de verdad bajó algo (o ya estaba): el filtro de duración descarta avances de 30 s
+  r=$("$ENV/yt-dlp" "scsearch1:$nombre" -f "bestaudio/best" -x --audio-format m4a --embed-metadata --embed-thumbnail \
+       --convert-thumbnails jpg --no-overwrites --download-archive "$HISTORIAL_YT" --match-filter "duration > 60" \
+       --print after_move:filepath -o "$DESTINO/%(uploader)s/%(title)s.%(ext)s" 2>&1)
+  if echo "$r" | grep -qE "^/|already been recorded in the archive"; then
+    verde "  ✓ Bajada desde SoundCloud"
+    return 0
+  fi
+  amarillo "  Buscando «$nombre» en Audius e Internet Archive…"
+  if r=$("$ENV/python" "$BASE/buscar-audio.py" bajar "$nombre" "$DESTINO" 2>/dev/null); then
+    verde "  ✓ $r"
+    return 0
+  fi
+  return 1
+}
+
+# Lo que Spotify no pudo bajar (enlaces de canciones): se busca por nombre fuera de YouTube.
+rescatar() {
+  local url nombre quedan=()
+  for url in "$@"; do
+    if [[ "$url" =~ open\.spotify\.com/track/ ]] && \
+       nombre=$("$ENV/python" "$BASE/buscar-audio.py" nombre "$url" 2>/dev/null | head -1) && [ -n "$nombre" ] && \
+       sin_youtube "$nombre"; then
+      continue
+    fi
+    quedan+=("$url")
+  done
+  FALLIDAS_FINAL=("${quedan[@]}")
 }
 
 # Enlaces de Apple Music, Deezer, Tidal o Amazon Music → búsquedas «Artista - Canción» (una por canción);
@@ -390,6 +426,12 @@ procesar() {
     echo
     verde "▶ Playlists: ${#LENTAS[@]}"
     bajar_spotify libre "${LENTAS[@]}"
+  fi
+
+  if [ ${#FALLIDAS_FINAL[@]} -gt 0 ]; then
+    echo
+    verde "▶ Rescate fuera de YouTube: ${#FALLIDAS_FINAL[@]} pendiente(s)"
+    rescatar "${FALLIDAS_FINAL[@]}"
   fi
 
   echo

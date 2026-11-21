@@ -82,12 +82,13 @@ public class MensajesController {
 
     /** El archivo del mensaje descifrado (solo para los dos de la conversación). */
     @GetMapping("/mensajes/adjunto/{id}")
-    public ResponseEntity<byte[]> archivo(@PathVariable Long id) {
+    public ResponseEntity<org.springframework.core.io.Resource> archivo(@PathVariable Long id) {
         var a = servicio.archivo(CurrentUser.id(), id);
         return ResponseEntity.ok().contentType(MediaType.parseMediaType(a.getKey()))
                 .cacheControl(CacheControl.maxAge(java.time.Duration.ofDays(7)).cachePrivate())
                 .header("X-Content-Type-Options", "nosniff")
-                .body(a.getValue());
+                // Como recurso: Spring responde también por partes (Range), que piden los reproductores de audio
+                .body(new org.springframework.core.io.ByteArrayResource(a.getValue()));
     }
 
     /** Eliminar un mensaje: el tuyo para los dos; el que recibiste, solo de tu conversación. */

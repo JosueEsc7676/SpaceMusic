@@ -189,6 +189,8 @@ public class MainActivity extends Activity {
         else cargar();
         pedirPermisoNotificaciones();
         vigilarRed();
+        // Mensajes y avisos con la app cerrada (revisión periódica de Android)
+        Revisar.programar(this);
         // Si la app se abrió desde una notificación, ir a esa pantalla cuando cargue
         final Intent inicio = getIntent();
         web.postDelayed(() -> abrirRuta(inicio), 4000);
@@ -614,6 +616,36 @@ public class MainActivity extends Activity {
 
     // ═══════════════════ Ciclo de vida ═══════════════════
     // La vista web NO se pausa al salir de la app: así la música sigue sonando.
+
+    /** true mientras la vista web está viva (ella avisa al instante; la revisión periódica no repite). */
+    static boolean abierta() {
+        MainActivity a = actual.get();
+        return a != null && a.web != null;
+    }
+
+    /** Guarda la sesión de la web para la revisión de mensajes con la app cerrada (`Revisar`). */
+    private void guardarSesion() {
+        if (web == null) return;
+        try {
+            web.evaluateJavascript("(function(){try{return localStorage.getItem('sm_token')||''}catch(e){return ''}})()", v -> {
+                String t = v == null ? "" : v.replace("\"", "").trim();
+                if (t.equals("null")) t = "";
+                if (t.isEmpty() || t.matches("[A-Za-z0-9._-]{20,4096}")) prefs.edit().putString("token", t).apply();
+            });
+        } catch (Exception ignored) { }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (web != null) web.postDelayed(this::guardarSesion, 5000);
+    }
+
+    @Override
+    protected void onStop() {
+        guardarSesion();
+        super.onStop();
+    }
 
     @Override
     protected void onSaveInstanceState(Bundle out) {
