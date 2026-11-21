@@ -200,6 +200,36 @@ public class LetrasService {
 
     private com.bpm.music.organizador.RegistroMetadatos registro;
 
+    private EventosService eventos;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setEventos(EventosService eventos) { this.eventos = eventos; }
+
+    /** Lectura bloqueada + revisión evita pisar correcciones de otro editor. No cambia el texto plano. */
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> guardarSincronia(Long id, Double segundos, String revision) {
+        biblioteca.requerir(id);
+        var filas = repo.letrasParaSincronia(id);
+        if (filas.isEmpty()) throw new NoSuchElementException("Canción no encontrada");
+        String plano = filas.get(0)[0] == null ? "" : filas.get(0)[0].toString();
+        String anterior = filas.get(0)[1] == null ? "" : filas.get(0)[1].toString();
+        if (revision == null || !revision.matches("[a-f0-9]{64}"))
+            throw new IllegalArgumentException("Falta la revisión de la letra; vuelve a cargarla");
+        if (!SincroniaLetra.revision(anterior).equals(revision))
+            throw new IllegalStateException("La letra cambió en otro dispositivo. Recarga el ajuste antes de guardar");
+        String nueva = SincroniaLetra.ajustar(anterior, segundos);
+        repo.actualizarSincronia(id, nueva);
+        anotar(id, "letraSincronizada", anterior, nueva);
+        if (eventos != null) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override public void afterCommit() {
+                            for (Long uid : eventos.conectados().keySet()) eventos.enviar(uid, "letra", Map.of("id", id));
+                        }
+                    });
+        }
+        return respuesta(plano, nueva, null);
+    }
+
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setRegistro(com.bpm.music.organizador.RegistroMetadatos registro) { this.registro = registro; }
 
@@ -346,6 +376,8 @@ public class LetrasService {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("letra", letra == null ? "" : letra);
         m.put("letraSincronizada", lrc == null ? "" : lrc);
+        m.put("sincroniaGlobalSegundos", SincroniaLetra.segundos(lrc));
+        m.put("revisionSincronia", SincroniaLetra.revision(lrc));
         if (fuente != null) m.put("fuente", fuente);
         return m;
     }

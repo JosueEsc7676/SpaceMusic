@@ -79,6 +79,14 @@ public interface CancionRepository extends JpaRepository<Cancion, Long> {
     @Query("UPDATE Cancion c SET c.letra = :letra, c.letraSincronizada = :lrc WHERE c.id = :id")
     int actualizarLetras(@Param("id") Long id, @Param("letra") String letra, @Param("lrc") String lrc);
 
+    /** Solo texto, sin leer portadas. La transacción del editor retiene el bloqueo hasta guardar. */
+    @Query(value = "SELECT letra, letra_sincronizada FROM cancion WHERE id = :id FOR UPDATE", nativeQuery = true)
+    List<Object[]> letrasParaSincronia(@Param("id") Long id);
+
+    @Modifying
+    @Query("UPDATE Cancion c SET c.letraSincronizada = :lrc WHERE c.id = :id")
+    int actualizarSincronia(@Param("id") Long id, @Param("lrc") String lrc);
+
     @Transactional
     @Modifying
     @Query("UPDATE Cancion c SET c.nombre = :nombre WHERE c.id = :id")

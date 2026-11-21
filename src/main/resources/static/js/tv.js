@@ -1306,6 +1306,8 @@ function conectarEventos() {
   for (const ev of ['juntos', 'juntos-reaccion', 'juntos-fin', 'control-orden', 'control-dispositivos', 'control-ack']) {
     fuente.addEventListener(ev, (e) => { try { bus.emit(ev, JSON.parse(e.data)); } catch { } });
   }
+  fuente.addEventListener('letra', e => { try { if (JSON.parse(e.data).id === player.current?.id) cargarLetra(player.current); } catch {} });
+  fuente.addEventListener('hola', () => { if (player.current) cargarLetra(player.current); });
   fuente.onerror = () => {
     // El navegador reintenta solo; si la sesión venció, se vuelve a la pantalla de entrada
     if (fuente.readyState === EventSource.CLOSED) setTimeout(conectarEventos, 5000);

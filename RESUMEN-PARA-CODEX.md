@@ -1,6 +1,6 @@
 # SpaceMusic: resumen para quien continúe el trabajo (Codex u otra persona)
 
-Estado al 21 de noviembre de 2026, versión **3.17** (servidor y web), **Android 2.7** (código 18), **Android TV 1.2** (código 3) e **iPhone 1.42+** (rama `app-ios`, la compilación de GitHub numera la versión).
+Estado al 21 de noviembre de 2026, versión **3.18** (servidor y web), **Android 2.7** (código 18), **Android TV 1.2** (código 3) e **iPhone 1.44** (rama `app-ios`, la compilación de GitHub numera la versión).
 El detalle de cada versión está en `CAMBIOS.md` (servidor, web y Android) y en `CAMBIOS.md` de la rama `app-ios` (iPhone).
 
 ## 1. Qué es y dónde está cada parte
@@ -130,3 +130,11 @@ Android carga la web: **toda función nueva de la web ya está en Android**. El 
 - Jar SHA256: 5b02d8629ffd14c96569d52822a2d42f46ecb75166d9213113ebb1eb1efc7b4f. Los diagnósticos locales están excluidos del jar en pom.xml.
 - Despliegue cerrado: /app/SpaceMusic-42.ipa conserva HTTP 200 y 4 112 592 bytes; la revisión de audio publicada es v=314 y el salto automático antiguo fue retirado. No se probó teléfono físico.
 - Evidencias: pruebas/resultados/audio-3.14.json.
+
+## Actualización 3.18 — sincronía compartida (21/11/2026)
+- Servidor/web 3.18 publicado y comprobado: novedades y estado HTTP 200; PUT /api/letras/1/sincronia sin sesión HTTP 401. Respaldo: /home/admin123/spacemusic/spacemusic.jar.antes-3.18-sincronia-20261121-1630. Sin cambios de esquema ni claves.
+- GET /api/letras/{id} devuelve sincroniaGlobalSegundos y revisionSincronia; PUT /api/letras/{id}/sincronia recibe segundos y revisión. Solo ADMIN/COLABORADOR, ±60 s, revisión SHA-256 y bloqueo de fila; conflicto 409. Se guarda un offset LRC, se conserva texto y tiempos originales; historial manual existente y aviso SSE letra después de confirmar la transacción. Web, Android WebView, TV y lector nativo reconocen el offset.
+- iPhone 1.44, commit 324a76a, Actions 44956404792 correcto: pruebas Swift, compilación Xcode y IPA. Publicado /app/SpaceMusic-44.ipa (4165825 bytes), SHA-256 33e7153decbd82eb3eb60eb60f1c9ab15ee28b8472cddc17985c71a28f26a757. Se instala con la firma/herramienta habitual; no se creó otra llave. Archivos anteriores .anterior en app/.
+- Panel de sincronía persistente: vista previa, pasos 0,1/0,5 s, pausa, retroceso y guardar para todos sin cerrar; usuario normal mantiene ajuste personal. Las correcciones de otro editor requieren recargar.
+- Verificación local: 10 pruebas Java (validación, roles, persistencia y dos editores concurrentes) y 19 JavaScript (incluidas caché/reproducción anteriores) correctas. Comando JS: node --experimental-vm-modules --test pruebas/letras-sincronia.test.mjs pruebas/audio-reproductor.test.mjs pruebas/audio-cache.test.mjs. No se probó un iPhone físico.
+- No agregar al commit ni al jar los diagnósticos locales audio-diagnostico.html y js/audio-diagnostico.js. Se comprobó su ausencia del jar publicado.

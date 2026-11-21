@@ -26,11 +26,12 @@ const limpiarLinea = (l) => l.replace(/\[[^\]]*]|<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>
 
 export function bloquesDeLetra(letra, lrc) {
   const lineas = [];
+  const offset = Number(lrc?.match(/\[offset:\s*([+-]?\d+)\s*]/i)?.[1] || 0) / 1000;
   if (lrc && /\[\d{1,3}:\d{2}/.test(lrc)) {
     for (const l of lrc.split(/\r?\n/)) {
       const m = /^\s*\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?]\s*(.*)$/.exec(l);
       if (!m) continue;
-      const t = +m[1] * 60 + +m[2] + (m[3] ? +('0.' + m[3]) : 0);
+      const t = +m[1] * 60 + +m[2] + (m[3] ? +('0.' + m[3]) : 0) - offset;
       lineas.push({ t, texto: limpiarLinea(m[4]) });
     }
   } else {

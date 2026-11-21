@@ -1,5 +1,12 @@
 # Registro de cambios
 
+## Versión 3.18
+- Sincronía compartida mediante offset LRC: ADMIN/COLABORADOR pueden guardar ±60 s, con revisión SHA-256 y bloqueo transaccional para evitar sobrescrituras. Conserva texto y marcas de palabras. Sin migración.
+- Panel persistente de ajuste con vista previa y guardado explícito; usuarios conservan ajuste personal. Invalidación en vivo por el SSE existente en web, TV y iPhone.
+- iPhone: ventana independiente con pasos de 0,1/0,5 s, deslizador, volver 5 s, pausa y recarga; no se cierra al ajustar ni guardar.
+- Pruebas Java de permisos, validación, persistencia y concurrencia; pruebas de offsets de líneas/palabras en JavaScript y Swift.
+
+
 
 ## Versión 3.17
 - **Órbita con los colores de la portada** (`paleta()`, `colores()`): se sacan los colores de la portada agrupados por tono; el fondo es el color principal oscurecido, los resplandores son el primero y el segundo color, y el acento es el más vivo aclarado (portadas en gris: acento lima).

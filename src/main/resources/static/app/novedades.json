@@ -1,13 +1,22 @@
 {
-  "version": "3.17",
-  "titulo": "Novedades: la TV se pinta con tu portada y la letra a tu gusto",
+  "version": "3.18",
+  "titulo": "Sincronía de letras compartida",
   "puntos": [
-    "TV «Órbita»: el fondo toma los colores reales de cada portada.",
-    "TV: muestra varias líneas, solo el verso que suena o el verso flotando por la pantalla (siempre derecho y legible).",
-    "TV: elige el color de la letra, más junta o más separada, al centro o a la izquierda y con o sin brillo.",
-    "TV: el reproductor se abre más fácil: «Reproduciendo» está primero en el menú y la flecha ↑ arriba del todo lleva al mini reproductor."
+    "Colaboradores y administradores pueden guardar la sincronía de cada canción para todos.",
+    "Ajusta la letra sin cerrar la ventana, escucha la vista previa y guarda cuando coincida.",
+    "Se conserva la letra original y se evitan conflictos entre editores."
   ],
   "anteriores": [
+    {
+      "version": "3.17",
+      "titulo": "Novedades: la TV se pinta con tu portada y la letra a tu gusto",
+      "puntos": [
+        "TV «Órbita»: el fondo toma los colores reales de cada portada.",
+        "TV: muestra varias líneas, solo el verso que suena o el verso flotando por la pantalla (siempre derecho y legible).",
+        "TV: elige el color de la letra, más junta o más separada, al centro o a la izquierda y con o sin brillo.",
+        "TV: el reproductor se abre más fácil: «Reproduciendo» está primero en el menú y la flecha ↑ arriba del todo lleva al mini reproductor."
+      ]
+    },
     {
       "version": "3.16",
       "titulo": "Novedades: nuevo reproductor «Órbita» en la TV",

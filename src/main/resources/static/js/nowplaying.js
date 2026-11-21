@@ -4,7 +4,7 @@ import { esc, $, bus, cover, coverImg, fmtTime, dominantColor, store, isMobile, 
 import { icon } from './icons.js';
 import { player, prefs, fx } from './player.js';
 import { lib } from './state.js';
-import { toast, errorToast, sortable, songMenu, editLyrics, showMenu } from './ui.js';
+import { toast, errorToast, sortable, songMenu, editLyrics, showMenu, modal } from './ui.js';
 import { parseLrc } from './lrc.js';
 
 // ═══════════════════ Letras ═══════════════════
@@ -49,14 +49,84 @@ async function getLyrics(song, { autoSearch = true } = {}) {
   lyricsCache.set(song.id, d);
   return d;
 }
-bus.on('lyrics:changed', (id) => { lyricsCache.delete(id); buscadas.delete(id); if (np.isOpen && player.current?.id === id) np.renderTab(); });
+bus.on('lyrics:changed', (id) => { lyricsCache.delete(id); buscadas.delete(id); if (np.isOpen && player.current?.id === id && np._editandoSincronia !== id) np.renderTab(); });
+bus.on('letra', ({ id }) => bus.emit('lyrics:changed', id));
+bus.on('letras:recargar', () => { lyricsCache.clear(); if (np.isOpen && !np._editandoSincronia) np.renderTab(); });
 
 const offsets = store.get('sm_lrc_offset', {});
-const getOffset = (id) => offsets[id] || 0;
+let vistaSincronia = null;
+const getOffset = (id) => vistaSincronia?.id === id ? vistaSincronia.delta : (offsets[id] || 0);
 function setOffset(id, v) {
   v = Math.round(v * 10) / 10;
   if (v) offsets[id] = v; else delete offsets[id];
   store.set('sm_lrc_offset', offsets);
+}
+
+async function editarSincroniaCompartida(vista, song) {
+  const id = song.id;
+  let actual = await getLyrics(song, { autoSearch: false });
+  if (!actual.revisionSincronia) actual = await api(`/api/letras/${id}`, { timeout: 10000 });
+  let global = Number(actual.sincroniaGlobalSegundos || 0), borrador = global;
+  let lineas = parseLrc(actual.letraSincronizada || '');
+  let guardando = false, abierto = true, reloj;
+  vista._editandoSincronia = id;
+  vistaSincronia = { id, delta: 0 };
+  try {
+    await modal({
+      title: 'Sincronía para todos',
+      body: `<p><strong>${esc(song.nombre)}</strong></p><p>Positivo: letra después. Negativo: letra antes. Vista previa hasta guardar.</p>
+        <p><output data-ajuste style="font-size:28px;font-variant-numeric:tabular-nums"></output></p>
+        <div class="row" style="flex-wrap:wrap">${[-0.5,-0.1,0.1,0.5].map(n => `<button class="btn sm" data-delta="${n}" type="button">${n > 0 ? '+' : '−'}${Math.abs(n)} s</button>`).join('')}<button class="btn sm" data-cero type="button">Restablecer</button></div>
+        <blockquote data-verso style="min-height:3em;margin:18px 0"></blockquote>
+        <div class="row"><button class="btn sm" data-atras type="button">Volver 5 s</button><button class="btn sm" data-sonar type="button">Reproducir / Pausar</button></div>
+        <p data-estado role="status" aria-live="polite">El ajuste guardado se aplicará a todos los dispositivos.</p>`,
+      actions: [{ label: 'Cerrar', value: 'cerrar' }, { label: 'Recargar', value: 'recargar' }, { label: 'Guardar para todos', value: 'guardar', primary: true }],
+      onOpen(el) {
+        const pintar = () => {
+          el.querySelector('[data-ajuste]').textContent = `${borrador >= 0 ? '+' : ''}${borrador.toFixed(1)} s`;
+          let verso = '';
+          const t = player.audio.currentTime + global - borrador;
+          for (const l of lineas) { if (l.t > t) break; if (l.text) verso = l.text; }
+          el.querySelector('[data-verso]').textContent = player.current?.id === id ? (verso || 'Escucha y ajusta hasta que coincida con la voz.') : 'La canción cambió. Cierra este ajuste y abre el de la canción actual.';
+        };
+        const cambiar = n => {
+          if (guardando || player.current?.id !== id) return;
+          borrador = Math.round(Math.max(-60, Math.min(60, n)) * 10) / 10;
+          vistaSincronia = { id, delta: global - borrador };
+          el.querySelector('[data-estado]').textContent = 'Vista previa: guarda para compartir el ajuste.';
+          vista.updateLyrics(true); pintar();
+        };
+        el.querySelectorAll('[data-delta]').forEach(b => b.onclick = () => cambiar(borrador + Number(b.dataset.delta)));
+        el.querySelector('[data-cero]').onclick = () => cambiar(0);
+        el.querySelector('[data-atras]').onclick = () => { if (player.current?.id === id) player.seek(Math.max(0, player.audio.currentTime - 5)); };
+        el.querySelector('[data-sonar]').onclick = () => { if (player.current?.id === id) player.toggle(); };
+        reloj = setInterval(pintar, 200); pintar();
+      },
+      async onAction(accion, el) {
+        if (accion === 'cerrar') return guardando ? false : undefined;
+        if (player.current?.id !== id) throw new Error('La canción cambió; abre su propio ajuste');
+        guardando = true;
+        el.querySelector('[data-estado]').textContent = 'Guardando para todos…';
+        try {
+          const nuevo = accion === 'recargar'
+            ? await api(`/api/letras/${id}?sincronia=${Date.now()}`, { timeout: 10000 })
+            : await api(`/api/letras/${id}/sincronia`, { method: 'PUT', body: { segundos: borrador, revision: actual.revisionSincronia }, timeout: 15000 });
+          actual = nuevo; global = Number(nuevo.sincroniaGlobalSegundos || 0); borrador = global;
+          lineas = parseLrc(nuevo.letraSincronizada || ''); lyricsCache.set(id, nuevo);
+          if (accion === 'guardar') setOffset(id, 0);
+          if (abierto) vistaSincronia = { id, delta: 0 };
+          if (player.current?.id === id && vista.isOpen) await vista.renderTab();
+          el.querySelector('[data-estado]').textContent = accion === 'recargar' ? 'Ajuste recargado desde el servidor.' : 'Guardado para todos. Puedes seguir comprobando sin cerrar.';
+        } catch (e) { el.querySelector('[data-estado]').textContent = e.message; throw e; }
+        finally { guardando = false; }
+        return false;
+      },
+    });
+  } finally {
+    abierto = false; clearInterval(reloj); vistaSincronia = null;
+    if (vista._editandoSincronia === id) delete vista._editandoSincronia;
+    if (vista.isOpen && player.current?.id === id) vista.renderTab();
+  }
 }
 
 // ═══════════════════ Cola (compartida con el panel lateral) ═══════════════════
@@ -270,7 +340,7 @@ export const np = {
       { label: 'Ir al artista', icon: 'user', fn: () => { this.close(); location.hash = '#/artista/' + encodeURIComponent(s.artista); } },
       s.album && s.album !== 'Single' ? { label: 'Ir al álbum', icon: 'disc', fn: () => { this.close(); location.hash = albumHref(s.album, s.artista); } } : null,
       { sep: true },
-      conSync ? { label: `Ajustar sincronía (${fmtOffCorto(getOffset(s.id))})`, icon: 'clock', fn: () => this.menuSync(anchor) } : null,
+      conSync ? { label: session.canEdit ? 'Sincronía para todos' : `Ajuste personal (${fmtOffCorto(getOffset(s.id))})`, icon: 'clock', fn: () => this.menuSync(anchor) } : null,
       session.canEdit ? { label: 'Editar letra', icon: 'edit', fn: () => editLyrics(s) } : null,
       { label: this.lyrFocus ? 'Letra normal' : isMobile() ? 'Letra en pantalla completa' : 'Letra grande', icon: 'expand', fn: () => { if (this.tab !== 'letra') this.setTab('letra'); this.toggleFocus(); } },
       this.tab === 'letra' && this.el.querySelector('.lyrics .line') ? { label: 'Compartir versos como imagen', icon: 'send', fn: () => this.elegirVersos(true) } : null,

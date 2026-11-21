@@ -182,6 +182,8 @@ function conectarEnVivo() {
   fuente.addEventListener('mantenimiento', () => bus.emit('servidor:mantenimiento'));
   fuente.addEventListener('visto', (e) => { try { bus.emit('dm:visto', JSON.parse(e.data)); } catch { } });
   fuente.addEventListener('notificacion', () => consultar());
+  fuente.addEventListener('letra', e => { try { bus.emit('letra', JSON.parse(e.data)); } catch {} });
+  fuente.addEventListener('hola', () => bus.emit('letras:recargar'));
   fuente.addEventListener('actividad', (e) => { try { bus.emit('amigo:actividad', JSON.parse(e.data)); } catch { } });
   // SyncPlay: estado y cierre
   // Control remoto entre tus dispositivos: órdenes y lista de dispositivos

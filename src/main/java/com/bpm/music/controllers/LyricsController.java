@@ -26,6 +26,14 @@ public class LyricsController {
         return letras.obtener(id);
     }
 
+    public record AjusteSincronia(Double segundos, String revision) {}
+
+    @PutMapping("/{id}/sincronia")
+    @PreAuthorize("hasAnyRole('ADMIN','COLABORADOR')")
+    public Map<String, Object> sincronia(@PathVariable Long id, @RequestBody AjusteSincronia ajuste) {
+        return letras.guardarSincronia(id, ajuste.segundos(), ajuste.revision());
+    }
+
     /** Busca la letra en internet (LRCLIB) y la guarda si la encuentra. */
     @PostMapping("/{id}/buscar")
     public Map<String, Object> buscar(@PathVariable Long id, @RequestParam(defaultValue = "false") boolean forzar) {
