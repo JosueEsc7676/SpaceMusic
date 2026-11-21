@@ -66,6 +66,7 @@ final class Reproductor {
     @ObservationIgnored private var tareaEspera: Task<Void, Never>?
     /// La siguiente canción se precarga cuando la actual ya está lista, para no competir por la red al arrancar.
     @ObservationIgnored private var siguientePendiente = false
+    @ObservationIgnored private var esperandoRadioAlFinal = false
     /// Vigila que la canción empiece: si no carga a tiempo se reintenta una vez y luego se explica el fallo.
     @ObservationIgnored private var vigilante: Task<Void, Never>?
     @ObservationIgnored private var reintentada: Int?
@@ -568,8 +569,9 @@ final class Reproductor {
         pausaLocal = false
         marcarInicio()
         intencionSonar = true
-        if (jugador.currentItem == nil || jugador.currentItem?.status == .failed || error != nil), actual != nil {
-            let posicion = tiempo
+        let terminada = duracion > 0 && tiempo >= duracion - 0.1
+        if (jugador.currentItem == nil || jugador.currentItem?.status == .failed || error != nil || terminada), actual != nil {
+            let posicion = terminada ? 0 : tiempo
             cargarActual(reproducir: true)
             if posicion > 0 { jugador.seek(to: CMTime(seconds: posicion, preferredTimescale: 600)) }
             return
@@ -734,6 +736,7 @@ final class Reproductor {
     }
 
     private func cargarActual(reproducir: Bool) {
+        esperandoRadioAlFinal = false
         intencionSonar = reproducir
         guard let c = actual, let item = elemento(para: c) else { return }
         error = nil
@@ -928,7 +931,7 @@ final class Reproductor {
         let filtradas = nuevas.filter { !ids.contains($0.id) }
         guard !filtradas.isEmpty else { return }
         cola.append(contentsOf: filtradas)
-        if jugador.currentItem == nil, intencionSonar, indice + 1 < cola.count {
+        if (jugador.currentItem == nil || esperandoRadioAlFinal), intencionSonar, indice + 1 < cola.count {
             indice += 1
             cargarActual(reproducir: true)
             return
@@ -1016,6 +1019,7 @@ final class Reproductor {
     /// Solo un final real avanza automáticamente; un error o una espera no cambia la canción.
     private func terminoNormalmente(_ item: AVPlayerItem?) {
         guard let item, item === itemActual, item.status != .failed else { return }
+        guard contexto != "juntos-oyente" else { return } // El siguiente estado lo decide la sala.
         if dormirAlTerminar {
             dormirAlTerminar = false
             pausar()
@@ -1032,6 +1036,7 @@ final class Reproductor {
                 cargarActual(reproducir: true)
             }
         } else if radioAutomatica {
+            esperandoRadioAlFinal = true
             let version = versionCola
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -1041,7 +1046,7 @@ final class Reproductor {
                     self.registrarEscucha()
                     self.indice = j
                     self.cargarActual(reproducir: true)
-                } else { self.pausar() }
+                } else if self.pidiendoRadio == nil { self.esperandoRadioAlFinal = false; self.pausar() }
             }
         } else { pausar() }
     }
