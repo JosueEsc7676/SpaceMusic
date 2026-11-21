@@ -1010,9 +1010,15 @@ final class Reproductor {
               jugador.timeControlStatus == .waitingToPlayAtSpecifiedRate else { return }
         let ahora = item.currentTime().seconds
         guard ahora.isFinite, ahora < 0.5 else { return }
-        let disponible = item.loadedTimeRanges.map(\.timeRangeValue)
-            .filter { $0.start.seconds <= ahora + 0.1 && $0.end.seconds > ahora }
-            .map { $0.end.seconds - ahora }.max() ?? 0
+        var disponible: Double = 0
+        for valor in item.loadedTimeRanges {
+            let rango: CMTimeRange = valor.timeRangeValue
+            let comienzo: Double = rango.start.seconds
+            let fin: Double = rango.end.seconds
+            if comienzo <= ahora + 0.1 && fin > ahora {
+                disponible = max(disponible, fin - ahora)
+            }
+        }
         if disponible >= 1 { jugador.playImmediately(atRate: 1) }
     }
 
