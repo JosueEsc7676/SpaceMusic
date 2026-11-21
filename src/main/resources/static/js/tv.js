@@ -8,6 +8,9 @@ import { icon } from './icons.js';
 import { player, prefs } from './player.js';
 import { parseLrc } from './lrc.js';
 import { pintarCuerpo, ocultarSplash } from './splash.js';
+import { qrSvg } from './qr.js';
+import { iniciarRemoto, cargarDispositivos, otrosDispositivos, miDispositivo, miNombre, ordenar, posicion, escucharAqui, pasarA } from './remoto.js';
+import { motor, objetivo, control, activar as activarSala, crearSala, retomarSala, salaActiva, unirseConCodigoTexto, salirDeSala } from './juntos-motor.js';
 
 const nativo = window.SpaceMusicTV || null; // puente con la APK (si existe)
 const $ = (s, r = document) => r.querySelector(s);
@@ -45,6 +48,7 @@ function toast(msg) {
   toastT = setTimeout(() => t.classList.add('hidden'), 2600);
 }
 bus.on('toast', (t) => toast(t.msg));
+const fallo = (e) => toast(e?.message || 'No se pudo completar');
 
 // ═══════════════════ Navegación con el control (flechas) ═══════════════════
 
@@ -247,6 +251,8 @@ const SECCIONES = [
   ['artistas', 'user', 'Artistas'],
   ['albumes', 'disc', 'Álbumes'],
   ['historial', 'history', 'Recientes'],
+  ['dispositivos', 'devices', 'Dispositivos'],
+  ['syncplay', 'headphones', 'SyncPlay'],
 ];
 
 function shell() {
@@ -267,7 +273,10 @@ function shell() {
   $('.rail').addEventListener('click', (e) => {
     const b = e.target.closest('[data-go]');
     if (!b) return;
-    if (b.dataset.go === 'salir') { session.clear(); location.reload(); return; }
+    if (b.dataset.go === 'salir') {
+      try { fetch('/api/control/presencia/' + encodeURIComponent(miDispositivo()), { method: 'DELETE', keepalive: true, headers: { Authorization: 'Bearer ' + session.token } }); } catch { }
+      session.clear(); location.reload(); return;
+    }
     if (b.dataset.go === 'np') { abrirNP(); return; }
     if (b.dataset.go === 'servidor') { nativo.openSettings(); return; }
     if (b.dataset.go === 'cerrar') { player.pause(); nativo.cerrarApp(); return; }
@@ -278,9 +287,10 @@ function shell() {
 
 function navegar(seccion) {
   pila.length = 0;
+  vistaActual(null);
   $$('.nav').forEach((n) => n.classList.toggle('active', n.dataset.go === seccion));
   const vistas = { inicio: vistaInicio, buscar: vistaBuscar, megusta: vistaMeGusta, playlists: vistaPlaylists,
-    artistas: vistaArtistas, albumes: vistaAlbumes, historial: vistaHistorial };
+    artistas: vistaArtistas, albumes: vistaAlbumes, historial: vistaHistorial, dispositivos: vistaDispositivos, syncplay: vistaSyncPlay };
   ir(vistas[seccion] || vistaInicio);
 }
 
@@ -505,6 +515,182 @@ async function coleccion({ kind, titulo, arte, meta, songs, ctx, redondo, colorD
   });
 }
 
+// ═══════════════════ Dispositivos (como Spotify Connect) ═══════════════════
+
+let enPantalla = null; // pantalla especial abierta: 'dispositivos', 'dispositivo:<id>' o 'syncplay'
+const vistaActual = (v) => { enPantalla = v; };
+const deviceIcon = (d) => (d.plataforma === 'tv' ? 'tv' : d.plataforma === 'ios' || d.plataforma === 'android' ? 'phone' : 'devices');
+
+async function vistaDispositivos() {
+  vistaActual('dispositivos');
+  const lista = await cargarDispositivos().catch(() => []);
+  if (enPantalla !== 'dispositivos') return;
+  const otros = otrosDispositivos();
+  const tarjeta = (d) => `<button class="dev f ${d.sonando ? 'sonando' : ''}" data-dev="${esc(d.id)}">
+      <div class="dev-art">${d.cancion ? img(d.cancion.portadaUrl, 300) : `<div class="ph">${icon(deviceIcon(d))}</div>`}<span class="dev-ico">${icon(deviceIcon(d))}</span></div>
+      <div class="t ellipsis">${esc(d.nombre)}</div>
+      <div class="s ellipsis">${d.cancion ? `${d.sonando ? 'Sonando' : 'En pausa'} · ${esc(d.cancion.nombre)}` : 'Sin música'}</div></button>`;
+  await pantalla(`<h1 class="title">Dispositivos</h1>
+    <p class="sub">Esta TV aparece como <b>${esc(miNombre())}</b> en tu teléfono, computadora o tablet: desde ahí puedes ponerle música, pausarla, cambiar de canción o el volumen.</p>
+    ${otros.length ? `<section class="row"><h2>Tus otros dispositivos</h2><div class="shelf">${otros.map(tarjeta).join('')}</div></section>`
+      : `<p class="empty">Abre SpaceMusic con tu cuenta en el teléfono o la computadora y aparecerá aquí.</p>`}
+    <div class="actions"><button class="btn f" data-dev-recargar>${icon('refresh')} Actualizar</button></div>`, { foco: true });
+  $('#screen [data-dev-recargar]')?.addEventListener('click', () => vistaDispositivos());
+  $$('#screen [data-dev]').forEach((b) => b.addEventListener('click', () => ir(vistaDispositivo, b.dataset.dev)));
+  return lista;
+}
+
+async function vistaDispositivo(id) {
+  vistaActual('dispositivo:' + id);
+  await cargarDispositivos().catch(() => []);
+  const d = otrosDispositivos().find((x) => x.id === id);
+  if (!d) { toast('Ese dispositivo ya no está conectado'); atras(); return; }
+  const c = d.cancion;
+  await pantalla(`<div class="head"><div class="cover">${c ? img(c.portadaUrl, 640) : `<div class="ph">${icon(deviceIcon(d))}</div>`}</div>
+      <div style="min-width:0"><div class="kind">${icon(deviceIcon(d))} ${esc(d.nombre)}</div>
+        <h1 class="ellipsis">${c ? esc(c.nombre) : 'Sin música'}</h1>
+        <div class="meta">${c ? `${esc(c.artista)} · ${d.sonando ? 'Sonando' : 'En pausa'} · <span data-dev-t>${fmtTime(posicion(d))}</span> / ${fmtTime(c.duracionSegundos)}` : 'Pon música desde aquí o desde ese dispositivo.'}
+          · Volumen <span data-dev-vol>${Math.round((d.volumen ?? 1) * 100)}</span>%</div></div></div>
+    <div class="actions dev-ctrls">
+      ${c ? `<button class="btn f" data-o="prev">${icon('rew')}</button>
+      <button class="btn primary f" data-o="${d.sonando ? 'pause' : 'play'}">${icon(d.sonando ? 'pause' : 'play')} ${d.sonando ? 'Pausar' : 'Reproducir'}</button>
+      <button class="btn f" data-o="next">${icon('fwd')}</button>
+      <button class="btn f" data-o="vol-">${icon('volumeLow')} −</button>
+      <button class="btn f" data-o="vol+">${icon('volume')} +</button>` : ''}
+    </div>
+    <div class="actions">
+      ${c ? `<button class="btn f" data-o="aqui">${icon('tv')} Escuchar en esta TV</button>` : ''}
+      ${player.current ? `<button class="btn f" data-o="pasar">${icon('devices')} Pasar la música de la TV</button>` : ''}
+    </div>`);
+  const acciones = $('#screen');
+  acciones.querySelectorAll('[data-o]').forEach((b) => b.addEventListener('click', async () => {
+    const o = b.dataset.o;
+    try {
+      if (o === 'aqui') { await escucharAqui(d); abrirNP(); return; }
+      if (o === 'pasar') { await pasarA(d); setTimeout(() => vistaDispositivo(id), 900); return; }
+      if (o === 'vol-' || o === 'vol+') {
+        const v = Math.max(0, Math.min(1, (d.volumen ?? 1) + (o === 'vol+' ? 0.1 : -0.1)));
+        d.volumen = v;
+        await ordenar(d.id, 'volumen', { volumen: v });
+        $('[data-dev-vol]') && ($('[data-dev-vol]').textContent = Math.round(v * 100));
+        return;
+      }
+      await ordenar(d.id, o);
+      setTimeout(() => { if (enPantalla === 'dispositivo:' + id) { const k = focused?.dataset.o; vistaDispositivo(id).then(() => k && enfocar($(`[data-o="${k}"]`) || $(`[data-o="${k === 'play' ? 'pause' : 'play'}"]`))); } }, 700);
+    } catch (e) { fallo(e); }
+  }));
+}
+
+// La lista cambia (alguien empezó a sonar, se conectó otro dispositivo…): se actualiza la pantalla abierta
+let pintandoDisp = 0;
+bus.on('remoto:lista', () => {
+  if (enPantalla !== 'dispositivos' || Date.now() - pintandoDisp < 1500 || $('.np.open')) return;
+  pintandoDisp = Date.now();
+  const k = focused?.dataset.dev;
+  vistaDispositivos().then(() => k && enfocar($(`[data-dev="${k}"]`)));
+});
+setInterval(() => {
+  if (!enPantalla?.startsWith('dispositivo:')) return;
+  const d = otrosDispositivos().find((x) => 'dispositivo:' + x.id === enPantalla);
+  const t = $('[data-dev-t]');
+  if (d && t) t.textContent = fmtTime(posicion(d));
+}, 1000);
+
+// ═══════════════════ SyncPlay en la TV ═══════════════════
+
+async function vistaSyncPlay() {
+  vistaActual('syncplay');
+  const activa = salaActiva();
+  if (activa) return pintarSala(motor.estado || await api('/api/juntos/' + activa.id).catch(() => null));
+  const salas = await api('/api/juntos').catch(() => []);
+  if (enPantalla !== 'syncplay') return;
+  const invit = salas.filter((s) => !s.dentro);
+  await pantalla(`<h1 class="title">SyncPlay</h1>
+    <p class="sub">Escuchen la misma canción en el mismo segundo en la TV, los teléfonos y las computadoras. Todos pueden reproducir, pausar y cambiar de canción.</p>
+    <div class="actions"><button class="btn primary f" data-sp="crear">${icon('headphones')} Iniciar SyncPlay en la TV</button>
+      <button class="btn f" data-sp="codigo">${icon('users')} Unirme con código</button></div>
+    <form class="search-box f hidden" id="spf">${icon('users')}<input id="spc" maxlength="7" placeholder="Código de 6 letras y números" autocomplete="off"></form>
+    ${invit.length || salas.some((s) => s.dentro) ? `<section class="row"><h2>Invitaciones y SyncPlay de tus amigos</h2><div class="shelf">${salas.map((s) => `<button class="card f" data-sala="${s.id}">
+      <div class="art">${s.cancion ? img(s.cancion.portadaUrl) : `<div class="ph">${icon('users')}</div>`}</div>
+      <div class="t ellipsis">${s.soyAnfitrion ? 'Tu SyncPlay' : 'SyncPlay de ' + esc(s.anfitrion?.nombre || '')}</div>
+      <div class="s ellipsis">${s.dentro ? `${s.personas.length} escuchando` : 'Te invitaron'}${s.cancion ? ' · ' + esc(s.cancion.nombre) : ''}</div></button>`).join('')}</div></section>` : ''}`);
+  const s = $('#screen');
+  s.querySelector('[data-sp="crear"]').addEventListener('click', async () => {
+    try {
+      const sonaba = player.current, cola = player.items.slice(player.index + 1, player.index + 21).map((x) => x.id);
+      const d = await crearSala();
+      toast('SyncPlay iniciado');
+      // Lo que sonaba en la TV pasa a sonar para todos
+      if (sonaba && !d.cancion) await control('poner', { cancionId: sonaba.id, cola });
+      pintarSala(motor.estado || d);
+    } catch (e) { fallo(e); }
+  });
+  s.querySelector('[data-sp="codigo"]').addEventListener('click', () => {
+    const f = $('#spf');
+    f.classList.remove('hidden');
+    enfocar(f);
+    $('#spc').focus();
+  });
+  $('#spf').addEventListener('click', () => $('#spc').focus());
+  $('#spf').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const codigo = $('#spc').value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (codigo.length !== 6) { toast('El código tiene 6 letras y números'); return; }
+    try { const d = await unirseConCodigoTexto(codigo); toast('Te uniste al SyncPlay de ' + (d.anfitrion?.nombre || 'tu amigo')); pintarSala(d); } catch (err) { fallo(err); }
+  });
+  s.querySelectorAll('[data-sala]').forEach((b) => b.addEventListener('click', async () => {
+    try {
+      let d = await api('/api/juntos/' + b.dataset.sala);
+      if (!d.dentro) d = await api(`/api/juntos/${d.id}/unirse`, { method: 'POST' });
+      activarSala(d);
+      pintarSala(d);
+    } catch (e) { fallo(e); }
+  }));
+}
+
+async function pintarSala(d) {
+  if (!d) { vistaActual(null); return vistaSyncPlay(); }
+  vistaActual('syncplay');
+  const c = d.cancion;
+  const enlace = `${location.origin}/#/juntos/${d.id}`;
+  const antes = focused?.dataset.sp;
+  await pantalla(`<div class="sala">
+    <div class="sala-izq">
+      <div class="eyebrow">${icon('headphones')} SyncPlay en vivo</div>
+      <h1 class="title">${d.soyAnfitrion ? 'Tu SyncPlay' : 'SyncPlay de ' + esc(d.anfitrion?.nombre || '')}</h1>
+      ${c ? `<div class="sala-ahora">${img(c.portadaUrl, 300)}<span style="min-width:0"><div class="t ellipsis">${esc(c.nombre)}</div>
+        <div class="s ellipsis">${esc(c.artista)} · ${d.sonando ? 'Sonando' : 'En pausa'} · <span data-sp-t>${fmtTime(objetivo(d))}</span></div></span></div>`
+        : '<p class="sub">Elige una canción en Buscar o en tu biblioteca: sonará para todos.</p>'}
+      <div class="actions">
+        ${c ? `<button class="btn f" data-sp="prev">${icon('rew')}</button>
+        <button class="btn primary f" data-sp="toggle">${icon(d.sonando ? 'pause' : 'play')} ${d.sonando ? 'Pausar' : 'Reproducir'}</button>
+        <button class="btn f" data-sp="next">${icon('fwd')}</button>` : ''}
+        <button class="btn f" data-sp="elegir">${icon('search')} Elegir canción</button>
+        <button class="btn f" data-sp="salir">${icon('logout')} ${d.soyAnfitrion ? 'Terminar' : 'Salir'}</button>
+      </div>
+      <h2 class="sala-h">Escuchando (${d.personas.length})</h2>
+      <div class="sala-personas">${d.personas.map((p) => `<span class="chip">${esc(p.nombre)}${p.username === d.anfitrion?.username ? ' · lo inició' : ''}</span>`).join('')}</div>
+      ${d.cola?.length ? `<h2 class="sala-h">A continuación</h2><div class="sala-cola">${d.cola.slice(0, 4).map((x) => `<span class="ellipsis">${esc(x.cancion.nombre)} · ${esc(x.cancion.artista)}</span>`).join('')}</div>` : ''}
+    </div>
+    ${d.codigo ? `<div class="sala-der"><div class="qr">${qrSvg(enlace)}</div>
+      <div class="sala-codigo"><small>Únete con el código</small><b>${esc(d.codigo.slice(0, 3))} ${esc(d.codigo.slice(3))}</b></div>
+      <p class="sub">Escanéalo con el teléfono o escribe el código en SyncPlay → «Unirme con código».</p></div>` : ''}
+  </div>`);
+  if (antes) enfocar($(`[data-sp="${antes}"]`) || $('.screen .f'), { scroll: false });
+  $$('#screen [data-sp]').forEach((b) => b.addEventListener('click', async () => {
+    const a = b.dataset.sp;
+    if (a === 'elegir') { navegar('buscar'); toast('Lo que elijas sonará para todos en el SyncPlay'); return; }
+    if (a === 'salir') { await salirDeSala(d.id); toast(d.soyAnfitrion ? 'SyncPlay terminado' : 'Saliste del SyncPlay'); vistaSyncPlay(); return; }
+    if (a === 'toggle') control(motor.estado?.sonando ? 'pause' : 'play');
+    else if (a === 'next') control('next', { desde: motor.estado?.cancion?.id ?? null });
+    else if (a === 'prev') control('prev');
+  }));
+}
+
+bus.on('juntos:vista', (d) => { if (enPantalla === 'syncplay' && d.id === motor.sala && !$('.np.open')) pintarSala(d); });
+bus.on('juntos:vista-fin', (d) => { if (enPantalla === 'syncplay') { toast(d.motivo || 'El SyncPlay terminó'); vistaSyncPlay(); } });
+setInterval(() => { const t = $('[data-sp-t]'); if (t && enPantalla === 'syncplay' && motor.estado) t.textContent = fmtTime(objetivo()); }, 1000);
+
 // ═══════════════════ Mini reproductor ═══════════════════
 
 function pintarMini() {
@@ -723,26 +909,115 @@ bus.on('player:queue', () => $('.np.open') && pintarNP(false));
 
 // ═══════════════════ Inicio de sesión ═══════════════════
 
+let vinculo = null, sondeo = 0;
+
+/** Nombre de esta TV para el teléfono («TV · modelo»). */
+function nombreTv() {
+  try { const m = nativo?.dispositivo?.(); if (m) return /tv/i.test(m) ? m : 'TV · ' + m; } catch { }
+  return 'TV';
+}
+
+/** Pantalla de entrada: QR + código (con el teléfono) o, si se prefiere, usuario y contraseña con el control. */
 function login(msg = '') {
-  pintarCuerpo(`<div class="login"><form id="lf">
-    <h1><img src="/img/logo-animado.svg" alt="">SpaceMusic</h1><p>Inicia sesión con tu cuenta</p>
-    <label>Usuario o correo</label><input class="f" id="lu" autocomplete="username">
-    <label>Contraseña</label><input class="f" id="lp" type="password" autocomplete="current-password">
-    <div class="err" id="le">${esc(msg)}</div>
-    <button class="btn primary f" type="submit">Entrar</button></form></div>`);
-  enfocar($('#lu'), { scroll: false });
+  pintarCuerpo(`<div class="login vinc">
+    <div class="vinc-izq">
+      <h1><img src="/img/logo-animado.svg" alt="">SpaceMusic</h1>
+      <p class="vinc-titulo">Inicia sesión con tu teléfono</p>
+      <ol class="vinc-pasos">
+        <li>${icon('qr')}<span>Escanea el código con la cámara del teléfono <small>(se abre SpaceMusic; si no tienes la sesión abierta, entra primero)</small></span></li>
+        <li>${icon('phone')}<span>O en SpaceMusic del teléfono o la computadora ve a <b>${esc(location.host)}/#/tv</b> y escribe el código</span></li>
+        <li>${icon('wifi')}<span>Si tu teléfono está en el mismo wifi que la TV, al abrir SpaceMusic te aparece «Iniciar sesión en la TV»</span></li>
+      </ol>
+      <div class="err" id="le">${esc(msg)}</div>
+      <div class="vinc-acc"><button class="btn f" id="lotro">${icon('keyboard')} Usar usuario y contraseña</button>
+        <button class="btn f" id="lnuevo">${icon('refresh')} Código nuevo</button></div>
+    </div>
+    <div class="vinc-der"><div class="qr" id="lqr"><div class="loading">Preparando…</div></div>
+      <div class="vinc-codigo" id="lcod"></div><div class="vinc-estado" id="lest">Esperando a que lo apruebes en tu teléfono…</div></div>
+    <form id="lf" class="hidden">
+      <h1><img src="/img/logo-animado.svg" alt="">SpaceMusic</h1><p>Inicia sesión con tu cuenta</p>
+      <label>Usuario o correo</label><input class="f" id="lu" autocomplete="username">
+      <label>Contraseña</label><input class="f" id="lp" type="password" autocomplete="current-password">
+      <div class="err" id="le2"></div>
+      <button class="btn primary f" type="submit">Entrar</button>
+      <button class="btn f" type="button" id="lvolver">${icon('qr')} Volver al código QR</button></form></div>`);
   ocultarSplash();
+  pedirVinculo();
+  enfocar($('#lotro'), { scroll: false });
+  $('#lnuevo').addEventListener('click', () => pedirVinculo());
+  $('#lotro').addEventListener('click', () => {
+    $('.vinc-izq').classList.add('hidden'); $('.vinc-der').classList.add('hidden'); $('#lf').classList.remove('hidden');
+    enfocar($('#lu'), { scroll: false });
+  });
+  $('#lvolver').addEventListener('click', () => {
+    $('#lf').classList.add('hidden'); $('.vinc-izq').classList.remove('hidden'); $('.vinc-der').classList.remove('hidden');
+    enfocar($('#lotro'), { scroll: false });
+  });
   $('#lf').addEventListener('submit', async (e) => {
     e.preventDefault();
     $('#le').textContent = '';
     try {
       const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ usuario: $('#lu').value.trim(), password: $('#lp').value }) }).then((x) => x.json());
-      if (r.error) { $('#le').textContent = r.error; return; }
+      if (r.error) { $('#le2').textContent = r.error; return; }
       session.save(r.token, r.usuario);
+      clearTimeout(sondeo);
       iniciar();
-    } catch { $('#le').textContent = 'No hay conexión con el servidor'; }
+    } catch { $('#le2').textContent = 'No hay conexión con el servidor'; }
   });
+}
+
+/** Pide un código al servidor, dibuja el QR y espera la aprobación desde el teléfono. */
+async function pedirVinculo() {
+  clearTimeout(sondeo);
+  try {
+    vinculo = await fetch('/api/auth/tv/vinculo', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre: nombreTv() }) }).then((x) => x.json());
+    if (!vinculo?.codigo) throw new Error(vinculo?.error || 'Sin código');
+  } catch (e) {
+    $('#lqr') && ($('#lqr').innerHTML = `<div class="loading">No hay conexión con el servidor</div>`);
+    sondeo = setTimeout(pedirVinculo, 8000);
+    return;
+  }
+  const enlace = `${location.origin}/#/tv/${vinculo.codigo}`;
+  $('#lqr').innerHTML = qrSvg(enlace);
+  $('#lcod').innerHTML = `<small>Código</small><b>${esc(vinculo.codigo.slice(0, 3))} ${esc(vinculo.codigo.slice(3))}</b>`;
+  $('#lest').textContent = 'Esperando a que lo apruebes en tu teléfono…';
+  esperarAprobacion(vinculo);
+}
+
+function esperarAprobacion(v) {
+  clearTimeout(sondeo);
+  sondeo = setTimeout(async () => {
+    if (vinculo !== v || !$('#lqr')) return;
+    let r;
+    try { r = await fetch('/api/auth/tv/vinculo/estado?secreto=' + encodeURIComponent(v.secreto)).then((x) => x.json()); } catch { r = { estado: 'esperando' }; }
+    if (vinculo !== v) return;
+    if (r.estado === 'aprobado' && r.token) {
+      $('#lest').textContent = `¡Listo! Entrando como ${r.usuario?.nombreDisplay || r.usuario?.username || ''}…`;
+      session.save(r.token, r.usuario);
+      setTimeout(iniciar, 600);
+      return;
+    }
+    if (r.estado === 'vencido') { pedirVinculo(); return; }
+    esperarAprobacion(v);
+  }, 2000);
+}
+
+// ═══════════════════ Eventos en vivo (SyncPlay y control desde otros dispositivos) ═══════════════════
+
+let fuente = null;
+function conectarEventos() {
+  if (!('EventSource' in window) || !session.token) return;
+  try { fuente?.close(); } catch { }
+  fuente = new EventSource('/api/eventos?t=' + encodeURIComponent(session.token));
+  for (const ev of ['juntos', 'juntos-reaccion', 'juntos-fin', 'control-orden', 'control-dispositivos', 'control-ack']) {
+    fuente.addEventListener(ev, (e) => { try { bus.emit(ev, JSON.parse(e.data)); } catch { } });
+  }
+  fuente.onerror = () => {
+    // El navegador reintenta solo; si la sesión venció, se vuelve a la pantalla de entrada
+    if (fuente.readyState === EventSource.CLOSED) setTimeout(conectarEventos, 5000);
+  };
 }
 
 // ═══════════════════ Arranque ═══════════════════
@@ -760,6 +1035,10 @@ async function iniciar() {
   pintarMini();
   navegar('inicio');
   ocultarSplash();
+  // La TV aparece en «Dispositivos» de tus otros equipos y recibe sus órdenes; también entra a SyncPlay
+  conectarEventos();
+  iniciarRemoto();
+  retomarSala().catch(() => { });
   api('/api/auth/refresh', { method: 'POST' }).then((r) => r?.token && session.save(r.token, r.usuario)).catch(() => { });
 }
 

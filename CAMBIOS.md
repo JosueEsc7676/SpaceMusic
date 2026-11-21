@@ -1,6 +1,12 @@
 # Registro de cambios
 
 
+## Versión 3.15
+- **Iniciar sesión en la TV con el teléfono** (`TvVinculoService`, `TvVinculoController`, `/api/auth/tv/*`): la TV pide un vínculo (`POST /vinculo` → código de 6 caracteres y un secreto), muestra un QR propio (`js/qr.js`, modo byte, nivel M, versiones 1–10, verificado con OpenCV) que abre `#/tv/CÓDIGO`, y pregunta cada 2 s (`GET /vinculo/estado?secreto=`). Se aprueba desde una sesión abierta (`POST /vinculo/{código}/aprobar`): la TV recibe su propia sesión una sola vez. Vínculos en memoria, 10 min, máximo 12 por IP. **Misma red wifi**: `GET /cercanas` lista las TVs que esperan desde la misma IP pública (o la misma /24 privada); la web avisa con un botón al abrir la app (`views/tv-vincular.js`) y el iPhone las muestra en Dispositivos. Pruebas: `TvVinculoTest` (3).
+- **TV con control de dispositivos** (`tv.js`): la TV se anuncia como «TV · nombre del televisor» (puente `SpaceMusicTV.dispositivo()`, app TV 1.2, código 3) y obedece las órdenes de tus otros dispositivos; pantalla «Dispositivos» con cada equipo y sus controles (reproducir/pausar, anterior/siguiente, volumen, escuchar en la TV, pasar la música de la TV). En la TV lo que eliges suena en la TV (no toma solo el control de otro equipo).
+- **SyncPlay en la TV**: iniciar (lo que sonaba pasa a sonar para todos), unirse con código o a una invitación, controles compartidos y QR + código para que otros se unan. El motor de SyncPlay pasó a `js/juntos-motor.js` (sin pantallas) y `remoto.js` ya no depende de `ui.js`: avisan por el bus («toast»), así la TV los usa sin cargar la interfaz web.
+- Probado en el Mi TV real (Android 14): QR legible desde la captura, aprobación por wifi, orden de reproducir desde otro equipo, pantallas de SyncPlay y Dispositivos.
+
 ## Versión 3.14
 - El error de audio de la web pausa y conserva la canción, la cola y la posición. Reproducir recarga la misma pista; no queda ningún salto automático pendiente. Una selección sin copia offline tampoco se sustituye por otra.
 - La restauración de posición ignora los metadatos de intentos anteriores si la persona ya eligió otra canción.

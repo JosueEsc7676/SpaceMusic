@@ -1,12 +1,22 @@
 {
-  "version": "3.14",
-  "titulo": "Reproducción sin saltos por errores de carga",
+  "version": "3.15",
+  "titulo": "Novedades: SpaceMusic en tu TV, sin escribir la contraseña",
   "puntos": [
-    "Una canción que tarda o falla al cargar ya no se sustituye por otra: conserva su lugar y permite reintentar.",
-    "La reproducción tiene prioridad sobre las descargas en curso, que se retoman después sin guardar archivos incompletos.",
-    "Se actualiza la caché de streaming para aprovechar las copias preparadas de inicio rápido."
+    "Inicia sesión en la TV con tu teléfono: escanea el QR, escribe el código o toca tu TV si está en el mismo wifi.",
+    "Controla la TV desde el teléfono o la computadora (ponerle música, pausar, cambiar de canción, volumen) y desde la TV controla tus otros dispositivos.",
+    "SyncPlay en la TV: inícialo con un código y un QR para que tus amigos se unan, o únete al de alguien más.",
+    "iPhone: en Dispositivos aparecen las TVs de tu wifi para iniciar sesión con un toque."
   ],
   "anteriores": [
+    {
+      "version": "3.14",
+      "titulo": "Reproducción sin saltos por errores de carga",
+      "puntos": [
+        "Una canción que tarda o falla al cargar ya no se sustituye por otra: conserva su lugar y permite reintentar.",
+        "La reproducción tiene prioridad sobre las descargas en curso, que se retoman después sin guardar archivos incompletos.",
+        "Se actualiza la caché de streaming para aprovechar las copias preparadas de inicio rápido."
+      ]
+    },
     {
       "version": "3.13",
       "titulo": "Novedades: escucha tus notas de voz y mensajes con la app cerrada",

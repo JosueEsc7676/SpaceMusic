@@ -154,6 +154,7 @@ const coincidimosView = diferida(experiencias, 'coincidimosView');
 const dedicatoriasView = diferida(experiencias, 'dedicatoriasView');
 const prepararView = diferida(experiencias, 'prepararView');
 const juntosView = diferida(() => import('./juntos.js'), 'juntosView');
+const tvVincularView = diferida(() => import('./views/tv-vincular.js'), 'tvVincularView');
 route('/', homeView);
 route('/buscar', searchView);
 route('/biblioteca', libraryView);
@@ -181,6 +182,9 @@ route('/dedicatorias/:id', dedicatoriasView);
 route('/preparar', prepararView);
 route('/juntos', juntosView);
 route('/juntos/:id', juntosView);
+// Iniciar sesión en la TV (el QR de la TV abre #/tv/CÓDIGO)
+route('/tv', tvVincularView);
+route('/tv/:codigo', tvVincularView);
 route('/admin', async (...args) => (await import('./views/admin.js')).adminView(...args));
 // Compatibilidad con marcadores y notificaciones anteriores.
 route('/soporte', (_el, _p, query) => go('/admin?tab=soporte' + (query.sec ? '&sec=' + encodeURIComponent(query.sec) : ''), { replace: true }));
@@ -654,6 +658,8 @@ async function boot() {
   iniciarAlarma();
   // Control remoto entre tus dispositivos: este se anuncia y queda listo para recibir órdenes
   import('./remoto.js').then((m) => m.iniciarRemoto()).catch(() => { });
+  // Una TV de tu misma red wifi espera para iniciar sesión: se ofrece con un toque
+  import('./views/tv-vincular.js').then((m) => m.vigilarTvCercanas()).catch(() => { });
   // SyncPlay: si estabas en un SyncPlay al cerrar la app, se retoma (el módulo solo se carga si hace falta)
   setTimeout(() => {
     if (sinConexion()) return;

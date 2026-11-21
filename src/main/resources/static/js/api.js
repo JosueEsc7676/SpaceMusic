@@ -43,7 +43,8 @@ export function logout(reason) {
   try { navigator.serviceWorker?.controller?.postMessage({ tipo: 'limpiar-usuario' }); } catch { }
   const p = new URLSearchParams();
   if (reason) p.set('motivo', reason);
-  if (reason && location.hash.length > 2) p.set('next', location.hash);
+  // Al volver de iniciar sesión se abre lo que se pedía (también el QR de la TV, aunque no hubiera sesión)
+  if ((reason || location.hash.startsWith('#/tv/')) && location.hash.length > 2) p.set('next', location.hash);
   const q = p.toString();
   // La app de TV tiene su propio inicio de sesión
   location.href = (window.SM_TV ? '/tv.html' : '/login.html') + (q ? '?' + q : '');

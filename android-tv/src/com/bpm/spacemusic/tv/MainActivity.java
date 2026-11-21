@@ -229,7 +229,16 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String version() {
-            return "1.0";
+            return "1.2";
+        }
+
+        /** Nombre del televisor (el que se le puso en Ajustes, o el modelo): así aparece en tus otros dispositivos. */
+        @JavascriptInterface
+        public String dispositivo() {
+            String n = null;
+            try { n = android.provider.Settings.Global.getString(getContentResolver(), "device_name"); } catch (Exception ignored) { }
+            if (n == null || n.trim().isEmpty()) n = android.os.Build.MODEL;
+            return n == null ? "" : n.trim();
         }
     }
 

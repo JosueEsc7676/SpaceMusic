@@ -9,7 +9,9 @@ import { api, session } from './api.js';
 import { bus, esc, fmtTime, coverImg } from './util.js';
 import { icon } from './icons.js';
 import { player } from './player.js';
-import { toast, errorToast, modal, promptDialog } from './ui.js';
+// Avisos por el bus (la web y la TV los muestran a su manera); así este módulo también sirve en la TV sin cargar ui.js
+const toast = (msg, o = {}) => bus.emit('toast', { msg, ...o });
+const errorToast = (e) => bus.emit('toast', { msg: e?.message || 'No se pudo completar', error: true });
 
 const app = window.SpaceMusicApp;
 const CLAVE_ID = 'sm_dispositivo';
@@ -28,8 +30,15 @@ export function miDispositivo() {
   return id;
 }
 
+/** App de TV (Android TV / Google TV): se presenta como «TV» con el modelo del equipo. */
+const tv = () => !!window.SM_TV;
 function nombrePorDefecto() {
   const ua = navigator.userAgent;
+  if (tv()) {
+    let modelo = '';
+    try { modelo = window.SpaceMusicTV?.dispositivo?.() || ''; } catch { }
+    return !modelo ? 'TV' : /tv/i.test(modelo) ? modelo : 'TV · ' + modelo;
+  }
   if (app) return 'App Android';
   if (/iPhone/.test(ua)) return 'iPhone (navegador)';
   if (/iPad/.test(ua)) return 'iPad (navegador)';
@@ -39,7 +48,7 @@ function nombrePorDefecto() {
   return so ? `${nav} en ${so}` : nav;
 }
 export const miNombre = () => leer(CLAVE_NOMBRE) || nombrePorDefecto();
-const plataforma = () => (app ? 'android' : 'web');
+const plataforma = () => (tv() ? 'tv' : app ? 'android' : 'web');
 
 // ═══════════════════ Reloj del servidor ═══════════════════
 
@@ -422,7 +431,8 @@ export function controlandoA() {
     if (d) return d;
     elegido = null;
   }
-  if (player.playing) return null;
+  // En la TV lo que se elige suena en la TV (los otros se controlan desde su pantalla de Dispositivos)
+  if (player.playing || tv()) return null;
   const act = dispositivos.find((d) => d.id === activo && d.id !== yo && d.id !== ignorado)
     || dispositivos.find((d) => d.id !== yo && d.sonando && d.id !== ignorado);
   return act && act.cancion ? act : null;
@@ -513,7 +523,7 @@ function marcarBoton() {
   });
 }
 
-const iconoDe = (d) => (d.plataforma === 'ios' || d.plataforma === 'android' ? 'speaker' : 'devices');
+const iconoDe = (d) => (d.plataforma === 'tv' ? 'tv' : d.plataforma === 'ios' || d.plataforma === 'android' ? 'speaker' : 'devices');
 
 /**
  * «Reproducir en» del panel «Dispositivos» (como Spotify Connect): este dispositivo y los demás de la cuenta.
@@ -534,6 +544,7 @@ export function htmlOtros(lista) {
 
 /** Cambiar el nombre con el que este dispositivo aparece en los demás. */
 export async function renombrar() {
+  const { promptDialog } = await import('./ui.js');
   const v = await promptDialog('Nombre de este dispositivo', { label: 'Así lo verás en tus otros dispositivos', value: miNombre(), optional: true });
   if (v == null) return;
   const n = v.trim().slice(0, 40);

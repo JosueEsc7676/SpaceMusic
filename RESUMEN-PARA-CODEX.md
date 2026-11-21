@@ -1,6 +1,6 @@
 # SpaceMusic: resumen para quien continúe el trabajo (Codex u otra persona)
 
-Estado al 21 de noviembre de 2026, versión **3.14** (servidor y web), **Android 2.7** (código 18) e **iPhone 1.42** (rama `app-ios`, la compilación de GitHub numera la versión).
+Estado al 21 de noviembre de 2026, versión **3.15** (servidor y web), **Android 2.7** (código 18), **Android TV 1.2** (código 3) e **iPhone 1.42+** (rama `app-ios`, la compilación de GitHub numera la versión).
 El detalle de cada versión está en `CAMBIOS.md` (servidor, web y Android) y en `CAMBIOS.md` de la rama `app-ios` (iPhone).
 
 ## 1. Qué es y dónde está cada parte
@@ -10,7 +10,7 @@ El detalle de cada versión está en `CAMBIOS.md` (servidor, web y Android) y en
 | Servidor + API | `src/main/java/com/bpm/music/**` | Spring Boot 3, Java 21, MySQL (H2 en pruebas), JWT |
 | Web | `src/main/resources/static/` (`js/views/*.js`, `css/noir.css`) | JavaScript sin framework (módulos ES), se sirve desde el mismo jar |
 | Android (teléfono) | `android-movil/` | Vista web (`MainActivity`) + servicios nativos; se compila **sin Gradle** con `android-movil/compilar.sh` |
-| Android TV | `android-tv/` | Igual que la de teléfono |
+| Android TV | `android-tv/` (nativo) + `static/tv.html`, `js/tv.js`, `css/tv.css` (interfaz) | Vista web a pantalla completa que carga `/tv.html` del servidor y le pasa las teclas del control; se compila con `android-tv/compilar.sh`. Casi todo cambio de la TV es web: se publica con el jar, sin reinstalar la APK |
 | iPhone | Repositorio aparte `untitled-ios`, rama `app-ios` (remoto `Espacemusic` → GitHub `JosueEsc7676/SpaceMusic`) | SwiftUI, sin firmar; GitHub Actions (`.github/workflows/ios.yml`) compila el `.ipa` en cada push |
 | Descargas de música | `scripts/descargar`, `scripts/convertir-enlace.py`, `scripts/buscar-audio.py` | bash + spotdl + yt-dlp (en el servidor, en `~/spacemusic/spotdl-env`) |
 
@@ -43,7 +43,16 @@ Android carga la web: **toda función nueva de la web ya está en Android**. El 
 
 ## 3. Lo que se hizo en las últimas versiones
 
-**3.13** (esta)
+**3.15** (esta): la app de TV
+- **Entrar en la TV con el teléfono**: QR (generador propio `js/qr.js`), código de 6 caracteres o «misma red wifi». Servidor: `TvVinculoService` / `TvVinculoController` (`/api/auth/tv/*`, en memoria, 10 min, la TV recibe su propia sesión una sola vez). Teléfono: `#/tv/CÓDIGO` (`views/tv-vincular.js`) y aviso automático si hay una TV esperando en el mismo wifi; iPhone: Dispositivos → «Iniciar sesión en una TV». La contraseña con el control sigue disponible.
+- **TV en «Dispositivos»** (como Spotify Connect): la TV aparece como «TV · nombre del televisor» y obedece órdenes; su pantalla Dispositivos controla a los demás (reproducir/pausar, anterior/siguiente, volumen, escuchar en la TV, pasar la música).
+- **SyncPlay en la TV**: iniciar (con lo que sonaba), unirse con código o a una invitación, controles, QR y código en pantalla.
+- Reutilización: el motor de SyncPlay está en `js/juntos-motor.js` (sin interfaz) y `remoto.js` avisa por el bus en vez de importar `ui.js`.
+- Para probar en la TV real: `adb mdns services` encuentra el Mi TV (IP cambia por DHCP); `adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>` permite evaluar JS en su vista web. Para apuntarla a un servidor de prueba se usa el diálogo «Servidor» (sliders en el menú) y luego «Por defecto» para volver.
+
+**3.14** (Codex): ver la sección «Continuación de audio» al final.
+
+**3.13**
 - **Notas de voz**:
   - Web: reproductor propio y vista previa antes de enviar (descartar / escuchar / enviar).
   - iPhone: lo mismo, con `VozMensajes` y `AVAudioPlayer`.
@@ -93,6 +102,8 @@ Android carga la web: **toda función nueva de la web ya está en Android**. El 
 4. **Descargas**: lo más efectivo contra los bloqueos de YouTube es poner cookies de una cuenta en `~/.config/spacemusic/youtube-cookies.txt` (formato Netscape). Las réplicas públicas (Invidious/Piped) están caídas o piden verificación; no se usan. JioSaavn no tiene el catálogo latino/internacional fuera de India.
 5. **Gráfica de géneros de la web**: sigue mostrando etiquetas genéricas como «Music»; el iPhone ya las oculta (`GraficaGeneros.genericos`). Conviene hacerlo en el servidor (`PerfilService`) para todas las apps.
 6. **Disco del PC de desarrollo casi lleno** (C:); afecta a una prueba.
+7. **`pruebas/navegador.mjs` da 6–7 de 11 desde la 3.14**: fallan «Iniciar radio…» (`responder is not a function`), «Volumen parejo con la pantalla apagada», «Con la pantalla apagada pasa a la siguiente…» y «Si la copia guardada es de otra canción…». Ya fallaban con la web de la 3.14 sin los cambios de la TV (comprobado el 21 de noviembre); probablemente la prueba no se actualizó al nuevo comportamiento de «no saltar por error». `syncplay-sincronia.mjs` da 7/8 (red lenta: desfase de 1–3 s) también antes de la 3.15. `control-remoto.mjs` sigue 14/14.
+8. **TV**: falta que la TV pueda ser «controlada» desde su barra como en la web (aquí se controla desde la pantalla Dispositivos) y aviso de versión nueva de la APK de TV (hoy la APK casi no cambia porque la interfaz es web).
 
 ## 5. Convenciones
 

@@ -228,3 +228,55 @@ h1.title { font-family: var(--display); font-size: 2.9rem; font-weight: 800; let
 .mini.focused { transform: scale(1.04); box-shadow: 0 0 0 .2rem #fff, 0 1rem 2.4rem rgba(0,0,0,.7); background: #1c1c22; }
 .mini-ok { display: none; margin-left: .4rem; padding: .25rem .6rem; border-radius: .5rem; background: #fff; color: #000; font-size: .8rem; font-weight: 800; white-space: nowrap; }
 .mini.focused .mini-ok { display: inline-block; }
+
+/* ── Entrar con el teléfono (QR, código o mismo wifi) ── */
+.login.vinc { display: flex; align-items: center; justify-content: center; gap: 6rem; padding: 0 6rem; }
+.vinc-izq { max-width: 40rem; }
+.vinc-titulo { font-family: var(--display); font-size: 2.6rem !important; font-weight: 800; color: #fff !important; margin: .4rem 0 1.6rem !important; line-height: 1.1; }
+.vinc-pasos { list-style: none; padding: 0; margin: 0 0 1.6rem; display: flex; flex-direction: column; gap: 1.2rem; }
+.vinc-pasos li { display: flex; gap: 1.1rem; align-items: flex-start; font-size: 1.2rem; line-height: 1.4; }
+.vinc-pasos .icon { width: 2rem; height: 2rem; flex-shrink: 0; padding: .45rem; box-sizing: content-box; border-radius: .8rem; background: rgba(255,255,255,.08); }
+.vinc-pasos small { display: block; color: var(--text-2); font-size: .95rem; }
+.vinc-acc { display: flex; gap: 1rem; }
+.vinc-acc .btn { width: auto; margin: 0; }
+.vinc-der { display: flex; flex-direction: column; align-items: center; gap: 1.2rem; }
+.qr { width: 22rem; height: 22rem; border-radius: 1.4rem; overflow: hidden; background: #fff; box-shadow: 0 2rem 5rem rgba(0,0,0,.6); }
+.qr svg { width: 100%; height: 100%; display: block; }
+.qr .loading { height: 100%; color: #555; }
+.vinc-codigo { text-align: center; }
+.vinc-codigo small { display: block; color: var(--text-2); font-size: 1rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.vinc-codigo b { font-family: var(--display); font-size: 3.4rem; letter-spacing: .3rem; }
+.vinc-estado { color: var(--text-2); font-size: 1.05rem; }
+.login #lf .btn + .btn { margin-top: .8rem; }
+
+/* ── Dispositivos ── */
+.sub { color: var(--text-2); font-size: 1.15rem; max-width: 60rem; margin: -.6rem 0 2rem; line-height: 1.5; }
+.dev { flex: 0 0 15rem; width: 15rem; text-align: left; border-radius: 1.1rem; }
+.dev-art { position: relative; width: 15rem; height: 15rem; border-radius: 1rem; overflow: hidden; background: #17171d; }
+.dev-art img { width: 100%; height: 100%; object-fit: cover; }
+.dev-ico { position: absolute; right: .7rem; bottom: .7rem; width: 2.8rem; height: 2.8rem; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,.65); }
+.dev.sonando .dev-ico { background: #fff; color: #000; }
+.dev .t { font-weight: 800; font-size: 1.1rem; margin-top: .7rem; }
+.dev .s { color: var(--text-2); font-size: .9rem; margin-top: .2rem; }
+.dev.focused { box-shadow: none; transform: none; }
+.dev.focused .dev-art { box-shadow: var(--ring); transform: scale(1.05); }
+.head .kind .icon { width: 1.1rem; height: 1.1rem; vertical-align: -.15rem; }
+.dev-ctrls .btn .icon { width: 1.6rem; height: 1.6rem; }
+
+/* ── SyncPlay ── */
+.sala { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4rem; align-items: start; }
+.sala .eyebrow .icon { width: 1rem; height: 1rem; vertical-align: -.1rem; }
+.sala-ahora { display: flex; gap: 1.4rem; align-items: center; margin: 0 0 2rem; }
+.sala-ahora img, .sala-ahora .ph { width: 7rem; height: 7rem; border-radius: .9rem; object-fit: cover; flex-shrink: 0; }
+.sala-ahora .t { font-family: var(--display); font-size: 2rem; font-weight: 800; }
+.sala-ahora .s { color: var(--text-2); font-size: 1.1rem; }
+.sala-h { font-size: 1.2rem; margin: 1.4rem 0 .8rem; color: var(--text-2); }
+.sala-personas { display: flex; flex-wrap: wrap; gap: .6rem; }
+.chip { padding: .45rem .9rem; border-radius: 999px; background: rgba(255,255,255,.1); font-weight: 700; }
+.sala-cola { display: flex; flex-direction: column; gap: .4rem; color: var(--text-2); font-size: 1.05rem; max-width: 40rem; }
+.sala-der { display: flex; flex-direction: column; align-items: center; gap: 1rem; width: 20rem; }
+.sala-der .qr { width: 18rem; height: 18rem; }
+.sala-codigo { text-align: center; }
+.sala-codigo small { display: block; color: var(--text-2); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.sala-codigo b { font-family: var(--display); font-size: 2.8rem; letter-spacing: .25rem; }
+.sala-der .sub { margin: 0; text-align: center; font-size: 1rem; }
