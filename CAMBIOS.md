@@ -1,4 +1,11 @@
 ## iPhone 3.15: iniciar sesión en la TV
+
+## Versión 3.18
+- Sincronía compartida mediante offset LRC: ADMIN/COLABORADOR pueden guardar ±60 s, con revisión SHA-256 y bloqueo transaccional para evitar sobrescrituras. Conserva texto y marcas de palabras. Sin migración.
+- Panel persistente de ajuste con vista previa y guardado explícito; usuarios conservan ajuste personal. Invalidación en vivo por el SSE existente en web, TV y iPhone.
+- iPhone: ventana independiente con pasos de 0,1/0,5 s, deslizador, volver 5 s, pausa y recarga; no se cierra al ajustar ni guardar.
+- Pruebas Java de permisos, validación, persistencia y concurrencia; pruebas de offsets de líneas/palabras en JavaScript y Swift.
+
 - Dispositivos → «Iniciar sesión en una TV»: aparecen las TVs de tu misma red wifi que esperan para entrar (`/api/auth/tv/cercanas`); al tocar una, o al escribir el código que muestra la TV, entra con tu cuenta (`POST /api/auth/tv/vinculo/{código}/aprobar`). El QR de la TV también se puede escanear con la cámara (abre la web).
 - Las TVs aparecen con su ícono en «Reproducir en».
 

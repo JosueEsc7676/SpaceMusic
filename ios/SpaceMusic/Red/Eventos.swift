@@ -173,6 +173,11 @@ final class Eventos {
             EscuchaJuntos.compartida.evento(evento, datos: d)
         case "control-orden", "control-dispositivos", "control-ack":
             ControlRemoto.compartido.evento(evento, datos: d)
+        case "letra", "hola":
+            let letras = Letras.compartido
+            guard !letras.editandoSincronia, let c = Reproductor.compartido.actual else { return }
+            let json = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any]
+            if evento == "hola" || json?["id"] as? Int == c.id { letras.cargar(c, forzar: true) }
         case "notificacion":
             Task { await actualizarResumen() }
         default:

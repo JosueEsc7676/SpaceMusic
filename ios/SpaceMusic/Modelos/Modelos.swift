@@ -273,6 +273,8 @@ struct Mix: Decodable, Identifiable, Hashable {
 }
 
 struct Letra: Decodable {
+    var sincroniaGlobalSegundos: Double = 0
+    var revisionSincronia: String = ""
     var letra: String
     var letraSincronizada: String
     var fuente: String?
@@ -282,6 +284,8 @@ struct Letra: Decodable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.campos()
+        sincroniaGlobalSegundos = c.numero("sincroniaGlobalSegundos") ?? 0
+        revisionSincronia = c.texto("revisionSincronia") ?? ""
         letra = c.texto("letra") ?? ""
         letraSincronizada = c.texto("letraSincronizada") ?? ""
         fuente = c.texto("fuente")

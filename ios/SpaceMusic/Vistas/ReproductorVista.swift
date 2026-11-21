@@ -20,6 +20,7 @@ struct ReproductorVista: View {
     @State private var altoControles: CGFloat = 340
     @State private var dispositivos = false
     @State private var letraAmpliada = false
+    @State private var ajusteSincronia = false
 
     var body: some View {
         GeometryReader { espacio in
@@ -53,6 +54,7 @@ struct ReproductorVista: View {
         .task(id: r.actual?.portadaUrl) { await calcularColores() }
         .accessibilityAction(.escape) { cerrar() }
         .sheet(isPresented: $dispositivos) { DispositivosVista() }
+        .sheet(isPresented: $ajusteSincronia) { AjustarSincroniaVista() }
         .fullScreenCover(isPresented: $letraAmpliada) { if let c = r.actual { LetraAmpliadaVista(cancion: c) } }
         .hojasGlobales()
     }
@@ -276,14 +278,8 @@ struct ReproductorVista: View {
             } label: { Label("Compartir versos como imagen", systemImage: "square.and.arrow.up") }
             if letras.sincronizada {
                 Toggle(isOn: $r.letraEnBloqueo) { Label("Letra en la pantalla bloqueada", systemImage: "lock.iphone") }
-                Menu {
-                    Button("Letra antes (−0,5 s)") { letras.ajustarDesfase(-0.5) }
-                    Button("Letra antes (−0,1 s)") { letras.ajustarDesfase(-0.1) }
-                    Button("Letra después (+0,1 s)") { letras.ajustarDesfase(0.1) }
-                    Button("Letra después (+0,5 s)") { letras.ajustarDesfase(0.5) }
-                    if letras.desfase != 0 { Button("Restablecer", role: .destructive) { letras.ajustarDesfase(nil) } }
-                } label: {
-                    Label("Ajustar sincronía (\(textoDesfase))", systemImage: "clock.arrow.2.circlepath")
+                Button { ajusteSincronia = true } label: {
+                    Label(Sesion.compartida.puedeEditar ? "Sincronía para todos" : "Ajuste personal de sincronía", systemImage: "clock.arrow.2.circlepath")
                 }
             }
             } label: { Label("Letra", systemImage: "quote.bubble") }
@@ -1085,5 +1081,110 @@ struct VolumenRemoto: View {
         .onAppear { valor = r.volumenRemoto }
         .onChange(of: r.volumenRemoto) { _, v in if !moviendo { valor = v } }
         .accessibilityLabel("Volumen de \(r.remoto?.nombre ?? "el otro dispositivo")")
+    }
+}
+
+
+/// Panel persistente: los botones no son acciones de un menú que se cierra al tocarlos.
+private struct AjustarSincroniaVista: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var letras = Letras.compartido
+    @State private var r = Reproductor.compartido
+    @State private var ajuste: Double = 0
+    @State private var guardando = false
+    @State private var estado = ""
+    private var compartido: Bool { Sesion.compartida.puedeEditar }
+
+    private var verso: String {
+        let t = letras.tiempoLetra(r.tiempoExacto)
+        guard let i = letras.indice(en: t), letras.lineas.indices.contains(i) else { return "Escucha y ajusta hasta que coincida con la voz" }
+        let texto = letras.lineas[i].texto
+        return texto.isEmpty ? "• • •" : texto
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text(r.actual?.nombre ?? "Canción actual").font(.headline)
+                    Text(compartido ? "Vista previa. Al guardar se aplica a todos los usuarios y dispositivos." : "Ajuste personal: solo se guarda en este iPhone.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Ajuste en segundos") {
+                    Text(String(format: "%+.1f s", ajuste).replacingOccurrences(of: ".", with: ","))
+                        .font(.largeTitle.bold()).monospacedDigit()
+                    Slider(value: $ajuste, in: -60...60, step: 0.1)
+                        .accessibilityLabel("Ajuste de sincronía en segundos").disabled(guardando)
+                    HStack {
+                        paso(-0.5); paso(-0.1); paso(0.1); paso(0.5)
+                    }.disabled(guardando)
+                    Text("Negativo: letra antes. Positivo: letra después.").font(.caption).foregroundStyle(.secondary)
+                    Button("Restablecer a cero") { ajuste = 0 }.disabled(guardando)
+                }
+                Section("Vista previa en vivo") {
+                    TimelineView(.periodic(from: .now, by: 0.2)) { _ in
+                        Text(verso).font(.headline).frame(maxWidth: .infinity, minHeight: 55)
+                    }
+                    HStack {
+                        Button("Volver 5 s") { r.buscar(max(0, r.tiempoExacto - 5)) }
+                        Spacer()
+                        Button(r.sonando ? "Pausar" : "Reproducir") { r.alternar() }
+                    }.disabled(guardando)
+                }
+                if compartido {
+                    Section {
+                        Button("Guardar para todos") { guardar() }.disabled(guardando)
+                        Button("Recargar ajuste guardado") { recargar() }.disabled(guardando)
+                        if guardando { ProgressView() }
+                        if !estado.isEmpty { Text(estado).font(.footnote).accessibilityLabel(estado) }
+                    }
+                }
+            }
+            .navigationTitle(compartido ? "Sincronía para todos" : "Sincronía personal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Listo") { dismiss() }.disabled(guardando) } }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDetents([.medium, .large])
+        .interactiveDismissDisabled(guardando)
+        .onAppear {
+            letras.editandoSincronia = true
+            ajuste = compartido ? letras.sincroniaGlobal : letras.desfase
+            if compartido { letras.previsualizarGlobal(ajuste) }
+        }
+        .onChange(of: ajuste) { _, nuevo in
+            if compartido { letras.previsualizarGlobal(nuevo); estado = "Vista previa: guarda para compartir el ajuste" }
+            else { letras.ajustarDesfase(nuevo - letras.desfase) }
+        }
+        .onChange(of: letras.cancionId) { _, _ in dismiss() }
+        .onDisappear { letras.terminarAjuste() }
+    }
+
+    private func paso(_ n: Double) -> some View {
+        Button(String(format: "%+.1f", n).replacingOccurrences(of: ".", with: ",")) {
+            ajuste = min(60, max(-60, ((ajuste + n) * 10).rounded() / 10))
+        }.buttonStyle(.bordered)
+    }
+    private func guardar() {
+        guardando = true
+        Task { @MainActor in
+            defer { guardando = false }
+            do {
+                try await letras.guardarSincroniaGlobal(ajuste)
+                estado = "Guardado para todos. Puedes seguir comprobando sin cerrar."
+            } catch { estado = error.localizedDescription }
+        }
+    }
+    private func recargar() {
+        guardando = true
+        Task { @MainActor in
+            defer { guardando = false }
+            do {
+                try await letras.recargarAjuste()
+                ajuste = letras.sincroniaGlobal
+                letras.previsualizarGlobal(ajuste)
+                estado = "Ajuste actualizado desde el servidor"
+            } catch { estado = error.localizedDescription }
+        }
     }
 }

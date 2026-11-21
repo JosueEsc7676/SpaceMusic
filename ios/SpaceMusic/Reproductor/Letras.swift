@@ -13,6 +13,33 @@ final class Letras {
     private(set) var cargando = false
     private(set) var mensaje: String?
 
+    private(set) var sincroniaGlobal: Double = 0
+    private(set) var revisionSincronia = ""
+    var editandoSincronia = false
+
+    func previsualizarGlobal(_ segundos: Double) { desfase = segundos - sincroniaGlobal }
+    func terminarAjuste() {
+        editandoSincronia = false
+        desfase = cancionId.flatMap { desfases[String($0)] } ?? 0
+    }
+    func recargarAjuste() async throws {
+        guard let id = cancionId else { return }
+        let l: Letra = try await API.get("/api/letras/\(id)?sincronia=\(UUID().uuidString)")
+        guard cancionId == id else { return }
+        aplicar(l)
+        desfase = 0
+    }
+    func guardarSincroniaGlobal(_ segundos: Double) async throws {
+        guard let id = cancionId else { return }
+        guard !revisionSincronia.isEmpty else { throw ErrorAPI(mensaje: "Recarga la letra antes de guardar", estado: 409) }
+        let l: Letra = try await API.enviar("PUT", "/api/letras/\(id)/sincronia", ["segundos": segundos, "revision": revisionSincronia])
+        guard cancionId == id else { return }
+        desfases[String(id)] = nil
+        UserDefaults.standard.set(desfases, forKey: "desfaseLetras")
+        aplicar(l)
+        desfase = 0
+    }
+
     var sincronizada: Bool { !lineas.isEmpty }
 
     /// Ajuste de sincronía de la canción actual, en segundos (como «Ajustar sincronía» de la web).
@@ -119,6 +146,9 @@ final class Letras {
     func cargar(_ c: Cancion, forzar: Bool = false) {
         guard forzar || c.id != cancionId else { return }
         cancionId = c.id
+        sincroniaGlobal = 0
+        revisionSincronia = ""
+        editandoSincronia = false
         desfase = desfases[String(c.id)] ?? 0
         seleccionando = false
         traducciones = [:]
@@ -158,6 +188,8 @@ final class Letras {
     }
 
     private func aplicar(_ l: Letra) {
+        sincroniaGlobal = l.sincroniaGlobalSegundos
+        revisionSincronia = l.revisionSincronia
         lineas = Letras.leerLRC(l.letraSincronizada)
         textoPlano = l.letra.isEmpty && lineas.isEmpty ? "" : l.letra
         if lineas.isEmpty, textoPlano.isEmpty, !l.letraSincronizada.isEmpty {

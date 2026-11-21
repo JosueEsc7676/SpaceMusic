@@ -92,3 +92,23 @@ final class VigilanciaCargaAudioTests: XCTestCase {
         XCTAssertTrue(vigilancia.debeReintentar(hasta: 1))
     }
 }
+
+
+final class SincroniaCompartidaTests: XCTestCase {
+    func testElAjusteCompartidoDesplazaLineasYPalabras() {
+        let lrc = "[offset:-1500]\n[00:10.00]<00:10.00>uno <00:11.00>dos"
+        let reales = LectorLRC.leer(lrc).filter { !$0.interludio }
+        XCTAssertEqual(reales.first!.tiempo, 11.5, accuracy: 0.001)
+        XCTAssertEqual(reales.first!.palabras[0].tiempo, 11.5, accuracy: 0.001)
+        XCTAssertEqual(reales.first!.palabras[1].tiempo, 12.5, accuracy: 0.001)
+    }
+    func testLetrasAntiguasYContratoDelServidor() throws {
+        let decoder = JSONDecoder()
+        let antigua = try decoder.decode(Letra.self, from: Data(#"{"letraSincronizada":"[00:01]uno"}"#.utf8))
+        XCTAssertEqual(antigua.sincroniaGlobalSegundos, 0)
+        XCTAssertEqual(antigua.revisionSincronia, "")
+        let nueva = try decoder.decode(Letra.self, from: Data(#"{"sincroniaGlobalSegundos":-0.5,"revisionSincronia":"abc"}"#.utf8))
+        XCTAssertEqual(nueva.sincroniaGlobalSegundos, -0.5)
+        XCTAssertEqual(nueva.revisionSincronia, "abc")
+    }
+}
