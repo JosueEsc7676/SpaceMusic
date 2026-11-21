@@ -449,3 +449,8 @@ h1.title { font-family: var(--display); font-size: 2.9rem; font-weight: 800; let
 .np.orbita .ob-der { padding-bottom: calc(3vh + 10.4rem); transition: padding-bottom .6s cubic-bezier(.4,0,.2,1); }
 .np.orbita .ob-izq { padding-bottom: calc(3vh + 10.4rem); }
 .np.orbita.idle .ob-der { padding-bottom: 2.4rem; }
+/* Solo letra: nada borroso, menos desvanecido arriba y abajo, y el verso en la franja central */
+.np.solo .np-lyrics .l { filter: none !important; }
+.np.solo .np-lyrics .l:not(.active) { opacity: max(var(--o, .3), .38); }
+.np.solo .np-lyrics { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 91%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 91%, transparent 100%); }
+.np.solo .np-lyrics .verso { top: 50%; filter: none; }

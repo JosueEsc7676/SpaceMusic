@@ -938,7 +938,7 @@ function actualizarLetra(force) {
     const a = inner.querySelector(`[data-i="${Math.max(0, i)}"]`);
     // Línea actual: al centro (clásico y solo letra) o en el tercio de arriba (Órbita, como en la referencia)
     const np = $('#np');
-    const alto = np?.classList.contains('solo') ? 0.45 : np?.classList.contains('orbita') ? 0.42 : 0.5;
+    const alto = np?.classList.contains('solo') ? 0.5 : np?.classList.contains('orbita') ? 0.42 : 0.5;
     if (a) inner.style.transform = `translateY(${inner.parentElement.clientHeight * alto - (a.offsetTop + a.offsetHeight / 2)}px)`;
     pintarVerso(i);
     const nl = $('[data-ob-linea]');
@@ -1089,7 +1089,7 @@ function sintonia(tipo, lineasN = 0) {
 // ═══════════════════ Verso suelto: solo el que suena, quieto o en distintas partes de la pantalla ═══════════════════
 
 // Lugares del verso flotante (siempre derecho y legible): [izquierda %, arriba %, alineación]
-const LUGARES = [[6, 16, 'left'], [50, 40, 'center'], [94, 22, 'right'], [8, 62, 'left'], [50, 72, 'center'], [92, 58, 'right'], [26, 34, 'left'], [74, 48, 'right']];
+const LUGARES = [[6, 30, 'left'], [50, 46, 'center'], [94, 34, 'right'], [8, 62, 'left'], [50, 66, 'center'], [92, 58, 'right'], [26, 40, 'left'], [74, 52, 'right']];
 let ultimoLugar = -1;
 function pintarVerso(i) {
   const v = $('#lyr [data-verso]');
