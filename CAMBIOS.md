@@ -1,5 +1,12 @@
 # Registro de cambios
 
+## iPhone 3.13: notas de voz, foto en los avisos, perfil más claro
+- Barra de pestañas siempre con fondo (en los álbumes quedaba transparente sobre la lista).
+- Notificaciones de mensajes como conversación (`INSendMessageIntent`): la foto de quien escribe ocupa el lugar del ícono, a la izquierda. Permiso `com.apple.developer.usernotifications.communication` en `SpaceMusic.entitlements` (la compilación lo incrusta con firma ad hoc); si iOS no lo concede, la foto va como imagen del aviso. Los avisos en segundo plano (resumen) también traen la foto.
+- Notas de voz: se escuchan antes de enviarlas (descartar / escuchar / enviar) y todas se reproducen, también las propias (`VozMensajes`: baja el audio y lo reproduce con `AVAudioPlayer`, barra para saltar).
+- Perfil: vibras como insignias compactas en dos columnas con su ícono (antes salía el nombre del ícono, «sparkles», «fire»); géneros en lista con barras, el favorito arriba y sin etiquetas genéricas («Music»).
+- Subir canciones: revisa antes cuáles ya están en el servidor y avisa en la campana al terminar (como la web).
+
 ## iPhone 3.12: mensajes con fotos y voz, inicio con Google/Facebook/Apple y perfil nuevo
 - Mensajes: fotos (`PhotosPicker`) y notas de voz (`GrabadoraVoz`, AAC) cifradas en el servidor; borrar desde el menú de cada burbuja; bloquear o desbloquear desde el menú del chat. Las notificaciones de mensajes llevan la foto de quien escribe.
 - `Entrada`: botones «Continuar con Google / Facebook / Apple» (solo los activos en el servidor) con `webAuthenticationSession` efímera y vuelta por `spacemusic://oauth`.

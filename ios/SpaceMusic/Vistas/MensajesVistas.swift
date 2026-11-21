@@ -124,6 +124,8 @@ struct ChatVista: View {
     @State private var eligiendoFoto = false
     @State private var foto: PhotosPickerItem?
     @State private var grabadora = GrabadoraVoz()
+    /// Nota de voz grabada que todavía no se envía (se puede escuchar, descartar o enviar).
+    @State private var vozPendiente: (datos: Data, duracion: Int)?
     @State private var confirmarBloqueo = false
 
     var body: some View {
@@ -243,10 +245,32 @@ struct ChatVista: View {
                 Circle().fill(Color.red).frame(width: 10, height: 10)
                 Text("Grabando · \(Formato.duracion(Int(grabadora.segundos)))").font(.subheadline.monospacedDigit())
                 Spacer()
+                Button { vozPendiente = grabadora.terminar() } label: {
+                    Image(systemName: "stop.fill").font(.body.weight(.bold)).foregroundStyle(.black)
+                        .frame(width: 38, height: 38).background(Circle().fill(Color.white))
+                }
+                .accessibilityLabel("Terminar de grabar")
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+        } else if let voz = vozPendiente {
+            // Escuchar la nota de voz antes de enviarla
+            HStack(spacing: 10) {
+                Button { VozMensajes.compartida.detener(); vozPendiente = nil } label: {
+                    Image(systemName: "trash").font(.body.weight(.semibold)).foregroundStyle(.red)
+                        .frame(width: 38, height: 38).background(Circle().fill(Tema.tarjeta))
+                }
+                .accessibilityLabel("Descartar el mensaje de voz")
+                AudioMensaje(clave: "previa", url: nil, datos: voz.datos, duracion: voz.duracion, mio: false)
+                    .background(Capsule().fill(Tema.tarjeta))
+                Spacer(minLength: 0)
                 Button { Task { await enviarVoz() } } label: {
                     Image(systemName: "arrow.up").font(.body.weight(.bold)).foregroundStyle(.black)
                         .frame(width: 38, height: 38).background(Circle().fill(Tema.celeste))
                 }
+                .disabled(enviando)
                 .accessibilityLabel("Enviar el mensaje de voz")
             }
             .buttonStyle(.plain)
@@ -365,7 +389,9 @@ struct ChatVista: View {
     }
 
     private func enviarVoz() async {
-        guard let voz = grabadora.terminar() else { return }
+        guard let voz = vozPendiente else { return }
+        VozMensajes.compartida.detener()
+        vozPendiente = nil
         await subir(voz.datos, nombre: "voz.m4a", tipo: "audio/mp4", duracion: voz.duracion)
     }
 
@@ -430,7 +456,7 @@ struct Burbuja: View {
                 } else {
                 if mensaje.tipo == "IMAGEN" { FotoMensaje(url: mensaje.urlArchivo) }
                 if mensaje.tipo == "AUDIO" {
-                    AudioMensaje(url: mensaje.urlArchivo, duracion: mensaje.duracion, mio: mensaje.mio)
+                    AudioMensaje(clave: "m\(mensaje.id)", url: mensaje.urlArchivo, duracion: mensaje.duracion, mio: mensaje.mio)
                         .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .fill(mensaje.mio ? AnyShapeStyle(Tema.celeste.opacity(0.85)) : AnyShapeStyle(Color(white: 0.17))))
                         .foregroundStyle(mensaje.mio ? Color.black : Tema.texto)

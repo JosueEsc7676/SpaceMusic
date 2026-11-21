@@ -1,4 +1,5 @@
 import Foundation
+import Intents
 import Observation
 import UIKit
 import UserNotifications
@@ -94,7 +95,8 @@ final class Eventos {
         if let m = r.ultimoMensaje, m.id > vistos["m", default: 0] {
             vistos["m"] = m.id
             if !primeraVez, chatAbierto != m.username {
-                avisar(titulo: m.de, texto: m.texto, ruta: "#/mensajes/\(m.username)", siempre: true)
+                avisar(titulo: m.de, texto: m.texto, ruta: "#/mensajes/\(m.username)", siempre: true,
+                       foto: m.foto, usuario: m.username)
             }
         }
         if let n = r.ultimaNotificacion, n.id > vistos["n", default: 0] {
@@ -159,7 +161,7 @@ final class Eventos {
                 mensajesSinLeer += 1
                 marcarMensajeAvisado(m.id)
                 avisar(titulo: ev.nombre, texto: m.cancion.map { "🎵 \($0.nombre) · \($0.artista)" } ?? m.texto, ruta: "#/mensajes/\(con)",
-                       foto: json["foto"] as? String)
+                       foto: json["foto"] as? String, usuario: con)
             }
         case "mensaje-borrado":
             if let json = try? JSONSerialization.jsonObject(with: d) as? [String: Any], let id = json["id"] as? Int { ultimoBorrado = id }
@@ -188,7 +190,7 @@ final class Eventos {
 
     /// Notificación del sistema. Los mensajes del chat en vivo solo avisan fuera de la app;
     /// lo que llega por el resumen (mensajes y avisos nuevos) avisa siempre, también en primer plano.
-    private func avisar(titulo: String, texto: String, ruta: String, siempre: Bool = false, foto: String? = nil) {
+    private func avisar(titulo: String, texto: String, ruta: String, siempre: Bool = false, foto: String? = nil, usuario: String? = nil) {
         guard siempre || !appActiva else { return }
         let c = UNMutableNotificationContent()
         c.title = titulo
@@ -197,18 +199,47 @@ final class Eventos {
         c.userInfo = ["ruta": ruta]
         c.threadIdentifier = ruta
         Task {
-            // Con la foto de perfil de quien escribe (como imagen de la notificación)
-            if let foto, !foto.isEmpty, let adjunto = await Eventos.fotoParaAviso(foto) { c.attachments = [adjunto] }
-            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: c, trigger: nil))
+            var contenido: UNNotificationContent = c
+            var datos: Data?
+            if let foto, !foto.isEmpty { datos = await Eventos.bajarFoto(foto) }
+            if let usuario, let conversacion = await Eventos.comoConversacion(c, nombre: titulo, usuario: usuario, foto: datos) {
+                // Notificación de comunicación: la foto de quien escribe ocupa el lugar del ícono de la app (izquierda)
+                contenido = conversacion
+            } else if let datos, let adjunto = Eventos.adjunto(datos) {
+                // Si iOS no permite las de comunicación (instalación sin ese permiso): la foto como imagen del aviso
+                c.attachments = [adjunto]
+            }
+            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: contenido, trigger: nil))
         }
     }
 
-    /// Baja la foto de perfil (solo de nuestro servidor) y la guarda en un archivo temporal para la notificación.
-    private static func fotoParaAviso(_ ruta: String) async -> UNNotificationAttachment? {
+    /// Baja la foto de perfil (solo de nuestro servidor).
+    private static func bajarFoto(_ ruta: String) async -> Data? {
         let base = Sesion.compartida.servidor
         guard let url = URL(string: ruta.hasPrefix("http") ? ruta : base + ruta), url.host == URL(string: base)?.host,
               let (datos, resp) = try? await URLSession.shared.data(from: url),
               (resp as? HTTPURLResponse)?.statusCode == 200, UIImage(data: datos) != nil else { return nil }
+        return datos
+    }
+
+    /// Convierte el aviso en una notificación de comunicación (como Mensajes o WhatsApp): iOS pone la foto
+    /// de la persona a la izquierda, con el ícono de la app pequeño encima. Devuelve nil si iOS no lo permite.
+    private static func comoConversacion(_ c: UNMutableNotificationContent, nombre: String, usuario: String, foto: Data?) async -> UNNotificationContent? {
+        let imagen = foto.map { INImage(imageData: $0) }
+        let persona = INPerson(personHandle: INPersonHandle(value: usuario, type: .unknown), nameComponents: nil,
+                               displayName: nombre, image: imagen, contactIdentifier: nil, customIdentifier: usuario)
+        let intent = INSendMessageIntent(recipients: nil, outgoingMessageType: .outgoingMessageText, content: c.body,
+                                         speakableGroupName: nil, conversationIdentifier: usuario, serviceName: nil,
+                                         sender: persona, attachments: nil)
+        if let imagen { intent.setImage(imagen, forParameterNamed: \.sender) }
+        let interaccion = INInteraction(intent: intent, response: nil)
+        interaccion.direction = .incoming
+        try? await interaccion.donate()
+        return try? c.updating(from: intent)
+    }
+
+    /// Guarda la foto en un archivo temporal para adjuntarla a la notificación.
+    private static func adjunto(_ datos: Data) -> UNNotificationAttachment? {
         let archivo = FileManager.default.temporaryDirectory.appendingPathComponent("aviso-\(UUID().uuidString).jpg")
         guard (try? datos.write(to: archivo)) != nil else { return nil }
         return try? UNNotificationAttachment(identifier: "foto", url: archivo, options: [UNNotificationAttachmentOptionsTypeHintKey: "public.jpeg"])

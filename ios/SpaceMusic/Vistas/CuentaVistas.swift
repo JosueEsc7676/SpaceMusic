@@ -372,7 +372,7 @@ struct SubirVista: View {
         let id = UUID()
         let url: URL
         var estado: Estado = .pendiente
-        enum Estado: Equatable { case pendiente, subiendo, listo, error(String) }
+        enum Estado: Equatable { case pendiente, subiendo, listo, yaEstaba, error(String) }
     }
 
     @State private var archivos: [Archivo] = []
@@ -398,6 +398,7 @@ struct SubirVista: View {
                             case .pendiente: Image(systemName: "clock").foregroundStyle(Tema.secundario)
                             case .subiendo: ProgressView()
                             case .listo: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                            case .yaEstaba: Text("Ya estaba").font(.caption).foregroundStyle(Tema.secundario)
                             case .error(let m): Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Tema.peligro).help(m)
                             }
                         }
@@ -437,6 +438,18 @@ struct SubirVista: View {
         guard !subiendo else { return }
         subiendo = true
         defer { subiendo = false }
+        // Como en la web: antes de subir se pregunta al servidor cuáles ya tiene (mismo nombre y tamaño)
+        let revisar = archivos.indices.filter { archivos[$0].estado == .pendiente }
+        let lista: [[String: Any]] = revisar.map { i in
+            let u = archivos[i].url
+            let acceso = u.startAccessingSecurityScopedResource()
+            defer { if acceso { u.stopAccessingSecurityScopedResource() } }
+            let tam = (try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -1
+            return ["nombre": u.lastPathComponent, "tamano": tam]
+        }
+        if !lista.isEmpty, let existen: [Bool] = try? await API.enviarLista("/api/canciones/subir/revisar", lista) {
+            for (k, i) in revisar.enumerated() where k < existen.count && existen[k] { archivos[i].estado = .yaEstaba }
+        }
         let pendientes = archivos.indices.filter { archivos[$0].estado == .pendiente }
         // Dos a la vez, como en la web
         for grupo in stride(from: 0, to: pendientes.count, by: 2).map({ Array(pendientes[$0..<min($0 + 2, pendientes.count)]) }) {
@@ -449,7 +462,11 @@ struct SubirVista: View {
             }
         }
         let listos = archivos.filter { $0.estado == .listo }.count
-        Avisos.compartido.mostrar("\(Formato.canciones(listos)) subidas")
+        let repetidas = archivos.filter { $0.estado == .yaEstaba }.count
+        let texto = "\(Formato.canciones(listos)) subidas" + (repetidas > 0 ? " · \(repetidas) ya estaban" : "")
+        Avisos.compartido.mostrar(texto)
+        // Queda en la campana, como en la web
+        if listos > 0 { try? await API.hacer("POST", "/api/notificaciones/subida", ["texto": "Subida terminada: " + texto]) }
     }
 
     private func subir(_ i: Int, _ url: URL) async {

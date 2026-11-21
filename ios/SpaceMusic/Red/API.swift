@@ -86,6 +86,14 @@ enum API {
         return try await ejecutar(r)
     }
 
+    /// POST con una lista JSON como cuerpo (por ejemplo, revisar varios archivos de una vez).
+    static func enviarLista<T: Decodable>(_ ruta: String, _ lista: [[String: Any]]) async throws -> T {
+        var r = try peticion(ruta, metodo: "POST")
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.httpBody = try JSONSerialization.data(withJSONObject: lista)
+        return try await ejecutar(r)
+    }
+
     /// Igual que enviar pero sin leer la respuesta.
     static func hacer(_ metodo: String, _ ruta: String, _ cuerpo: [String: Any]? = nil) async throws {
         let _: Vacio = try await enviar(metodo, ruta, cuerpo)

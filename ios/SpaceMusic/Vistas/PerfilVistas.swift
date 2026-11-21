@@ -176,16 +176,14 @@ struct PerfilVista: View {
                     .padding(.horizontal)
                 }
                 if !p.vibras.isEmpty {
-                    // Vibras: tarjetas con degradado en carrusel, cada una con su color
+                    // Vibras: insignias compactas en dos columnas (ícono de color, nombre y una línea)
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Vibras").titulo().padding(.horizontal)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(Array(p.vibras.enumerated()), id: \.offset) { _, v in TarjetaVibra(vibra: v) }
-                            }
-                            .padding(.horizontal)
+                        Text("Vibras").titulo()
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                            ForEach(Array(p.vibras.enumerated()), id: \.offset) { _, v in TarjetaVibra(vibra: v) }
                         }
                     }
+                    .padding(.horizontal)
                 }
                 if !p.topCanciones.isEmpty {
                     let cs = p.topCanciones.compactMap(\.cancion)
@@ -211,7 +209,7 @@ struct PerfilVista: View {
                 if !p.topGeneros.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Géneros").titulo()
-                        GraficaGeneros(generos: Array(p.topGeneros.prefix(6)))
+                        GraficaGeneros(generos: p.topGeneros)
                     }
                     .padding(.horizontal)
                 }
@@ -389,68 +387,107 @@ struct PersonasVista: View {
     }
 }
 
-/// Una vibra del perfil: emoji grande, nombre y descripción sobre un degradado de su propio color.
+/// Una vibra del perfil: insignia compacta con su ícono en un círculo de color, el nombre y una línea.
 struct TarjetaVibra: View {
     let vibra: Perfil.Vibra
+
+    /// El servidor manda el nombre del ícono de la web; aquí se usa el símbolo equivalente del iPhone.
+    static func simbolo(_ icono: String?) -> String {
+        switch icono ?? "" {
+        case "fire": "flame.fill"
+        case "mic": "music.mic"
+        case "star": "star.fill"
+        case "wave": "waveform"
+        case "moon": "moon.stars.fill"
+        case "sparkles": "sparkles"
+        case "heart": "heart.fill"
+        case "sun": "sun.max.fill"
+        case "disc": "opticaldisc.fill"
+        case "compass": "safari.fill"
+        case "clock": "flame"
+        default: "music.note"
+        }
+    }
+
     var body: some View {
         let (r, g, b) = Tema.colorGenero(vibra.nombre)
         let color = Color(red: r, green: g, blue: b)
-        VStack(alignment: .leading, spacing: 8) {
-            Text(vibra.icono ?? "✨").font(.system(size: 34))
+        HStack(spacing: 10) {
+            Image(systemName: TarjetaVibra.simbolo(vibra.icono))
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(LinearGradient(colors: [color, color.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(vibra.nombre).font(.subheadline.weight(.bold)).lineLimit(1)
+                Text(vibra.descripcion).font(.caption2).foregroundStyle(Tema.secundario).lineLimit(2)
+            }
             Spacer(minLength: 0)
-            Text(vibra.nombre).font(.headline).foregroundStyle(.white).lineLimit(2)
-            Text(vibra.descripcion).font(.caption).foregroundStyle(.white.opacity(0.8)).lineLimit(3)
         }
-        .padding(16)
-        .frame(width: 190, height: 170, alignment: .leading)
-        .background(
-            LinearGradient(colors: [color.opacity(0.95), color.opacity(0.45), Color.black.opacity(0.6)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.12)))
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(color.opacity(0.14)))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(color.opacity(0.25)))
         .accessibilityElement(children: .combine)
     }
 }
 
-/// Géneros del perfil: gráfica de dona con el principal en el centro y la leyenda en dos columnas.
+/// Géneros del perfil, fácil de leer: el favorito arriba y cada género con su barra y porcentaje.
+/// Se omiten las etiquetas genéricas («Music», «Desconocido»…) y los porcentajes se reparten entre los que quedan.
 struct GraficaGeneros: View {
     let generos: [Perfil.TopGenero]
+
+    private static let genericos: Set<String> = ["music", "música", "musica", "desconocido", "unknown", "other", "otros", "otro", "varios", ""]
+
+    private var limpios: [(nombre: String, porcentaje: Double)] {
+        let validos = generos.filter { !GraficaGeneros.genericos.contains($0.genero.trimmingCharacters(in: .whitespaces).lowercased()) && $0.porcentaje > 0 }
+        let suma = validos.reduce(0) { $0 + $1.porcentaje }
+        guard suma > 0 else { return [] }
+        return validos.prefix(5).map { ($0.genero, $0.porcentaje / suma * 100) }
+    }
+
     private func color(_ nombre: String) -> Color {
         let (r, g, b) = Tema.colorGenero(nombre)
         return Color(red: r, green: g, blue: b)
     }
+
     var body: some View {
-        VStack(spacing: 16) {
-            ZStack {
-                Chart(Array(generos.enumerated()), id: \.offset) { _, g in
-                    SectorMark(angle: .value("Porcentaje", max(g.porcentaje, 0.5)), innerRadius: .ratio(0.62), angularInset: 2)
-                        .cornerRadius(5)
-                        .foregroundStyle(color(g.genero))
-                }
-                .chartLegend(.hidden)
-                .frame(height: 210)
-                if let primero = generos.first {
-                    VStack(spacing: 2) {
-                        Text("\(Int(primero.porcentaje.rounded()))%").font(.system(size: 30, weight: .heavy, design: .rounded))
-                        Text(primero.genero).font(.caption.weight(.semibold)).foregroundStyle(Tema.secundario).lineLimit(1)
+        let lista = limpios
+        VStack(alignment: .leading, spacing: 14) {
+            if let primero = lista.first {
+                HStack(spacing: 12) {
+                    Image(systemName: "crown.fill").font(.title3).foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(color(primero.nombre)))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Tu género favorito").font(.caption).foregroundStyle(Tema.secundario)
+                        Text(primero.nombre).font(.title3.weight(.bold)).lineLimit(1)
                     }
-                    .frame(maxWidth: 120)
+                    Spacer()
+                    Text("\(Int(primero.porcentaje.rounded()))%").font(.title3.weight(.heavy).monospacedDigit())
+                        .foregroundStyle(color(primero.nombre))
                 }
             }
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], alignment: .leading, spacing: 10) {
-                ForEach(Array(generos.enumerated()), id: \.offset) { _, g in
-                    HStack(spacing: 8) {
-                        Circle().fill(color(g.genero)).frame(width: 10, height: 10)
-                        Text(g.genero).font(.subheadline.weight(.medium)).lineLimit(1)
-                        Spacer(minLength: 2)
-                        Text("\(Int(g.porcentaje.rounded()))%").font(.caption.monospacedDigit()).foregroundStyle(Tema.secundario)
+            ForEach(Array(lista.enumerated()), id: \.offset) { i, g in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("\(i + 1). \(g.nombre)").font(.subheadline.weight(.semibold)).lineLimit(1)
+                        Spacer()
+                        Text("\(Int(g.porcentaje.rounded()))%").font(.subheadline.monospacedDigit()).foregroundStyle(Tema.secundario)
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Tema.tarjeta))
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.08))
+                            Capsule().fill(LinearGradient(colors: [color(g.nombre), color(g.nombre).opacity(0.65)], startPoint: .leading, endPoint: .trailing))
+                                .frame(width: max(8, geo.size.width * g.porcentaje / 100))
+                        }
+                    }
+                    .frame(height: 8)
                 }
+                .accessibilityElement(children: .combine)
             }
         }
-        .accessibilityElement(children: .contain)
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tema.tarjeta))
     }
 }
