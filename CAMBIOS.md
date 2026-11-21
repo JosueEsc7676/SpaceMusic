@@ -1,6 +1,12 @@
 # Registro de cambios
 
 
+## Versión 3.16
+- **TV: reproductor «Órbita»** (`tv.js` `htmlOrbita`, `tv.css` `.np.orbita`): barra superior (modo letra y número en la cola), portada inclinada con su sombra y etiqueta (género o álbum), título grande, letra «a su manera» con la línea actual arriba en el color de acento, pie con líneas (n / total) y barra de controles abajo. Los colores salen de la portada (`colores()`: acento brillante y dos resplandores; portada gris → lima). Se elige entre «Clásico» y «Órbita» en el botón de estilo (deslizadores) del reproductor.
+- **Solo letra**: pantalla completa sin controles (botón de expandir o desde el panel), sincronizada; OK pausa/reanuda y Atrás sale.
+- **Letra a tu manera** (en los dos estilos y en solo letra): tipografía normal, cursiva (Dancing Script) o elegante (Playfair Display itálica), tamaño 70–160 % y orden «ordenada» o «desordenada» (cada línea con su desplazamiento e inclinación fijos, alternando lados). Se guarda en la TV (`sm_tv_estilo`).
+- Panel de estilo navegable con el control (`#ajustes`, capa propia para las flechas; Atrás lo cierra).
+
 ## Versión 3.15
 - **Iniciar sesión en la TV con el teléfono** (`TvVinculoService`, `TvVinculoController`, `/api/auth/tv/*`): la TV pide un vínculo (`POST /vinculo` → código de 6 caracteres y un secreto), muestra un QR propio (`js/qr.js`, modo byte, nivel M, versiones 1–10, verificado con OpenCV) que abre `#/tv/CÓDIGO`, y pregunta cada 2 s (`GET /vinculo/estado?secreto=`). Se aprueba desde una sesión abierta (`POST /vinculo/{código}/aprobar`): la TV recibe su propia sesión una sola vez. Vínculos en memoria, 10 min, máximo 12 por IP. **Misma red wifi**: `GET /cercanas` lista las TVs que esperan desde la misma IP pública (o la misma /24 privada); la web avisa con un botón al abrir la app (`views/tv-vincular.js`) y el iPhone las muestra en Dispositivos. Pruebas: `TvVinculoTest` (3).
 - **TV con control de dispositivos** (`tv.js`): la TV se anuncia como «TV · nombre del televisor» (puente `SpaceMusicTV.dispositivo()`, app TV 1.2, código 3) y obedece las órdenes de tus otros dispositivos; pantalla «Dispositivos» con cada equipo y sus controles (reproducir/pausar, anterior/siguiente, volumen, escuchar en la TV, pasar la música de la TV). En la TV lo que eliges suena en la TV (no toma solo el control de otro equipo).

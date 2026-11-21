@@ -1,6 +1,6 @@
 # SpaceMusic: resumen para quien continúe el trabajo (Codex u otra persona)
 
-Estado al 21 de noviembre de 2026, versión **3.15** (servidor y web), **Android 2.7** (código 18), **Android TV 1.2** (código 3) e **iPhone 1.42+** (rama `app-ios`, la compilación de GitHub numera la versión).
+Estado al 21 de noviembre de 2026, versión **3.16** (servidor y web), **Android 2.7** (código 18), **Android TV 1.2** (código 3) e **iPhone 1.42+** (rama `app-ios`, la compilación de GitHub numera la versión).
 El detalle de cada versión está en `CAMBIOS.md` (servidor, web y Android) y en `CAMBIOS.md` de la rama `app-ios` (iPhone).
 
 ## 1. Qué es y dónde está cada parte
@@ -43,7 +43,9 @@ Android carga la web: **toda función nueva de la web ya está en Android**. El 
 
 ## 3. Lo que se hizo en las últimas versiones
 
-**3.15** (esta): la app de TV
+**3.16** (esta): reproductor «Órbita» en la TV (dinámico, con los colores de la portada), modo «solo letra» a pantalla completa y letra configurable (normal/cursiva/elegante, tamaño, ordenada/desordenada). Todo en `tv.js` / `tv.css`; preferencias en `localStorage` `sm_tv_estilo`.
+
+**3.15**: la app de TV
 - **Entrar en la TV con el teléfono**: QR (generador propio `js/qr.js`), código de 6 caracteres o «misma red wifi». Servidor: `TvVinculoService` / `TvVinculoController` (`/api/auth/tv/*`, en memoria, 10 min, la TV recibe su propia sesión una sola vez). Teléfono: `#/tv/CÓDIGO` (`views/tv-vincular.js`) y aviso automático si hay una TV esperando en el mismo wifi; iPhone: Dispositivos → «Iniciar sesión en una TV». La contraseña con el control sigue disponible.
 - **TV en «Dispositivos»** (como Spotify Connect): la TV aparece como «TV · nombre del televisor» y obedece órdenes; su pantalla Dispositivos controla a los demás (reproducir/pausar, anterior/siguiente, volumen, escuchar en la TV, pasar la música).
 - **SyncPlay en la TV**: iniciar (con lo que sonaba), unirse con código o a una invitación, controles, QR y código en pantalla.

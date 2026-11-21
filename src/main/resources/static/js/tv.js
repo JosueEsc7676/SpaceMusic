@@ -13,6 +13,30 @@ import { iniciarRemoto, cargarDispositivos, otrosDispositivos, miDispositivo, mi
 import { motor, objetivo, control, activar as activarSala, crearSala, retomarSala, salaActiva, unirseConCodigoTexto, salirDeSala } from './juntos-motor.js';
 
 const nativo = window.SpaceMusicTV || null; // puente con la APK (si existe)
+
+// Tipografías de la letra en la TV: «Órbita» (Bricolage Grotesque), cursiva (Dancing Script) y elegante (Playfair)
+if (navigator.onLine !== false && !document.querySelector('link[data-fuentes-tv]')) {
+  const l = document.createElement('link');
+  l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Dancing+Script:wght@600;700&family=Playfair+Display:ital,wght@1,600;1,700&display=swap';
+  l.dataset.fuentesTv = '';
+  document.head.appendChild(l);
+}
+
+// ═══════════════════ Estilo del reproductor y de la letra (se guarda en esta TV) ═══════════════════
+// reproductor: «clasico» (el de siempre) u «orbita» (dinámico, con los colores de la portada)
+// fuente: normal | cursiva | elegante · tam: 70–160 (%) · orden: ordenada | desordenada
+const ESTILO_DEF = { reproductor: 'clasico', fuente: 'normal', tam: 100, orden: 'ordenada' };
+let estilo = { ...ESTILO_DEF, ...(store.get('sm_tv_estilo', {}) || {}) };
+function aplicarEstilo() {
+  const np = $('#np');
+  if (!np) return;
+  np.classList.toggle('orbita', estilo.reproductor === 'orbita');
+  np.classList.toggle('desorden', estilo.orden === 'desordenada');
+  np.dataset.fuente = estilo.fuente;
+  np.style.setProperty('--letra-escala', String(estilo.tam / 100));
+}
+function guardarEstilo() { store.set('sm_tv_estilo', estilo); aplicarEstilo(); }
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -55,6 +79,7 @@ const fallo = (e) => toast(e?.message || 'No se pudo completar');
 let focused = null;
 
 function capa() {
+  if ($('#ajustes.open')) return $('#ajustes');
   if ($('.np.open')) return $('.np');
   return document;
 }
@@ -92,8 +117,10 @@ const destinoDe = (box, eje) => animaciones.get(box)?.[eje]?.destino ?? (eje ===
 
 function enfocar(el, { scroll = true } = {}) {
   if (!el) return;
+  const panel = $('#ajustes.open');
+  if (panel && !panel.contains(el)) return;
   const npAbierto = $('.np.open');
-  if (npAbierto && !npAbierto.contains(el)) return;
+  if (!panel && npAbierto && !npAbierto.contains(el)) return;
   focused?.classList.remove('focused');
   focused = el;
   el.classList.add('focused');
@@ -229,6 +256,8 @@ function ir(fn, ...args) {
 
 /** Atrás: cierra lo que esté abierto o vuelve a la pantalla anterior. Devuelve false si no hay a dónde volver. */
 function atras() {
+  if ($('#ajustes.open')) { cerrarAjustes(); return true; }
+  if ($('.np.solo')) { soloLetra(false); return true; }
   if ($('.np.open')) { cerrarNP(); return true; }
   if (focused?.closest('.rail')) { enfocar($('.screen .f')); return true; }
   if (pila.length > 1) {
@@ -269,7 +298,25 @@ function shell() {
       <main class="main"><div class="screen" id="screen"></div></main>
     </div>
     <button class="mini f hidden" id="mini"></button>
-    <div class="np" id="np"></div>`);
+    <div class="np" id="np"></div>
+    <div class="ajustes" id="ajustes"></div>`);
+  aplicarEstilo();
+  // Botones del reproductor (los dos estilos usan los mismos data-c)
+  $('#np').addEventListener('click', (e) => {
+    const c = e.target.closest('[data-c]')?.dataset.c;
+    if (c === 'play') player.toggle();
+    else if (c === 'prev') player.prev();
+    else if (c === 'next') player.next();
+    else if (c === 'shuffle') { player.toggleShuffle(); toast(player.shuffle ? 'Aleatorio activado' : 'Aleatorio desactivado'); }
+    else if (c === 'repeat') { player.cycleRepeat(); toast(player.repeat === 'off' ? 'Repetición desactivada' : player.repeat === 'one' ? 'Repetir esta canción' : 'Repetir todo'); }
+    else if (c === 'fav') alternarFav();
+    else if (c === 'estilo') abrirAjustes();
+    else if (c === 'solo') soloLetra(true);
+  });
+  $('#ajustes').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-aj]');
+    if (b) cambiarAjuste(b.dataset.aj);
+  });
   $('.rail').addEventListener('click', (e) => {
     const b = e.target.closest('[data-go]');
     if (!b) return;
@@ -743,7 +790,7 @@ function despertar() {
   if (!np) return;
   np.classList.remove('idle');
   clearTimeout(idleT);
-  if (np.classList.contains('open')) idleT = setTimeout(() => np.classList.add('idle'), 8000);
+  if (np.classList.contains('open')) idleT = setTimeout(() => { if (!$('#ajustes.open')) np.classList.add('idle'); }, 8000);
 }
 
 function abrirNP() {
@@ -770,7 +817,7 @@ function pintarNP(cambio) {
   if (!s || !np) return;
   if (cambio || !np.innerHTML) {
     const antes = focused && np.contains(focused) ? focused.dataset.c : null;
-    np.innerHTML = `<div class="np-bg" style="background-image:url('${esc(cover(s.portadaUrl, 300))}')"></div><div class="np-tint"></div>
+    np.innerHTML = estilo.reproductor === 'orbita' ? htmlOrbita(s) : `<div class="np-bg" style="background-image:url('${esc(cover(s.portadaUrl, 300))}')"></div><div class="np-tint"></div>
       <div class="np-left">
         <div class="np-art">${img(s.portadaUrl, 640)}</div>
         <div class="np-head">
@@ -787,20 +834,14 @@ function pintarNP(cambio) {
           <button class="cb sm f" data-c="shuffle" aria-label="Aleatorio">${icon('shuffle')}</button>
           <button class="cb sm f" data-c="repeat" aria-label="Repetir">${icon('repeat')}</button>
           <button class="cb sm f" data-c="fav" aria-label="Me gusta">${icon('heart')}</button>
+          <button class="cb sm f" data-c="estilo" aria-label="Estilo del reproductor y de la letra">${icon('sliders')}</button>
+          <button class="cb sm f" data-c="solo" aria-label="Solo letra en pantalla completa">${icon('expand')}</button>
           <div class="np-up" id="up"></div>
         </div>
       </div>
       <div class="np-lyrics" id="lyr"><div class="none">Cargando letra…</div></div>`;
-    np.querySelector('.np-left').addEventListener('click', (e) => {
-      const c = e.target.closest('[data-c]')?.dataset.c;
-      if (c === 'play') player.toggle();
-      else if (c === 'prev') player.prev();
-      else if (c === 'next') player.next();
-      else if (c === 'shuffle') { player.toggleShuffle(); toast(player.shuffle ? 'Aleatorio activado' : 'Aleatorio desactivado'); }
-      else if (c === 'repeat') { player.cycleRepeat(); toast(player.repeat === 'off' ? 'Repetición desactivada' : player.repeat === 'one' ? 'Repetir esta canción' : 'Repetir todo'); }
-      else if (c === 'fav') alternarFav();
-    });
-    dominantColor(s.portadaUrl).then((c) => np.style.setProperty('--np', c.join(',')));
+    aplicarEstilo();
+    dominantColor(s.portadaUrl).then((c) => { np.style.setProperty('--np', c.join(',')); colores(np, c); });
     cargarLetra(s);
     estadoFav();
     if (np.classList.contains('open')) enfocar($(`[data-c="${antes || 'play'}"]`, np), { scroll: false });
@@ -811,6 +852,8 @@ function pintarNP(cambio) {
   np.querySelector('[data-c="shuffle"]')?.classList.toggle('on', player.shuffle);
   const rp = np.querySelector('[data-c="repeat"]');
   if (rp) { rp.classList.toggle('on', player.repeat !== 'off'); rp.innerHTML = icon('repeat') + (player.repeat === 'one' ? '<span class="rep1">1</span>' : ''); }
+  const cont = np.querySelector('[data-ob-cont]');
+  if (cont) cont.textContent = `${dos(player.index + 1)} / ${dos(player.items.length)}`;
   const sig = player.items[player.index + 1];
   const up = $('#up');
   if (up) up.textContent = sig ? `A continuación: ${sig.nombre} · ${sig.artista}` : '';
@@ -848,12 +891,15 @@ async function cargarLetra(s) {
     lineas = parseLrc(d.letraSincronizada);
     box.innerHTML = `<div class="inner">${lineas.map((l, i) => l.interlude
       ? `<div class="dots" data-i="${i}"><i></i><i></i><i></i></div>`
-      : `<p class="l" data-i="${i}">${l.words ? l.words.map((w) => `<span class="w">${esc(w.w)}</span>`).join('') : esc(l.text)}</p>`).join('')}</div>`;
+      : `<p class="l" data-i="${i}" style="--dx:${desorden(i).x}%;--rot:${desorden(i).r}deg">${l.words ? l.words.map((w) => `<span class="w">${esc(w.w)}</span>`).join('') : esc(l.text)}</p>`).join('')}</div>`;
+    sintonia('sincronizada', lineas.filter((l) => !l.interlude).length);
     actualizarLetra(true);
   } else if (d.letra) {
     box.innerHTML = `<div class="plain">${d.letra.split('\n').filter((x) => x.trim()).map((x) => `<p>${esc(x)}</p>`).join('')}</div>`;
+    sintonia('texto');
   } else {
     box.innerHTML = `<div class="none">${icon('mic')}<br>No hay letra para esta canción</div>`;
+    sintonia('sin');
   }
 }
 
@@ -876,7 +922,16 @@ function actualizarLetra(force) {
       }
     });
     const a = inner.querySelector(`[data-i="${Math.max(0, i)}"]`);
-    if (a) inner.style.transform = `translateY(${inner.parentElement.clientHeight * 0.5 - (a.offsetTop + a.offsetHeight / 2)}px)`; // línea actual en el centro, a la altura de la portada
+    // Línea actual: al centro (clásico y solo letra) o en el tercio de arriba (Órbita, como en la referencia)
+    const np = $('#np');
+    const alto = np?.classList.contains('solo') ? 0.45 : np?.classList.contains('orbita') ? 0.22 : 0.5;
+    if (a) inner.style.transform = `translateY(${inner.parentElement.clientHeight * alto - (a.offsetTop + a.offsetHeight / 2)}px)`;
+    const nl = $('[data-ob-linea]');
+    if (nl) {
+      const total = lineas.filter((x) => !x.interlude).length;
+      const n = lineas.slice(0, Math.max(0, i) + 1).filter((x) => !x.interlude).length;
+      nl.textContent = `${dos(Math.max(1, n))} / ${dos(total)}`;
+    }
   }
   const l = lineas[i];
   if (l?.words) {
@@ -886,6 +941,143 @@ function actualizarLetra(force) {
       spans[k]?.style.setProperty('--p', (t <= w.t ? 0 : t >= fin ? 100 : ((t - w.t) / (fin - w.t)) * 100) + '%');
     });
   }
+}
+
+// ═══════════════════ Órbita: reproductor dinámico con los colores de la portada ═══════════════════
+
+const dos = (n) => String(Math.max(0, n || 0)).padStart(2, '0');
+
+/** Desplazamiento fijo de cada línea en el modo «desordenada» (siempre el mismo para la misma línea). */
+function desorden(i) {
+  const azar = (n) => { const v = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return v - Math.floor(v); };
+  // Alterna izquierda/derecha para que nunca queden en diagonal, con algo de azar en cada una
+  const lado = i % 2 === 0 ? azar(i) * 0.45 : 0.5 + azar(i) * 0.5;
+  const x = lado * 36;                              // 0–36 % hacia la derecha
+  const r = (azar(i + 101) - 0.5) * 10;             // −5° a 5°
+  return { x: x.toFixed(1), r: r.toFixed(1) };
+}
+
+/** RGB → HSL (0–360, 0–1, 0–1). */
+function hsl([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min, s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+
+/** Paleta de Órbita a partir del color de la portada: acento brillante y dos resplandores. */
+function colores(np, rgb) {
+  let [h, s] = hsl(rgb);
+  if (s < 0.12) { h = 75; s = 0.9; } // portada gris: acento lima como la referencia
+  np.style.setProperty('--ob-acento', `hsl(${h.toFixed(0)} 95% 68%)`);
+  np.style.setProperty('--ob-glow1', `hsl(${((h + 300) % 360).toFixed(0)} 70% 32%)`);
+  np.style.setProperty('--ob-glow2', `hsl(${((h + 200) % 360).toFixed(0)} 75% 36%)`);
+}
+
+function htmlOrbita(s) {
+  const etiqueta = s.genero || (s.album && s.album !== 'Single' ? s.album : 'Ahora suena');
+  const meta = [s.artista, s.album && s.album !== 'Single' ? s.album : null].filter(Boolean).map(esc).join(' · ');
+  return `<div class="ob-fondo"></div>
+    <header class="ob-top"><div class="ob-logo"><img src="/img/icon.svg" alt="">SpaceMusic<i>.</i></div>
+      <div class="ob-estado"><span class="ob-punto"></span><span data-ob-modo>MODO LETRA ACTIVADO</span><span class="ob-cont" data-ob-cont>01 / 01</span></div></header>
+    <section class="ob-izq">
+      <div class="ob-eyebrow"><i></i>EN TU FRECUENCIA</div>
+      <div class="ob-arte"><div class="ob-sombra"></div><div class="ob-carta">${img(s.portadaUrl, 640)}<span class="ob-sticker">${esc(etiqueta)} ✳</span></div></div>
+      <h1 class="ob-nombre">${esc(s.nombre)}</h1>
+      <div class="ob-meta"><span class="ellipsis">${meta}</span><span>N.º ${dos(player.index + 1)}</span></div>
+    </section>
+    <section class="ob-der">
+      <div class="ob-cab"><b>LA LETRA, A SU MANERA</b><span class="ob-sinto" data-ob-sinto><i></i>EN SINTONÍA</span></div>
+      <div class="np-lyrics" id="lyr"><div class="none">Cargando letra…</div></div>
+      <div class="ob-pie"><span data-ob-fuente>↗ LETRA SINCRONIZADA</span><span class="ob-linea" data-ob-linea>00 / 00</span></div>
+    </section>
+    <footer class="ob-barra">
+      <div class="ob-mini">${img(s.portadaUrl, 160)}<span style="min-width:0"><b class="ellipsis">${esc(s.nombre)}</b><small class="ellipsis">${esc(s.artista)}</small></span></div>
+      <div class="ob-centro">
+        <div class="ob-ctrls">
+          <button class="cb f" data-c="prev" aria-label="Anterior">${icon('prev')}</button>
+          <button class="cb big f" data-c="play" aria-label="Reproducir o pausar">${icon(player.playing ? 'pause' : 'play')}</button>
+          <button class="cb f" data-c="next" aria-label="Siguiente">${icon('next')}</button>
+        </div>
+        <button class="np-prog f" data-c="seek" aria-label="Adelantar o retroceder"><div class="rail2"><i></i><b class="knob"></b></div>
+          <div class="times"><span data-cur>0:00</span><span class="seek-hint">◀ ▶ para adelantar</span><span data-dur>0:00</span></div><span class="tip"></span></button>
+      </div>
+      <div class="ob-extra">
+        <button class="cb sm f" data-c="shuffle" aria-label="Aleatorio">${icon('shuffle')}</button>
+        <button class="cb sm f" data-c="repeat" aria-label="Repetir">${icon('repeat')}</button>
+        <button class="cb sm f" data-c="fav" aria-label="Me gusta">${icon('heart')}</button>
+        <button class="cb sm f" data-c="estilo" aria-label="Estilo">${icon('sliders')}</button>
+        <button class="cb sm f" data-c="solo" aria-label="Solo letra">${icon('expand')}</button>
+      </div>
+    </footer>`;
+}
+
+/** Estado de la letra en Órbita: «en sintonía» (sincronizada), solo texto o sin letra. */
+function sintonia(tipo, lineasN = 0) {
+  const st = $('[data-ob-sinto]'), f = $('[data-ob-fuente]'), m = $('[data-ob-modo]');
+  if (st) { st.classList.toggle('off', tipo !== 'sincronizada'); st.lastChild.textContent = tipo === 'sincronizada' ? 'EN SINTONÍA' : tipo === 'texto' ? 'SOLO TEXTO' : 'SIN LETRA'; }
+  if (f) f.textContent = tipo === 'sincronizada' ? `↗ LETRA SINCRONIZADA · ${lineasN} LÍNEAS` : tipo === 'texto' ? '↗ LETRA SIN TIEMPOS' : '↗ ESTA CANCIÓN NO TIENE LETRA TODAVÍA';
+  if (m) m.textContent = tipo === 'sin' ? 'MODO MÚSICA' : 'MODO LETRA ACTIVADO';
+}
+
+// ═══════════════════ Solo letra (pantalla completa, sin controles) ═══════════════════
+
+function soloLetra(on) {
+  const np = $('#np');
+  if (!np) return;
+  cerrarAjustes(false);
+  np.classList.toggle('solo', on);
+  if (on) {
+    enfocar($('[data-c="play"]', np), { scroll: false }); // OK sigue pausando / reanudando
+    toast('Solo letra · OK pausa · Atrás para salir');
+  } else {
+    enfocar($('[data-c="solo"]', np) || $('[data-c="play"]', np), { scroll: false });
+    despertar();
+  }
+  activa = -2;
+  setTimeout(() => actualizarLetra(true), 450);
+}
+
+// ═══════════════════ Panel de estilo ═══════════════════
+
+function abrirAjustes() {
+  const p = $('#ajustes');
+  const op = (clave, valor, texto) => `<button class="aj-op f ${estilo[clave] === valor ? 'sel' : ''}" data-aj="${clave}:${valor}">${texto}</button>`;
+  p.innerHTML = `<div class="aj-caja">
+    <h2>Estilo</h2>
+    <div class="aj-fila"><span>Reproductor</span>${op('reproductor', 'clasico', 'Clásico')}${op('reproductor', 'orbita', 'Órbita · dinámico')}</div>
+    <div class="aj-fila"><span>Letra</span>${op('fuente', 'normal', 'Normal')}${op('fuente', 'cursiva', '<i class="aj-cursiva">Cursiva</i>')}${op('fuente', 'elegante', '<i class="aj-elegante">Elegante</i>')}</div>
+    <div class="aj-fila"><span>Tamaño</span><button class="aj-op f" data-aj="tam:-">A−</button><b class="aj-tam">${estilo.tam}%</b><button class="aj-op f" data-aj="tam:+">A+</button></div>
+    <div class="aj-fila"><span>Orden</span>${op('orden', 'ordenada', 'Ordenada')}${op('orden', 'desordenada', 'Desordenada')}</div>
+    <div class="aj-fila aj-fin"><button class="aj-op f grande" data-aj="solo">${icon('expand')} Solo letra en pantalla completa</button><button class="aj-op f" data-aj="cerrar">Listo</button></div>
+    <p class="aj-nota">La letra sigue sincronizada en todos los estilos. Se guarda en esta TV.</p></div>`;
+  p.classList.add('open');
+  enfocar($('.aj-op.sel', p) || $('.aj-op', p), { scroll: false });
+}
+
+function cerrarAjustes(volver = true) {
+  const p = $('#ajustes');
+  if (!p?.classList.contains('open')) return;
+  p.classList.remove('open');
+  if (volver) enfocar($('#np [data-c="estilo"]') || $('#np [data-c="play"]'), { scroll: false });
+}
+
+function cambiarAjuste(v) {
+  if (v === 'cerrar') { cerrarAjustes(); return; }
+  if (v === 'solo') { soloLetra(true); return; }
+  const [clave, valor] = v.split(':');
+  const antes = focused?.dataset.aj;
+  if (clave === 'tam') estilo.tam = Math.max(70, Math.min(160, estilo.tam + (valor === '+' ? 10 : -10)));
+  else estilo[clave] = valor;
+  const otroReproductor = clave === 'reproductor';
+  guardarEstilo();
+  if (otroReproductor) pintarNP(true);
+  activa = -2;
+  setTimeout(() => actualizarLetra(true), 60);
+  abrirAjustes();
+  if (antes) enfocar($(`[data-aj="${antes}"]`, $('#ajustes')), { scroll: false });
 }
 
 // ═══════════════════ Eventos del reproductor ═══════════════════

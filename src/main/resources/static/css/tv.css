@@ -280,3 +280,108 @@ h1.title { font-family: var(--display); font-size: 2.9rem; font-weight: 800; let
 .sala-codigo small { display: block; color: var(--text-2); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .sala-codigo b { font-family: var(--display); font-size: 2.8rem; letter-spacing: .25rem; }
 .sala-der .sub { margin: 0; text-align: center; font-size: 1rem; }
+
+/* ══════════ Letra: tipografía, tamaño y orden (en los dos estilos y en «solo letra») ══════════ */
+.np { --letra-escala: 1; }
+.np .np-lyrics .l { font-size: calc(2.9rem * var(--letra-escala)); transform: translateX(var(--dxr, 0)) rotate(var(--rotr, 0)) scale(var(--s, .96)); }
+.np .np-lyrics .plain p { font-size: calc(2rem * var(--letra-escala)); }
+.np.desorden .np-lyrics .l { --dxr: var(--dx); --rotr: var(--rot); max-width: 74%; }
+.np.desorden .np-lyrics .l.active { --rotr: calc(var(--rot) * .5); }
+.np[data-fuente="cursiva"] .np-lyrics .l, .np[data-fuente="cursiva"] .np-lyrics .plain p { font-family: "Dancing Script", cursive; font-weight: 700; letter-spacing: 0; line-height: 1.25; }
+.np[data-fuente="elegante"] .np-lyrics .l, .np[data-fuente="elegante"] .np-lyrics .plain p { font-family: "Playfair Display", Georgia, serif; font-style: italic; font-weight: 700; letter-spacing: -.01rem; }
+
+/* ══════════ Órbita: reproductor dinámico (colores de la portada) ══════════ */
+.np.orbita { --ob-acento: #d7ff4f; --ob-glow1: #5b1a63; --ob-glow2: #1b3a8a; display: grid; padding: 0;
+  grid-template-columns: minmax(0, 34%) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; column-gap: 4rem;
+  background: #0b0a12; transition: opacity .35s; }
+.np.orbita .ob-fondo { position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(48rem 34rem at 92% 30%, var(--ob-glow1), transparent 70%), radial-gradient(40rem 30rem at 0% 100%, var(--ob-glow2), transparent 70%), linear-gradient(160deg, #0d0b16, #0a0910 60%); }
+.np.orbita > *:not(.ob-fondo) { position: relative; z-index: 1; }
+.ob-top { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 2.2rem 4rem 0; }
+.ob-logo { display: flex; align-items: center; gap: .7rem; font-family: "Bricolage Grotesque", var(--display); font-weight: 800; font-size: 1.3rem; }
+.ob-logo img { width: 2.2rem; height: 2.2rem; }
+.ob-logo i { color: var(--ob-acento); font-style: normal; }
+.ob-estado { display: flex; align-items: center; gap: .9rem; font-size: .75rem; font-weight: 800; letter-spacing: .18em; color: rgba(255,255,255,.8); }
+.ob-punto { width: .55rem; height: .55rem; border-radius: 50%; background: #ff4fa3; box-shadow: 0 0 .8rem #ff4fa3; }
+.ob-cont { color: rgba(255,255,255,.4); margin-left: 1rem; }
+.ob-izq { padding: 3vh 0 0 6rem; display: flex; flex-direction: column; min-width: 0; }
+.ob-eyebrow { display: flex; align-items: center; gap: .8rem; font-size: .72rem; font-weight: 800; letter-spacing: .2em; color: var(--ob-acento); margin-bottom: 2.2vh; }
+.ob-eyebrow i { width: 2rem; height: 2px; background: var(--ob-acento); }
+.ob-arte { position: relative; width: min(24rem, 42vh); aspect-ratio: 1; }
+.ob-sombra { position: absolute; inset: 0; transform: translate(.9rem, .9rem) rotate(-1deg); border-radius: 1.2rem; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.04); }
+.ob-carta { position: absolute; inset: 0; transform: rotate(-3deg); border-radius: 1.2rem; overflow: hidden; box-shadow: 0 2.4rem 4rem rgba(0,0,0,.6); }
+.np.orbita:not(.paused) .ob-carta { animation: flota 7s ease-in-out infinite; }
+@keyframes flota { 0%, 100% { transform: rotate(-3deg) translateY(0); } 50% { transform: rotate(-2deg) translateY(-.5rem); } }
+.ob-carta img, .ob-carta .ph { width: 100%; height: 100%; object-fit: cover; }
+.ob-sticker { position: absolute; top: 1rem; right: 1rem; max-width: 70%; padding: .45rem .9rem; border-radius: 999px; background: var(--ob-acento); color: #0b0a12;
+  font-size: .72rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transform: rotate(3deg); }
+.ob-nombre { font-family: "Bricolage Grotesque", var(--display); font-weight: 800; font-size: 2.6rem; letter-spacing: -.06rem; line-height: 1.05; margin: 3.4vh 0 .4rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ob-meta { display: flex; justify-content: space-between; gap: 1rem; color: rgba(255,255,255,.55); font-size: .95rem; }
+.ob-der { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 3vh 5rem 0 0; }
+.ob-cab, .ob-pie { display: flex; justify-content: space-between; align-items: center; font-size: .75rem; font-weight: 800; letter-spacing: .18em; }
+.ob-cab { padding-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,.12); }
+.ob-pie { padding-top: 1rem; border-top: 1px solid rgba(255,255,255,.12); color: rgba(255,255,255,.45); font-size: .68rem; }
+.ob-linea { color: #ff6fb5; }
+.ob-sinto { display: flex; align-items: center; gap: .5rem; color: var(--ob-acento); }
+.ob-sinto i { width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; box-shadow: 0 0 .7rem currentColor; }
+.ob-sinto.off { color: rgba(255,255,255,.45); }
+.np.orbita .np-lyrics { flex: 1; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 8%, #000 85%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 8%, #000 85%, transparent 100%); }
+.np.orbita .np-lyrics .inner { padding: 0 1rem 0 3rem; }
+.np.orbita .np-lyrics .l { font-family: "Bricolage Grotesque", var(--display); font-size: calc(2.2rem * var(--letra-escala)); font-weight: 600; letter-spacing: -.03rem; color: rgba(255,255,255,.9); margin: 0 0 1.3rem; filter: none; }
+.np.orbita .np-lyrics .l.active { color: var(--ob-acento); font-weight: 800; font-size: calc(2.7rem * var(--letra-escala)); text-shadow: 0 0 2.4rem rgba(255,255,255,.12); }
+.np.orbita .np-lyrics .l.active .w { background-image: linear-gradient(90deg, var(--ob-acento) var(--p, 0%), rgba(255,255,255,.35) var(--p, 0%)); }
+.np.orbita .np-lyrics .l:not(.active) .w { color: inherit; }
+.np.orbita[data-fuente="cursiva"] .np-lyrics .l { font-family: "Dancing Script", cursive; font-weight: 700; }
+.np.orbita[data-fuente="elegante"] .np-lyrics .l { font-family: "Playfair Display", Georgia, serif; font-style: italic; }
+.ob-barra { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr minmax(0, 2fr) 1fr; align-items: center; gap: 2rem; margin: 2vh 4rem 3vh;
+  padding: 1rem 1.6rem; border-radius: 1.4rem; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  transition: opacity .6s, transform .6s; }
+.ob-mini { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+.ob-mini img, .ob-mini .ph { width: 3.4rem; height: 3.4rem; border-radius: .6rem; object-fit: cover; flex-shrink: 0; }
+.ob-mini b { display: block; font-size: 1rem; } .ob-mini small { display: block; color: rgba(255,255,255,.55); font-size: .85rem; }
+.ob-centro { display: flex; flex-direction: column; align-items: stretch; min-width: 0; }
+.ob-ctrls { display: flex; justify-content: center; align-items: center; gap: 1.6rem; }
+.np.orbita .ob-ctrls .cb { width: 3.4rem; height: 3.4rem; }
+.np.orbita .ob-ctrls .cb .icon { width: 1.5rem; height: 1.5rem; }
+.np.orbita .ob-ctrls .cb.big { width: 4.2rem; height: 4.2rem; background: var(--ob-acento); color: #0b0a12; }
+.np.orbita .ob-ctrls .cb.big .icon { width: 1.9rem; height: 1.9rem; }
+.np.orbita .ob-ctrls .cb.big.focused { background: var(--ob-acento); color: #0b0a12; box-shadow: 0 0 0 .2rem #0b0a12, 0 0 0 .38rem var(--ob-acento); }
+.np.orbita .np-prog { margin-top: .4rem; padding: .4rem .5rem .1rem; }
+.np.orbita .np-prog .rail2 i { background: var(--ob-acento); }
+.np.orbita .np-prog .knob { background: var(--ob-acento); opacity: 1; }
+.np.orbita .np-prog .times { font-size: .8rem; }
+.ob-extra { display: flex; justify-content: flex-end; gap: .4rem; }
+.np.orbita .ob-extra .cb.sm.on { color: var(--ob-acento); }
+.np.orbita.idle .ob-barra { opacity: 0; transform: translateY(1.5rem); }
+.np.orbita.idle .np-prog { opacity: 1; max-height: none; }
+
+/* ══════════ Solo letra: pantalla completa, sin controles ══════════ */
+.np.solo .np-left, .np.solo .ob-top, .np.solo .ob-izq, .np.solo .ob-barra, .np.solo .ob-cab, .np.solo .ob-pie, .np.solo .np-up { display: none !important; }
+.np.solo { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); padding: 0; }
+.np.solo .ob-der { grid-column: 1 / -1; grid-row: 1 / -1; padding: 0; }
+.np.solo .np-lyrics { grid-column: 1 / -1; grid-row: 1 / -1; height: 100vh;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 18%, #000 82%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 18%, #000 82%, transparent 100%); }
+.np.solo .np-lyrics .inner { padding: 0 10vw; text-align: center; }
+.np.solo:not(.desorden) .np-lyrics .l { transform-origin: center; }
+.np.solo .np-lyrics .l { font-size: calc(3.6rem * var(--letra-escala)); }
+.np.orbita.solo .np-lyrics .l { font-size: calc(3rem * var(--letra-escala)); }
+.np.orbita.solo .np-lyrics .l.active { font-size: calc(3.8rem * var(--letra-escala)); }
+.np.solo.desorden .np-lyrics .inner { text-align: left; }
+.np.solo .np-lyrics .plain { padding: 10vh 10vw 0; text-align: center; }
+
+/* ══════════ Panel de estilo ══════════ */
+.ajustes { position: fixed; inset: 0; z-index: 40; display: none; place-items: center; background: rgba(0,0,0,.55); }
+.ajustes.open { display: grid; }
+.aj-caja { width: min(56rem, 86vw); background: #15141d; border-radius: 1.6rem; padding: 2.4rem 2.8rem; box-shadow: 0 2rem 5rem rgba(0,0,0,.7); border: 1px solid rgba(255,255,255,.08); }
+.aj-caja h2 { font-family: var(--display); font-size: 2rem; margin: 0 0 1.6rem; }
+.aj-fila { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.2rem; }
+.aj-fila > span { width: 9rem; color: var(--text-2); font-weight: 700; font-size: 1.05rem; flex-shrink: 0; }
+.aj-op { height: 3.2rem; padding: 0 1.4rem; border-radius: 999px; border: .12rem solid rgba(255,255,255,.14); background: rgba(255,255,255,.04); color: var(--text); font-weight: 700; font-size: 1.05rem; display: inline-flex; align-items: center; gap: .6rem; }
+.aj-op.sel { background: #f5f5f7; color: #000; border-color: transparent; }
+.aj-op.focused { transform: scale(1.06); box-shadow: 0 0 0 .2rem #15141d, 0 0 0 .38rem #fff; }
+.aj-op.grande { flex: 1; justify-content: center; }
+.aj-tam { min-width: 4rem; text-align: center; font-size: 1.15rem; }
+.aj-cursiva { font-family: "Dancing Script", cursive; font-style: normal; font-size: 1.35rem; }
+.aj-elegante { font-family: "Playfair Display", Georgia, serif; }
+.aj-fin { margin-top: 1.8rem; }
+.aj-nota { color: var(--text-2); font-size: .95rem; margin: .4rem 0 0; }

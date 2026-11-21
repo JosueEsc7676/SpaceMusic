@@ -1,13 +1,22 @@
 {
-  "version": "3.15",
-  "titulo": "Novedades: SpaceMusic en tu TV, sin escribir la contraseña",
+  "version": "3.16",
+  "titulo": "Novedades: nuevo reproductor «Órbita» en la TV",
   "puntos": [
-    "Inicia sesión en la TV con tu teléfono: escanea el QR, escribe el código o toca tu TV si está en el mismo wifi.",
-    "Controla la TV desde el teléfono o la computadora (ponerle música, pausar, cambiar de canción, volumen) y desde la TV controla tus otros dispositivos.",
-    "SyncPlay en la TV: inícialo con un código y un QR para que tus amigos se unan, o únete al de alguien más.",
-    "iPhone: en Dispositivos aparecen las TVs de tu wifi para iniciar sesión con un toque."
+    "TV: elige entre el reproductor clásico y el nuevo «Órbita», más dinámico, que toma los colores de cada portada.",
+    "TV: modo «solo letra» a pantalla completa, sin controles, siempre sincronizado.",
+    "TV: la letra puede ser normal, cursiva o elegante, más grande o más chica, y ordenada o desordenada."
   ],
   "anteriores": [
+    {
+      "version": "3.15",
+      "titulo": "Novedades: SpaceMusic en tu TV, sin escribir la contraseña",
+      "puntos": [
+        "Inicia sesión en la TV con tu teléfono: escanea el QR, escribe el código o toca tu TV si está en el mismo wifi.",
+        "Controla la TV desde el teléfono o la computadora (ponerle música, pausar, cambiar de canción, volumen) y desde la TV controla tus otros dispositivos.",
+        "SyncPlay en la TV: inícialo con un código y un QR para que tus amigos se unan, o únete al de alguien más.",
+        "iPhone: en Dispositivos aparecen las TVs de tu wifi para iniciar sesión con un toque."
+      ]
+    },
     {
       "version": "3.14",
       "titulo": "Reproducción sin saltos por errores de carga",
