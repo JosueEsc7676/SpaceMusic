@@ -11,6 +11,10 @@ import java.util.List;
 public interface UsuarioReproduccionRepository extends JpaRepository<UsuarioReproduccion, Long> {
 
     long countByUsuarioId(Long usuarioId);
+    @Query("SELECT HOUR(r.fecha), COUNT(r) FROM UsuarioReproduccion r WHERE r.usuario.id = :uid AND r.fecha >= :desde GROUP BY HOUR(r.fecha)")
+    List<Object[]> porHora(@Param("uid") Long uid, @Param("desde") LocalDateTime desde);
+    @Query("SELECT YEAR(r.fecha), MONTH(r.fecha), DAY(r.fecha) FROM UsuarioReproduccion r WHERE r.usuario.id = :uid AND r.fecha >= :desde GROUP BY YEAR(r.fecha), MONTH(r.fecha), DAY(r.fecha)")
+    List<Object[]> diasActivos(@Param("uid") Long uid, @Param("desde") LocalDateTime desde);
 
     long countByFechaAfter(LocalDateTime fecha);
 

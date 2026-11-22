@@ -46,8 +46,8 @@ public class MonitorFiltro extends OncePerRequestFilter {
                 if (puesta || isCommitted()) return;
                 puesta = true;
                 long[] db = TiemposBD.parcial();
-                setHeader("Server-Timing", String.format(java.util.Locale.ROOT, "app;dur=%.1f, db;dur=%.1f;desc=\"%d consultas\"",
-                        (System.nanoTime() - t0) / 1e6, db[0] / 1e6, db[1]));
+                setHeader("Server-Timing", String.format(java.util.Locale.ROOT, "app;dur=%.1f, db;dur=%.1f;desc=\"%d consultas\", pool;dur=%.1f",
+                        (System.nanoTime() - t0) / 1e6, db[0] / 1e6, db[1], db[2] / 1e6));
             }
             @Override public jakarta.servlet.ServletOutputStream getOutputStream() throws IOException { poner(); return super.getOutputStream(); }
             @Override public java.io.PrintWriter getWriter() throws IOException { poner(); return super.getWriter(); }
@@ -71,7 +71,7 @@ public class MonitorFiltro extends OncePerRequestFilter {
                 boolean largo = req.isAsyncStarted() || uri.endsWith("/audio") || uri.endsWith("/descargar") || uri.equals("/api/eventos");
                 double ms = (System.nanoTime() - t0) / 1e6;
                 monitor.registrarPeticion(endpoint, estado, largo ? -1 : ms, uri.endsWith("/audio"));
-                if (!largo) monitor.registrarTiempos(endpoint, ms, db[0] / 1e6, (int) db[1]);
+                if (!largo) monitor.registrarTiempos(endpoint, ms, db[0] / 1e6, (int) db[1], db[2] / 1e6);
                 Long uid = req.getAttribute("sm.uid") instanceof Long l ? l : null;
                 String ua = req.getHeader("User-Agent");
                 if (uid != null) sesiones.registrar(uid, ua, version(ua), req.getRemoteAddr());

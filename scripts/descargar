@@ -38,7 +38,7 @@ LOG=$DATOS/descargas.log
 FALLIDAS=$DATOS/fallidas.txt
 PIDFILE=$DATOS/.trabajador.pid
 RONDAS=3
-HILOS=6                     # canciones en paralelo
+HILOS=2                     # canciones en paralelo
 TANDA=50                    # canciones por tanda en listas grandes
 mkdir -p "$DESTINO" "$DATOS" "$COLA" "$HECHAS"
 
@@ -195,7 +195,17 @@ spotify_bloqueado() {
   [ -n "$hasta" ] && [ "$hasta" -gt "$(date +%s)" ] 2>/dev/null
 }
 
+esperar_audio() {
+  local archivo="$DATOS/audio-activo" ahora marca
+  while [ -f "$archivo" ]; do
+    ahora=$(date +%s); marca=$(stat -c %Y "$archivo" 2>/dev/null || echo 0)
+    [ $((ahora - marca)) -gt 8 ] && break
+    sleep 2
+  done
+}
+
 spotify() {
+  esperar_audio
   local ronda=$1; shift
   local oficial=("${USAR_OFICIAL[@]}")
   if [ ${#oficial[@]} -gt 0 ] && spotify_bloqueado; then
@@ -228,6 +238,7 @@ antibloqueo() {
 }
 
 otra() {
+  esperar_audio
   # shellcheck disable=SC2086
   "$ENV/yt-dlp" "$1" $(ytdlp_args "${2:-1}") $(antibloqueo "${2:-1}") -f "bestaudio[ext=m4a]/bestaudio/best" -x --audio-format m4a \
     --embed-metadata --embed-thumbnail --convert-thumbnails jpg \
@@ -236,7 +247,7 @@ otra() {
     --parse-metadata 'title:(?P<artist>.+?)\s+[-–]\s+(?P<title>.+)' \
     --parse-metadata "%(artist,uploader)s:%(meta_artist)s" \
     --download-archive "$HISTORIAL_YT" --no-overwrites --ignore-errors \
-    --concurrent-fragments 4 \
+    --concurrent-fragments 1 \
     -o "$DESTINO/%(artist,uploader)s/%(title)s.%(ext)s"
 }
 

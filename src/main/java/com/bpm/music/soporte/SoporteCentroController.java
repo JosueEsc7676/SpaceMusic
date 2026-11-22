@@ -74,6 +74,9 @@ public class SoporteCentroController {
         return r;
     }
 
+    @GetMapping("/monitor/rendimiento")
+    public List<Map<String, Object>> rendimiento() { return monitor.rendimiento(); }
+
     @GetMapping("/monitor/historial")
     public List<MetricaMuestra> historial(@RequestParam(defaultValue = "24") int horas) {
         return monitor.historial(horas);

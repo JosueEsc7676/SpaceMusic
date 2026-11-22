@@ -1,12 +1,22 @@
 {
-  "version": "3.18",
-  "titulo": "Sincronía de letras compartida",
+  "version": "3.19",
+  "titulo": "Una biblioteca más ágil",
   "puntos": [
-    "Colaboradores y administradores pueden guardar la sincronía de cada canción para todos.",
-    "Ajusta la letra sin cerrar la ventana, escucha la vista previa y guarda cuando coincida.",
-    "Se conserva la letra original y se evitan conflictos entre editores."
+    "Audio con menos consultas repetidas y tareas en segundo plano con prioridad para la reproducción.",
+    "Biblioteca y búsquedas más ligeras; carga incremental de artistas y álbumes en iPhone.",
+    "Recomendaciones precalculadas, cachés coordinadas y estadísticas agrupadas.",
+    "Nuevas mediciones de rendimiento en Administración → Soporte → Monitor."
   ],
   "anteriores": [
+    {
+      "version": "3.18",
+      "titulo": "Sincronía de letras compartida",
+      "puntos": [
+        "Colaboradores y administradores pueden guardar la sincronía de cada canción para todos.",
+        "Ajusta la letra sin cerrar la ventana, escucha la vista previa y guarda cuando coincida.",
+        "Se conserva la letra original y se evitan conflictos entre editores."
+      ]
+    },
     {
       "version": "3.17",
       "titulo": "Novedades: la TV se pinta con tu portada y la letra a tu gusto",

@@ -12,20 +12,26 @@ public class CacheTemporal<K, V> {
     private final Map<K, Entrada<V>> datos = new ConcurrentHashMap<>();
     private final long ttlMs;
     private final int maximo;
+    private final Object[] turnos = new Object[64];
+    private final java.util.concurrent.atomic.AtomicLong generacion = new java.util.concurrent.atomic.AtomicLong();
 
     public CacheTemporal(long ttlMs, int maximo) {
         this.ttlMs = ttlMs;
         this.maximo = maximo;
+        java.util.Arrays.setAll(turnos, i -> new Object());
     }
 
     public V obtener(K clave, Supplier<V> calcular) {
-        long ahora = System.currentTimeMillis();
-        Entrada<V> e = datos.get(clave);
-        if (e != null && e.vence() > ahora) return e.valor();
-        V v = calcular.get();
-        if (datos.size() >= maximo) datos.entrySet().removeIf(x -> x.getValue().vence() <= ahora);
-        if (datos.size() < maximo) datos.put(clave, new Entrada<>(v, ahora + ttlMs));
-        return v;
+        V existente = leer(clave);
+        if (existente != null) return existente;
+        synchronized (turnos[(clave.hashCode() & Integer.MAX_VALUE) % turnos.length]) {
+            existente = leer(clave);
+            if (existente != null) return existente;
+            long version = generacion.get();
+            V v = calcular.get();
+            synchronized (this) { if (generacion.get() == version) poner(clave, v); }
+            return v;
+        }
     }
 
     /** Valor guardado y vigente, o null (sin calcular nada). */
@@ -34,17 +40,19 @@ public class CacheTemporal<K, V> {
         return e != null && e.vence() > System.currentTimeMillis() ? e.valor() : null;
     }
 
-    public void poner(K clave, V valor) {
+    public synchronized void poner(K clave, V valor) {
         long ahora = System.currentTimeMillis();
         if (datos.size() >= maximo) datos.entrySet().removeIf(x -> x.getValue().vence() <= ahora);
-        if (datos.size() < maximo) datos.put(clave, new Entrada<>(valor, ahora + ttlMs));
+        if (datos.containsKey(clave) || datos.size() < maximo) datos.put(clave, new Entrada<>(valor, ahora + ttlMs));
     }
 
-    public void borrar(K clave) {
+    public synchronized void borrar(K clave) {
+        generacion.incrementAndGet();
         datos.remove(clave);
     }
 
-    public void limpiar() {
+    public synchronized void limpiar() {
+        generacion.incrementAndGet();
         datos.clear();
     }
 }

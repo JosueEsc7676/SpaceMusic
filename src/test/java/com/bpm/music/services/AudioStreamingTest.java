@@ -151,4 +151,21 @@ class AudioStreamingTest {
         assertTrue(com.bpm.music.controllers.CancionController.cacheAudio(true, false).getHeaderValue().contains("max-age=600"));
         Files.deleteIfExists(f);
     }
+
+    @Test void catalogoNoModificadoEvitaGenerarOtraRespuesta() throws Exception {
+        var primera = mvc.perform(get("/api/albumes").header("Authorization", token)).andExpect(status().isOk()).andReturn();
+        String etag = primera.getResponse().getHeader("ETag"); assertNotNull(etag);
+        mvc.perform(get("/api/albumes").header("Authorization", token).header("If-None-Match", etag)).andExpect(status().isNotModified()).andExpect(content().string(""));
+        mvc.perform(get("/api/albumes").header("If-None-Match", etag)).andExpect(status().isUnauthorized());
+        biblioteca.invalidar();
+        mvc.perform(get("/api/albumes").header("Authorization", token).header("If-None-Match", etag)).andExpect(status().isOk());
+    }
+    @Test void paginasYMedidasConservanPermisosYLimites() throws Exception {
+        mvc.perform(get("/api/artistas/pagina?tam=1").header("Authorization", token)).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+        mvc.perform(get("/api/artistas/pagina?pagina=-1").header("Authorization", token)).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/admin/soporte/monitor/rendimiento").header("Authorization", token)).andExpect(status().isForbidden());
+        var post = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/usuario/rendimiento");
+        mvc.perform(post.header("Authorization", token).contentType("application/json").content("{\"metrica\":\"audioInicio\",\"plataforma\":\"web\",\"ms\":123}")).andExpect(status().isNoContent());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/usuario/rendimiento").header("Authorization", token).contentType("application/json").content("{\"metrica\":\"arbitraria\",\"plataforma\":\"web\",\"ms\":123}")).andExpect(status().isBadRequest());
+    }
 }

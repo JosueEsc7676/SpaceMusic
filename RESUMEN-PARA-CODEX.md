@@ -1,6 +1,6 @@
 # SpaceMusic: resumen para quien continúe el trabajo (Codex u otra persona)
 
-Estado al 21 de noviembre de 2026, versión **3.18** (servidor y web), **Android 2.7** (código 18), **Android TV 1.2** (código 3) e **iPhone 1.44** (rama `app-ios`, la compilación de GitHub numera la versión).
+Estado al 21 de noviembre de 2026, versión **3.19** (servidor y web), **Android 2.7** (código 18), **Android TV 1.2** (código 3) e **iPhone 1.45** (rama `app-ios`, la compilación de GitHub numera la versión).
 El detalle de cada versión está en `CAMBIOS.md` (servidor, web y Android) y en `CAMBIOS.md` de la rama `app-ios` (iPhone).
 
 ## 1. Qué es y dónde está cada parte
@@ -138,3 +138,12 @@ Android carga la web: **toda función nueva de la web ya está en Android**. El 
 - Panel de sincronía persistente: vista previa, pasos 0,1/0,5 s, pausa, retroceso y guardar para todos sin cerrar; usuario normal mantiene ajuste personal. Las correcciones de otro editor requieren recargar.
 - Verificación local: 10 pruebas Java (validación, roles, persistencia y dos editores concurrentes) y 19 JavaScript (incluidas caché/reproducción anteriores) correctas. Comando JS: node --experimental-vm-modules --test pruebas/letras-sincronia.test.mjs pruebas/audio-reproductor.test.mjs pruebas/audio-cache.test.mjs. No se probó un iPhone físico.
 - No agregar al commit ni al jar los diagnósticos locales audio-diagnostico.html y js/audio-diagnostico.js. Se comprobó su ausencia del jar publicado.
+
+## Actualización 3.19 — eficiencia de API (21/11/2026)
+- Publicada en servidor/web/Android WebView. IPA nativo iPhone 1.45, Actions 44958437353 correcto, commit app-ios ab0052e. Manifiesto y /app/SpaceMusic-45.ipa verificados públicamente (4177758 bytes). Las firmas existentes no cambiaron; Android no requiere APK nueva.
+- Diez mejoras implementadas: rutas de audio en caché; resúmenes de playlists por lotes; coescucha/similitudes fuera de peticiones; refresco automático de biblioteca sin bloquear lectores; ETag anticipado del catálogo común; paginación y búsqueda filtrada; estadísticas SQL agregadas; cálculo único de caché por clave; prioridad de audio en descargador; límites de proveedores y métricas separadas de SQL/pool/cliente.
+- Consultar pruebas/resultados/eficiencia-3.19.json: checklist, resultados antes/después y límites de medición. 48 pruebas Java, 19 JavaScript y 11 de navegador simulado correctas. No hay prueba en iPhone/Android físico. Comparación local: 12 muestras por operación, H2 de desarrollo; la carga del PC no estaba aislada. No prometer porcentajes de velocidad en producción. Test de preparación de audio falló una vez bajo carga y pasó aislado sin modificarlo.
+- Endpoints nuevos: GET /api/playlists/guardadas, /api/playlists/publicas/pagina, /api/albumes/guardados, /api/albumes/pagina, /api/artistas/pagina; POST /api/usuario/rendimiento (duraciones y nombres de métricas limitados, sin contenido; 20/min/cuenta); GET /api/admin/soporte/monitor/rendimiento (privado). Se mantienen rutas anteriores. Soporte → Monitor muestra p50/p95 y espera de conexión. iPhone busca en todo el catálogo antes de paginar 48 elementos.
+- Descargador privado de la API: /home/admin123/spacemusic/descargar-api, SHA-256 23c83e5bc7002a024891a2c1c8f999058d03af6a9db7e3d1f0dc98884f80450a. Se elige en DescargasService si la configuración usa el valor por defecto y el archivo es ejecutable. /usr/local/bin/descargar queda intacto. Procesos nuevos heredan nice/ionice, dos canciones y un fragmento concurrentes; esperan si el marcador audio-activo está vigente. No se interrumpen descargas ya iniciadas.
+- Reversión: copiar /home/admin123/spacemusic/spacemusic.jar.antes-3.19-eficiencia-20261121 sobre spacemusic.jar y reiniciar solo spacemusic. El jar anterior no utiliza descargar-api. Publicador de IPA conserva .anterior. SHA-256 del jar nuevo: 4d253b29aa9830eb7f62d1e6d3321788ebd4be2499d77083c016f597280c8c3d.
+- Sin migraciones, nuevas dependencias, cambios de claves, puertos o firmas. Se conserva el respaldo existente: no se cambió su implementación. No agregar los dos diagnósticos locales al git/jar.

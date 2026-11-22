@@ -204,7 +204,7 @@ public class EscanerService {
                     procesados++;
                 }
                 if (!lote.isEmpty()) repo.saveAll(lote);
-                biblioteca.invalidar();
+                biblioteca.refrescarEnSegundoPlano();
             }
 
             fase = "Completado";

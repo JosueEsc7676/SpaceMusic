@@ -59,13 +59,22 @@ public class LetrasService {
     }
 
     /** Busca en todas las fuentes y devuelve la mejor (sincronizada si existe en alguna). */
+    private final ThreadLocal<Long> plazo = new ThreadLocal<>();
+    private final CacheTemporal<Long, Optional<Encontrada>> resultadosBusqueda = new CacheTemporal<>(300000, 1000);
     Encontrada buscarTodas(CancionDTO c) {
+        return resultadosBusqueda.obtener(c.getId(), () -> Optional.ofNullable(buscarAcotada(c))).orElse(null);
+    }
+    private long restanteMillis() { return plazo.get() == null ? 10000 : Math.max(1, Math.min(10000, (plazo.get() - System.nanoTime()) / 1000000)); }
+    private Encontrada buscarAcotada(CancionDTO c) {
+        plazo.set(System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(18));
+        try {
         Encontrada soloTexto = null;
         for (var fuente : List.<java.util.concurrent.Callable<Encontrada>>of(
                 () -> deLrclib(buscarExacta(c), "LRCLIB", "artista + título + duración (búsqueda exacta)", 0),
                 () -> aproximadaLrclib(c),
                 () -> deNetease(c),
                 () -> deSyncedlyrics(c))) {
+            if (System.nanoTime() >= plazo.get()) break;
             try {
                 Encontrada e = fuente.call();
                 if (e == null) continue;
@@ -76,6 +85,7 @@ public class LetrasService {
             }
         }
         return soloTexto;
+        } finally { plazo.remove(); }
     }
 
     private Encontrada deLrclib(JsonNode hit, String fuente, String metodo, int dif) {
@@ -136,7 +146,7 @@ public class LetrasService {
         p.getOutputStream().close();
         String salida;
         try (var in = p.getInputStream()) {
-            if (!p.waitFor(40, java.util.concurrent.TimeUnit.SECONDS)) { p.destroyForcibly(); return null; }
+            if (!p.waitFor(restanteMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) { p.destroyForcibly(); return null; }
             salida = new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
         String lrc = limpiarLrc(salida);
@@ -267,6 +277,7 @@ public class LetrasService {
      * Si la encuentra la guarda y la devuelve.
      */
     public Map<String, Object> buscarEnInternet(Long id, boolean forzar) {
+        if (forzar) resultadosBusqueda.borrar(id);
         CancionDTO c = biblioteca.requerir(id);
         Long antes = sinResultado.get(id);
         if (!forzar && antes != null && System.currentTimeMillis() - antes < 24 * 3600_000L) {
@@ -285,7 +296,7 @@ public class LetrasService {
             String plano = e.plano() == null ? "" : e.plano().trim();
             repo.actualizarLetras(id, plano.isBlank() ? textoPlanoDeLrc(lrc) : plano, lrc);
             if (registro != null) registro.automatico(id, "letra", lrc.isBlank() ? plano : lrc, e.fuente(), "Al abrir la letra: " + e.metodo());
-            biblioteca.invalidar();
+            biblioteca.refrescarEnSegundoPlano();
             Map<String, Object> r = new HashMap<>(respuesta(plano, lrc, e.fuente()));
             r.put("encontrada", true);
             return r;
@@ -340,7 +351,7 @@ public class LetrasService {
 
     private HttpResponse<String> get(String url) throws Exception {
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(10))
+                .timeout(Duration.ofMillis(restanteMillis()))
                 .header("User-Agent", "SpaceMusic/2.0 (servidor personal de musica)")
                 .GET().build();
         return http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));

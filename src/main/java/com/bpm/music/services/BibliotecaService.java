@@ -27,6 +27,35 @@ public class BibliotecaService {
 
     private final CancionRepository repo;
     private volatile Snapshot snapshot;
+    private final java.util.concurrent.atomic.AtomicLong revision = new java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis());
+    private final java.util.concurrent.atomic.AtomicBoolean refrescando = new java.util.concurrent.atomic.AtomicBoolean();
+    public long revision() { return revision.get(); }
+    private final java.util.concurrent.atomic.AtomicLong revisionArchivos = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong solicitudes = new java.util.concurrent.atomic.AtomicLong();
+    public long revisionArchivos() { return revisionArchivos.get(); }
+
+    /** Para altas y enriquecimiento: mantiene la última vista mientras prepara la siguiente. */
+    public void refrescarEnSegundoPlano() {
+        synchronized (refrescando) {
+            solicitudes.incrementAndGet();
+            if (refrescando.get()) return;
+            refrescando.set(true);
+        }
+        Thread.startVirtualThread(() -> {
+            try {
+                while (true) {
+                    long leida = solicitudes.get();
+                    synchronized (this) { snapshot = construir(); revision.incrementAndGet(); revisionArchivos.incrementAndGet(); }
+                    synchronized (refrescando) {
+                        if (leida == solicitudes.get()) { refrescando.set(false); return; }
+                    }
+                }
+            } catch (RuntimeException e) {
+                synchronized (refrescando) { refrescando.set(false); }
+                log.warn("No se pudo refrescar la biblioteca; se conserva la anterior", e);
+            }
+        });
+    }
 
     public BibliotecaService(CancionRepository repo) {
         this.repo = repo;
@@ -53,7 +82,9 @@ public class BibliotecaService {
     }
 
     /** Marca la caché como desactualizada; se reconstruye en la próxima consulta. */
-    public void invalidar() {
+    public synchronized void invalidar() {
+        revision.incrementAndGet();
+        revisionArchivos.incrementAndGet();
         snapshot = null;
     }
 
@@ -346,7 +377,7 @@ public class BibliotecaService {
     /** Suma una reproducción en memoria (la BD se actualiza aparte). */
     public void sumarReproduccion(Long id) {
         CancionDTO c = snap().porId().get(id);
-        if (c != null) c.setReproducciones(c.getReproducciones() + 1);
+        if (c != null) { c.setReproducciones(c.getReproducciones() + 1); revision.incrementAndGet(); }
     }
 
     // ═════════════════════════ Búsqueda ═════════════════════════

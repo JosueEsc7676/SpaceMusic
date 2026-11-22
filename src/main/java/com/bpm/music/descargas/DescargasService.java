@@ -34,10 +34,23 @@ public class DescargasService {
 
     private final Path script;
     private final Path datos;
+    private com.bpm.music.soporte.MonitorService monitor;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMonitor(com.bpm.music.soporte.MonitorService monitor) { this.monitor = monitor; }
+    @org.springframework.scheduling.annotation.Scheduled(initialDelay = 10000, fixedDelay = 2000)
+    public void prioridadAudio() {
+        if (monitor == null || !Files.isDirectory(datos)) return;
+        try {
+            Path aviso = datos.resolve("audio-activo");
+            if (monitor.audiosActivos() > 0) Files.writeString(aviso, String.valueOf(System.currentTimeMillis()));
+            else Files.deleteIfExists(aviso);
+        } catch (IOException ignored) { }
+    }
 
     public DescargasService(@Value("${descargas.script:/usr/local/bin/descargar}") String script,
                             @Value("${descargas.datos:${user.home}/.config/spacemusic}") String datos) {
-        this.script = Path.of(script);
+        Path preferido = Path.of(System.getProperty("user.home"), "spacemusic", "descargar-api");
+        this.script = "/usr/local/bin/descargar".equals(script) && Files.isExecutable(preferido) ? preferido : Path.of(script);
         this.datos = Path.of(datos);
     }
 
@@ -304,7 +317,11 @@ public class DescargasService {
         if (pidTrabajador() != null) return Map.of("mensaje", "Ya se está descargando");
         if (listar(datos.resolve("cola")).isEmpty()) return Map.of("mensaje", "La cola está vacía");
         try {
-            new ProcessBuilder("setsid", "-f", script.toString(), "--trabajar")
+            List<String> comando = new ArrayList<>(List.of("setsid", "-f"));
+            if (Files.isExecutable(Path.of("/usr/bin/ionice"))) comando.addAll(List.of("/usr/bin/ionice", "-c", "3"));
+            if (Files.isExecutable(Path.of("/usr/bin/nice"))) comando.addAll(List.of("/usr/bin/nice", "-n", "15"));
+            comando.addAll(List.of(script.toString(), "--trabajar"));
+            new ProcessBuilder(comando)
                     .redirectOutput(ProcessBuilder.Redirect.appendTo(datos.resolve("descargas.log").toFile()))
                     .redirectErrorStream(true)
                     .redirectInput(ProcessBuilder.Redirect.from(new File("/dev/null")))

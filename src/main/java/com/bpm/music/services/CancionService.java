@@ -36,10 +36,18 @@ public class CancionService {
         this.imagenes = imagenes;
     }
 
+    private final CacheTemporal<Long, String> rutas = new CacheTemporal<>(60_000, 10000);
+    private volatile long revisionRutas = -1;
     /** Archivo de audio de una canción, o null si no se encuentra en disco. */
     public File archivo(Long id) {
-        String ruta = repo.findRutaById(id).orElseThrow(() -> new NoSuchElementException("Canción no encontrada"));
-        return escaner.resolverArchivo(ruta);
+        long rev = biblioteca.revisionArchivos();
+        if (revisionRutas != rev) synchronized (rutas) {
+            if (revisionRutas != rev) { rutas.limpiar(); revisionRutas = rev; }
+        }
+        String ruta = rutas.obtener(id, () -> repo.findRutaById(id).orElseThrow(() -> new NoSuchElementException("Canción no encontrada")));
+        File f = escaner.resolverArchivo(ruta);
+        if (f == null || !f.isFile()) rutas.borrar(id);
+        return f;
     }
 
     private com.bpm.music.organizador.RegistroMetadatos registro;

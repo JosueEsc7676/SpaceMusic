@@ -18,6 +18,14 @@ public interface PlaylistRepository extends JpaRepository<Playlist, Long> {
     Optional<Playlist> findForUpdate(@Param("id") Long id);
 
     List<Playlist> findByUsuarioIdOrderByFechaCreacionDesc(Long usuarioId);
+    @Query("SELECT p FROM Playlist p WHERE p.publica = true AND EXISTS (SELECT g.id FROM UsuarioGuardado g WHERE g.usuarioId = :uid AND g.tipo = 'PLAYLIST' AND g.clave = CAST(p.id AS string)) ORDER BY p.id")
+    List<Playlist> guardadas(@Param("uid") Long uid);
+    @Query("SELECT p FROM Playlist p WHERE p.publica = true AND (p.usuarioId IS NULL OR p.usuarioId <> :uid) AND p.cancionesCount > 0 ORDER BY p.fechaActualizacion DESC, p.id DESC")
+    List<Playlist> publicasPagina(@Param("uid") Long uid, org.springframework.data.domain.Pageable pagina);
+    @Query("SELECT p FROM Playlist p WHERE LOCATE(LOWER(:q), LOWER(p.nombre)) > 0 AND (p.publica = true OR p.usuarioId = :uid OR p.id IN (SELECT c.playlistId FROM PlaylistColaborador c WHERE c.usuarioId = :uid)) ORDER BY p.fechaActualizacion DESC, p.id DESC")
+    List<Playlist> buscarVisibles(@Param("uid") Long uid, @Param("q") String q, org.springframework.data.domain.Pageable pagina);
+    @Query(value = "SELECT playlist_id, cancion_id FROM playlist_cancion WHERE playlist_id IN (:ids)", nativeQuery = true)
+    List<Object[]> cancionesPorPlaylists(@Param("ids") java.util.Collection<Long> ids);
 
     Optional<Playlist> findByIdAndUsuarioId(Long id, Long usuarioId);
 

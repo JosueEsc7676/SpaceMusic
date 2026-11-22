@@ -16,6 +16,7 @@ public interface PlaylistColaboradorRepository extends JpaRepository<PlaylistCol
     boolean existsByPlaylistIdAndUsuarioId(Long playlistId, Long usuarioId);
 
     long countByPlaylistId(Long playlistId);
+    List<PlaylistColaborador> findByPlaylistIdIn(java.util.Collection<Long> ids);
 
     @Query("SELECT c.playlistId FROM PlaylistColaborador c WHERE c.usuarioId = :uid")
     List<Long> playlistsDe(@Param("uid") Long uid);

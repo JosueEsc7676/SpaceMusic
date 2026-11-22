@@ -50,17 +50,14 @@ public class PlaylistService {
 
     /** Las del usuario y, después, las colaborativas a las que lo invitaron. */
     public List<PlaylistDTO> mias(Long userId) {
-        List<PlaylistDTO> r = new ArrayList<>(repo.findByUsuarioIdOrderByFechaCreacionDesc(userId).stream()
-                .map(p -> dto(p, userId, false)).toList());
-        for (Playlist p : repo.findAllById(colaboradores.playlistsDe(userId))) r.add(dto(p, userId, false));
-        return r;
+        List<Playlist> lista = new ArrayList<>(repo.findByUsuarioIdOrderByFechaCreacionDesc(userId));
+        Set<Long> propias = new HashSet<>(); lista.forEach(p -> propias.add(p.getId()));
+        for (Playlist p : repo.findAllById(colaboradores.playlistsDe(userId))) if (propias.add(p.getId())) lista.add(p);
+        return resumenes(lista, userId);
     }
 
     public List<PlaylistDTO> publicas(Long userId) {
-        return repo.findPublicasDeOtros(userId).stream()
-                .map(p -> dto(p, userId, false))
-                .filter(p -> p.getCancionesCount() > 0)
-                .toList();
+        return resumenes(repo.findPublicasDeOtros(userId), userId).stream().filter(p -> p.getCancionesCount() > 0).toList();
     }
 
     public PlaylistDTO detalle(Long id, Long userId) {
@@ -73,11 +70,8 @@ public class PlaylistService {
 
     /** Playlists públicas de un usuario (para su perfil). Las privadas nunca se muestran. */
     public List<PlaylistDTO> publicasDe(Long duenoId, Long viewerId) {
-        return repo.findByUsuarioIdOrderByFechaCreacionDesc(duenoId).stream()
-                .filter(Playlist::isPublica)
-                .map(p -> dto(p, viewerId, false))
-                .filter(p -> p.getCancionesCount() > 0)
-                .toList();
+        return resumenes(repo.findByUsuarioIdOrderByFechaCreacionDesc(duenoId).stream().filter(Playlist::isPublica).toList(), viewerId)
+                .stream().filter(p -> p.getCancionesCount() > 0).toList();
     }
 
     // ═══════════════════════ Crear / editar ═══════════════════════
@@ -287,8 +281,29 @@ public class PlaylistService {
         return ref.substring(Math.max(ref.lastIndexOf('/'), ref.lastIndexOf('\\')) + 1);
     }
 
-    private PlaylistDTO dto(Playlist p, Long userId, boolean conCanciones) {
-        List<CancionDTO> canciones = biblioteca.porIds(repo.findCancionIds(p.getId()));
+    public List<PlaylistDTO> guardadas(Long uid) { return resumenes(repo.guardadas(uid), uid); }
+    public List<PlaylistDTO> publicasPagina(Long uid, int pagina, int tam) {
+        return resumenes(repo.publicasPagina(uid, org.springframework.data.domain.PageRequest.of(pagina, tam)), uid);
+    }
+    public List<PlaylistDTO> buscar(Long uid, String q) {
+        return resumenes(repo.buscarVisibles(uid, q.strip(), org.springframework.data.domain.PageRequest.of(0, 12)), uid);
+    }
+    private record Datos(Map<Long, List<CancionDTO>> canciones, Map<Long, Usuario> autores, Map<Long, List<PlaylistColaborador>> colaboradores) {}
+    private List<PlaylistDTO> resumenes(List<Playlist> lista, Long uid) {
+        if (lista.isEmpty()) return List.of();
+        Map<Long, List<CancionDTO>> canciones = new HashMap<>();
+        List<Long> ids = lista.stream().map(Playlist::getId).toList();
+        for (Object[] fila : repo.cancionesPorPlaylists(ids)) biblioteca.porId(((Number)fila[1]).longValue()).ifPresent(c -> canciones.computeIfAbsent(((Number)fila[0]).longValue(), k -> new ArrayList<>()).add(c));
+        Map<Long, Usuario> autores = new HashMap<>();
+        usuarios.findAllById(lista.stream().map(Playlist::getUsuarioId).filter(Objects::nonNull).distinct().toList()).forEach(u -> autores.put(u.getId(), u));
+        Map<Long, List<PlaylistColaborador>> cols = new HashMap<>();
+        colaboradores.findByPlaylistIdIn(ids).forEach(c -> cols.computeIfAbsent(c.getPlaylistId(), k -> new ArrayList<>()).add(c));
+        Datos datos = new Datos(canciones, autores, cols);
+        return lista.stream().map(p -> dto(p, uid, false, datos)).toList();
+    }
+    private PlaylistDTO dto(Playlist p, Long userId, boolean conCanciones) { return dto(p, userId, conCanciones, null); }
+    private PlaylistDTO dto(Playlist p, Long userId, boolean conCanciones, Datos datos) {
+        List<CancionDTO> canciones = datos == null ? biblioteca.porIds(repo.findCancionIds(p.getId())) : datos.canciones().getOrDefault(p.getId(), List.of());
         String portada = null;
         String img = nombreImagen(p);
         if (img != null) portada = "/api/playlists/imagen/" + img; // normaliza URLs antiguas con IP
@@ -298,7 +313,7 @@ public class PlaylistService {
         boolean propia = Objects.equals(p.getUsuarioId(), userId);
         String autor = null, autorUsername = null;
         if (!propia && p.getUsuarioId() != null) {
-            Optional<Usuario> u = usuarios.findById(p.getUsuarioId());
+            Optional<Usuario> u = datos == null ? usuarios.findById(p.getUsuarioId()) : Optional.ofNullable(datos.autores().get(p.getUsuarioId()));
             autor = u.map(Usuario::getNombreVisible).orElse(null);
             autorUsername = u.map(Usuario::getUsername).orElse(null);
         }
@@ -317,8 +332,8 @@ public class PlaylistService {
                 .fechaCreacion(p.getFechaCreacion())
                 .fechaActualizacion(p.getFechaActualizacion())
                 .canciones(conCanciones ? canciones : null)
-                .colaborativa(colaboradores.countByPlaylistId(p.getId()) > 0)
-                .editable(propia || colaboradores.existsByPlaylistIdAndUsuarioId(p.getId(), userId))
+                .colaborativa(datos == null ? colaboradores.countByPlaylistId(p.getId()) > 0 : !datos.colaboradores().getOrDefault(p.getId(), List.of()).isEmpty())
+                .editable(propia || (datos == null ? colaboradores.existsByPlaylistIdAndUsuarioId(p.getId(), userId) : datos.colaboradores().getOrDefault(p.getId(), List.of()).stream().anyMatch(c -> Objects.equals(c.getUsuarioId(), userId))))
                 .colaboradores(conCanciones ? listaColaboradores(p.getId()) : null)
                 .build();
     }

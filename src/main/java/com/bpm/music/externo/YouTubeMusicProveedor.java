@@ -37,6 +37,8 @@ public class YouTubeMusicProveedor {
     private final Semaphore turno = new Semaphore(1, true);
     private final CacheTemporal<String, JsonNode> cache = new CacheTemporal<>(30 * 60_000, 2000);
     private volatile long ultima;
+    private final ExecutorService lectores = Executors.newVirtualThreadPerTaskExecutor();
+    @jakarta.annotation.PreDestroy void cerrar() { lectores.shutdownNow(); }
 
     public YouTubeMusicProveedor(@Value("${ytmusic.python:${user.home}/spacemusic/spotdl-env/bin/python}") String python,
                                  @Value("${ytmusic.script:${user.home}/spacemusic/ytm-proveedor.py}") String script,
@@ -81,13 +83,16 @@ public class YouTubeMusicProveedor {
         if (guardado != null) return guardado;
         if (!proveedores.permitido(CLAVE))
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "YouTube Music no responde; se volverá a intentar en unos minutos");
+        return cache.obtener(clave, () -> consultar(clave));
+    }
+    private JsonNode consultar(String clave) {
+        long limite = System.nanoTime() + TimeUnit.SECONDS.toNanos(25);
         String ultimoError = null;
         for (int intento = 1; intento <= 2; intento++) {
             try {
-                JsonNode r = ejecutar(clave);
+                JsonNode r = ejecutar(clave, limite);
                 if (r.path("ok").asBoolean()) {
                     proveedores.exito(CLAVE);
-                    cache.poner(clave, r);
                     return r;
                 }
                 String err = r.path("error").asText("Error del proveedor");
@@ -99,25 +104,31 @@ public class YouTubeMusicProveedor {
             } catch (Exception e) {
                 ultimoError = e.getMessage();
             }
+            if (limite - System.nanoTime() < TimeUnit.SECONDS.toNanos(2)) break;
             try { Thread.sleep(800L * intento); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
         }
         proveedores.fallo(CLAVE, ultimoError);
         throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "YouTube Music no respondió. Inténtalo de nuevo en un momento.");
     }
 
-    private JsonNode ejecutar(String entrada) throws Exception {
-        if (!turno.tryAcquire(25, TimeUnit.SECONDS)) throw new TimeoutException("Hay muchas búsquedas en curso");
+    private JsonNode ejecutar(String entrada, long limite) throws Exception {
+        long restante = limite - System.nanoTime();
+        if (restante <= 0 || !turno.tryAcquire(Math.min(restante, TimeUnit.SECONDS.toNanos(2)), TimeUnit.NANOSECONDS)) throw new TimeoutException("Hay muchas búsquedas en curso");
+        Process proceso = null; Future<byte[]> salida = null;
         try {
             long espera = 700 - (System.currentTimeMillis() - ultima);
             if (espera > 0) Thread.sleep(espera);
             Process p = new ProcessBuilder(python.toString(), script.toString()).redirectError(ProcessBuilder.Redirect.DISCARD).start();
             try (OutputStream os = p.getOutputStream()) { os.write(entrada.getBytes(StandardCharsets.UTF_8)); }
-            Future<byte[]> salida = Executors.newVirtualThreadPerTaskExecutor().submit(() -> {
+            proceso = p;
+            salida = lectores.submit(() -> {
                 try (InputStream is = p.getInputStream()) { return is.readNBytes(2_000_000); }
             });
-            if (!p.waitFor(20, TimeUnit.SECONDS)) { p.destroyForcibly(); throw new TimeoutException("YouTube Music tardó demasiado"); }
-            return json.readTree(new String(salida.get(5, TimeUnit.SECONDS), StandardCharsets.UTF_8));
+            if (!p.waitFor(Math.max(1, Math.min(TimeUnit.SECONDS.toNanos(20), limite - System.nanoTime())), TimeUnit.NANOSECONDS)) { p.destroyForcibly(); throw new TimeoutException("YouTube Music tardó demasiado"); }
+            return json.readTree(new String(salida.get(Math.max(1, limite - System.nanoTime()), TimeUnit.NANOSECONDS), StandardCharsets.UTF_8));
         } finally {
+            if (salida != null) salida.cancel(true);
+            if (proceso != null && proceso.isAlive()) proceso.destroyForcibly();
             ultima = System.currentTimeMillis();
             turno.release();
         }

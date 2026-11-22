@@ -27,7 +27,7 @@ export async function libraryView(el, _p, query, isStale) {
   if (Date.now() - cache.t > 60000) {
     const [albumes, publicas] = await Promise.all([
       // Sin conexión se muestran listas vacías (las descargas siguen disponibles)
-      api('/api/albumes').catch(() => []), api('/api/playlists/publicas').catch(() => []),
+      api('/api/albumes/guardados').catch(() => []), api('/api/playlists/guardadas').catch(() => []),
     ]);
     cache = { artistas: [], albumes, publicas, t: Date.now() };
   }

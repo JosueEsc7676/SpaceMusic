@@ -69,9 +69,11 @@ public class MonitorService {
     private final Map<String, java.util.concurrent.ConcurrentLinkedDeque<double[]>> tiempos = new ConcurrentHashMap<>();
     private final java.util.concurrent.atomic.AtomicInteger audiosActivos = new java.util.concurrent.atomic.AtomicInteger();
 
-    void registrarTiempos(String endpoint, double appMs, double dbMs, int consultas) {
+    public void registrarCliente(String nombre, double ms) { registrarTiempos(nombre, ms, 0, 0); }
+    void registrarTiempos(String endpoint, double appMs, double dbMs, int consultas) { registrarTiempos(endpoint, appMs, dbMs, consultas, 0); }
+    void registrarTiempos(String endpoint, double appMs, double dbMs, int consultas, double poolMs) {
         var cola = tiempos.computeIfAbsent(endpoint, k -> new java.util.concurrent.ConcurrentLinkedDeque<>());
-        cola.addLast(new double[]{appMs, dbMs, consultas});
+        cola.addLast(new double[]{appMs, dbMs, consultas, poolMs});
         while (cola.size() > 400) cola.pollFirst();
     }
 
@@ -97,6 +99,8 @@ public class MonitorService {
             m.put("dbP50", redondear(db[db.length / 2]));
             m.put("dbP95", redondear(db[(int) Math.min(db.length - 1, Math.ceil(db.length * 0.95) - 1)]));
             m.put("consultasMedia", redondear(l.stream().mapToDouble(x -> x[2]).average().orElse(0)));
+            double[] pool = l.stream().mapToDouble(x -> x[3]).sorted().toArray();
+            m.put("poolP95", redondear(pool[(int)Math.min(pool.length - 1, Math.ceil(pool.length * .95) - 1)]));
             r.add(m);
         });
         r.sort(Comparator.comparingDouble((Map<String, Object> m) -> ((Number) m.get("appP95")).doubleValue()).reversed());

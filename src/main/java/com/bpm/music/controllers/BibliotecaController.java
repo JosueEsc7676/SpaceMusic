@@ -65,7 +65,7 @@ public class BibliotecaController {
                 .filter(a -> recomendaciones.artistaPermitido(a.nombre(), ok)).limit(12).toList());
         // "Explora por género": estilos concretos (no un "Latino" con mil canciones); los aparte van al final
         r.put("generos", explorar(apartesOk).stream().limit(16).toList());
-        r.put("playlistsPublicas", playlists.publicas(uid).stream().filter(p -> {
+        r.put("playlistsPublicas", playlists.publicasPagina(uid, 0, 40).stream().filter(p -> {
             List<CancionDTO> cs = biblioteca.porIds(playlists.idsCanciones(p.getId()));
             long no = cs.stream().filter(ok.negate()).count();
             return no * 2 < Math.max(1, cs.size());
@@ -80,8 +80,7 @@ public class BibliotecaController {
         Long uid = CurrentUser.id();
         if (!nq.isEmpty()) {
             List<Object> pls = new ArrayList<>();
-            playlists.mias(uid).stream().filter(p -> BibliotecaService.normalizar(p.getNombre()).contains(nq)).forEach(pls::add);
-            playlists.publicas(uid).stream().filter(p -> BibliotecaService.normalizar(p.getNombre()).contains(nq)).forEach(pls::add);
+            pls.addAll(playlists.buscar(uid, q));
             r.put("playlists", pls);
             r.put("generos", biblioteca.generos().stream()
                     .filter(g -> BibliotecaService.normalizar((String) g.get("nombre")).contains(nq)).limit(6).toList());
@@ -94,6 +93,30 @@ public class BibliotecaController {
             r.put("generos", List.of());
         }
         return r;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bpm.music.repositories.UsuarioGuardadoRepository guardados;
+
+    @GetMapping("/albumes/guardados")
+    public List<AlbumDTO> albumesGuardados() {
+        Set<String> claves = new HashSet<>();
+        guardados.findByUsuarioIdOrderByFechaDesc(CurrentUser.id()).stream().filter(g -> "ALBUM".equals(g.getTipo())).forEach(g -> claves.add(g.getClave()));
+        return biblioteca.albumes().stream().filter(a -> claves.contains(a.clave()) || claves.contains(a.nombre())).toList();
+    }
+    private static <T> List<T> pagina(List<T> lista, int pagina, int tam) {
+        if (pagina < 0 || pagina > 10000 || tam < 1 || tam > 100) throw new IllegalArgumentException("Página no válida");
+        return lista.stream().skip((long)pagina * tam).limit(tam).toList();
+    }
+    @GetMapping("/albumes/pagina")
+    public List<AlbumDTO> albumesPagina(@RequestParam(defaultValue = "0") int pagina, @RequestParam(defaultValue = "48") int tam, @RequestParam(defaultValue = "") String q) {
+        String texto = BibliotecaService.normalizar(q);
+        return pagina(biblioteca.albumes().stream().filter(a -> BibliotecaService.normalizar(a.nombre() + " " + a.artista()).contains(texto)).toList(), pagina, tam);
+    }
+    @GetMapping("/artistas/pagina")
+    public List<ArtistaDTO> artistasPagina(@RequestParam(defaultValue = "0") int pagina, @RequestParam(defaultValue = "48") int tam, @RequestParam(defaultValue = "") String q) {
+        String texto = BibliotecaService.normalizar(q);
+        return pagina(biblioteca.artistas().stream().filter(a -> BibliotecaService.normalizar(a.nombre()).contains(texto)).toList(), pagina, tam);
     }
 
     // ── Álbumes ──

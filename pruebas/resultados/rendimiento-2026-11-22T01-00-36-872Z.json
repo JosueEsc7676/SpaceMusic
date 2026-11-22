@@ -1,0 +1,163 @@
+{
+  "base": "http://127.0.0.1:8090",
+  "fecha": "2026-11-22T01:00:36.885Z",
+  "repeticiones": 12,
+  "filas": [
+    {
+      "operacion": "Inicio (/api/inicio)",
+      "n": 12,
+      "totalP50": 25,
+      "totalP95": 258,
+      "servidorP50": 16.9,
+      "servidorP95": 240.9,
+      "bdP50": 1.9,
+      "bdP95": 19.7,
+      "redP50": 7.8,
+      "consultas": 5.8
+    },
+    {
+      "operacion": "Búsqueda \"a\"",
+      "n": 12,
+      "totalP50": 26,
+      "totalP95": 78,
+      "servidorP50": 21.5,
+      "servidorP95": 70.1,
+      "bdP50": 1.2,
+      "bdP95": 2.7,
+      "redP50": 4.1,
+      "consultas": 7
+    },
+    {
+      "operacion": "Búsqueda \"amor\"",
+      "n": 12,
+      "totalP50": 29.8,
+      "totalP95": 123.3,
+      "servidorP50": 25.1,
+      "servidorP95": 116.8,
+      "bdP50": 1.4,
+      "bdP95": 15.8,
+      "redP50": 3.9,
+      "consultas": 8
+    },
+    {
+      "operacion": "Explorar (/api/generos)",
+      "n": 12,
+      "totalP50": 6.5,
+      "totalP95": 9,
+      "servidorP50": 3.1,
+      "servidorP95": 5.6,
+      "bdP50": 0,
+      "bdP95": 0,
+      "redP50": 3.6,
+      "consultas": 0
+    },
+    {
+      "operacion": "Página de género",
+      "n": 12,
+      "totalP50": 10.9,
+      "totalP95": 27.1,
+      "servidorP50": 7.1,
+      "servidorP95": 21.3,
+      "bdP50": 0.1,
+      "bdP95": 1,
+      "redP50": 3.2,
+      "consultas": 1
+    },
+    {
+      "operacion": "Página de artista",
+      "n": 12,
+      "totalP50": 8.2,
+      "totalP95": 16.1,
+      "servidorP50": 4.4,
+      "servidorP95": 12.2,
+      "bdP50": 0,
+      "bdP95": 0,
+      "redP50": 3.8,
+      "consultas": 0
+    },
+    {
+      "operacion": "Mix del día",
+      "n": 12,
+      "totalP50": 24.5,
+      "totalP95": 722.1,
+      "servidorP50": 20.9,
+      "servidorP95": 41.2,
+      "bdP50": 2,
+      "bdP95": 3.2,
+      "redP50": 3.9,
+      "consultas": 7
+    },
+    {
+      "operacion": "Radio",
+      "n": 12,
+      "totalP50": 14.2,
+      "totalP95": 71.9,
+      "servidorP50": 7.8,
+      "servidorP95": 59,
+      "bdP50": 0.1,
+      "bdP95": 3,
+      "redP50": 6.3,
+      "consultas": 1.2
+    },
+    {
+      "operacion": "Audio: primer byte #1",
+      "n": 10,
+      "totalP50": 13.5,
+      "totalP95": 194.7,
+      "servidorP50": 9,
+      "servidorP95": 174.7,
+      "bdP50": 0.1,
+      "bdP95": 0.2,
+      "redP50": 4,
+      "consultas": 1
+    },
+    {
+      "operacion": "Audio: primer byte #2",
+      "n": 10,
+      "totalP50": 11.3,
+      "totalP95": 12.6,
+      "servidorP50": 7.2,
+      "servidorP95": 9.4,
+      "bdP50": 0.1,
+      "bdP95": 0.1,
+      "redP50": 3.2,
+      "consultas": 1
+    },
+    {
+      "operacion": "Audio: primer byte #3",
+      "n": 10,
+      "totalP50": 13.2,
+      "totalP95": 22.4,
+      "servidorP50": 8.8,
+      "servidorP95": 16.7,
+      "bdP50": 0.1,
+      "bdP95": 0.1,
+      "redP50": 4.4,
+      "consultas": 1
+    },
+    {
+      "operacion": "Audio: primer byte #4",
+      "n": 10,
+      "totalP50": 12.9,
+      "totalP95": 24.3,
+      "servidorP50": 8.9,
+      "servidorP95": 11.1,
+      "bdP50": 0.1,
+      "bdP95": 0.2,
+      "redP50": 4.2,
+      "consultas": 1
+    },
+    {
+      "operacion": "Audio: primer byte #5",
+      "n": 10,
+      "totalP50": 12.9,
+      "totalP95": 34.7,
+      "servidorP50": 8.9,
+      "servidorP95": 10.8,
+      "bdP50": 0.1,
+      "bdP95": 0.2,
+      "redP50": 3.6,
+      "consultas": 1
+    }
+  ]
+}

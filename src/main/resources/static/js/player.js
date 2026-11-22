@@ -358,6 +358,7 @@ export const player = {
       audio.load();
     }
     updateMediaSession(s);
+    corteInicio = 0;
     bus.emit('player:song', s);
     bus.emit('player:queue');
     this._save();
@@ -436,14 +437,21 @@ export const player = {
 
 // ═══════════════════ Eventos del <audio> ═══════════════════
 
+let corteInicio = 0;
+function informarRendimiento(metrica, ms) {
+  if (!session.token || !navigator.onLine || ms < 0 || ms > 120000) return;
+  fetch('/api/usuario/rendimiento', { method: 'POST', headers: { Authorization: 'Bearer ' + session.token, 'Content-Type': 'application/json' }, body: JSON.stringify({ metrica, ms, plataforma: window.SpaceMusicApp ? 'android' : 'web' }), signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(3000) : undefined }).catch(() => {});
+}
 audio.addEventListener('playing', () => {
+  if (corteInicio) { informarRendimiento('corte', performance.now() - corteInicio); corteInicio = 0; }
   if (!audio.dataset.arranqueMs && audio.dataset.inicioMs) {
     audio.dataset.arranqueMs = String(Math.round(performance.now() - Number(audio.dataset.inicioMs)));
+    informarRendimiento('audioInicio', Number(audio.dataset.arranqueMs));
   }
   player.buffering = false; player._errors = 0; bus.emit('player:state');
 });
 audio.addEventListener('pause', () => { bus.emit('player:state'); player._save(); });
-audio.addEventListener('waiting', () => { player.buffering = true; bus.emit('player:state'); });
+audio.addEventListener('waiting', () => { if (!audio.paused && audio.currentTime > 0 && !corteInicio) corteInicio = performance.now(); player.buffering = true; bus.emit('player:state'); });
 audio.addEventListener('canplay', () => { player.buffering = false; bus.emit('player:state'); });
 audio.addEventListener('loadedmetadata', () => {
   audio.dataset.metadataMs = String(Math.round(performance.now() - Number(audio.dataset.inicioMs)));

@@ -1,5 +1,17 @@
 # Registro de cambios
 
+## Versión 3.19
+- Caché de rutas de audio de 60 s (máximo 10.000); invalidación por cambios de catálogo y comprobación del archivo en cada acceso. Se conservan autenticación, rangos y validadores.
+- Resúmenes de playlists con consultas por lotes; búsqueda de playlists y usuarios filtrada antes de materializar; biblioteca solicita solo lo guardado. Nuevos endpoints paginados conservando los anteriores.
+- Coescucha cada 15 minutos y similitudes cada 10 minutos fuera de las peticiones. Último resultado disponible ante fallos. Refresco de biblioteca en segundo plano para altas y enriquecimiento; invalidación inmediata en edición/eliminación.
+- ETag anticipado para catálogo común autenticado. Estadísticas por hora y día agregadas en SQL. Caché coordinada con invalidación protegida frente a cálculos concurrentes.
+- Descargador de la API en ruta privada descargar-api, prioridad nice/ionice, dos canciones concurrentes y espera antes de nuevas tandas si hay transferencia de audio; no se cambia /usr/local/bin/descargar ni servicios ajenos.
+- YouTube Music: consultas idénticas coordinadas, presupuesto total de 25 s, espera de turno acotada y ejecutor reutilizado. Letras: presupuesto de 18 s y caché de búsquedas positivas/negativas de cinco minutos.
+- Server-Timing distingue adquisición de conexión y ejecución SQL. Muestras acotadas del inicio de audio y cortes; resultados p50/p95 privados en soporte. Fallos de telemetría no afectan sesión ni reproducción.
+- No se agregaron columnas, índices o dependencias ni se cambiaron firmas. Se conserva el sistema de respaldos existente.
+- iPhone: catálogo paginado de 48 elementos, búsqueda completa y biblioteca selectiva; compilación independiente en rama app-ios. Android usa los mismos módulos web actualizados.
+
+
 ## Versión 3.18
 - Sincronía compartida mediante offset LRC: ADMIN/COLABORADOR pueden guardar ±60 s, con revisión SHA-256 y bloqueo transaccional para evitar sobrescrituras. Conserva texto y marcas de palabras. Sin migración.
 - Panel persistente de ajuste con vista previa y guardado explícito; usuarios conservan ajuste personal. Invalidación en vivo por el SSE existente en web, TV y iPhone.

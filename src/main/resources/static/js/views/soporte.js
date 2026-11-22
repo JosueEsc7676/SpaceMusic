@@ -213,7 +213,7 @@ async function resumen(box) {
 
 async function monitor(box) {
   const horas = store.get('sm_sop_horas', 6);
-  const [h, r] = await Promise.all([api('/api/admin/soporte/monitor/historial?horas=' + horas), api('/api/admin/soporte/resumen')]);
+  const [h, r, tiempos] = await Promise.all([api('/api/admin/soporte/monitor/historial?horas=' + horas), api('/api/admin/soporte/resumen'), api('/api/admin/soporte/monitor/rendimiento')]);
   const serie = (f) => h.map((m) => ({ t: m.fecha, v: f(m) }));
   box.innerHTML = `
     <div class="sop-cabecera"><div class="chips">${[[1, '1 h'], [6, '6 h'], [24, '24 h'], [168, '7 días'], [720, '30 días']].map(([v, l]) =>
@@ -232,6 +232,8 @@ async function monitor(box) {
       ${grafica(serie((m) => m.conexionesEnVivo), { etiqueta: 'Conexiones en vivo', color: '#af52de' })}
       ${grafica(serie((m) => m.fallosAudio), { etiqueta: 'Fallos de reproducción por minuto', color: '#ff9f0a' })}
     </div>
+    <div class="panel"><h3>Rendimiento por ruta y plataforma</h3><p class="muted">Últimas 400 muestras por ruta. Cliente: duración observada en el dispositivo; API: tiempo total del servidor, SQL y espera por conexión. No son medidas equivalentes.</p>
+      ${tabla(['Ruta o medida', 'Muestras', 'p50 (ms)', 'p95 (ms)', 'SQL p95', 'Espera BD p95', 'Consultas medias'], tiempos.map(t => `<tr><td>${esc(t.ruta)}</td><td>${fmtNum(t.peticiones)}</td><td>${val(t.appP50)}</td><td>${val(t.appP95)}</td><td>${val(t.dbP95)}</td><td>${val(t.poolP95)}</td><td>${val(t.consultasMedia)}</td></tr>`), 'Todavía no hay suficientes muestras; se requieren tres por medida.')}</div>
     <div class="panel"><h3>${icon('folder')} Almacenamiento y tareas</h3>
       <div class="kv"><span>Carpeta de música</span><b>${chip(r.componentes?.almacenamiento?.estado)} ${esc(r.componentes?.almacenamiento?.detalle || '')}</b></div>
       <div class="kv"><span>Tareas en segundo plano</span><b>${chip(r.componentes?.tareas?.estado)} ${esc(r.componentes?.tareas?.detalle || '')}</b></div>

@@ -77,9 +77,12 @@ public class CompletarDescargasService {
         }
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.bpm.music.soporte.MonitorService monitor;
+
     @Scheduled(initialDelay = 3 * 60_000L, fixedDelay = 10 * 60_000L)
     public void completar() {
-        if (!activo) return;
+        if (!activo || (monitor != null && monitor.audiosActivos() > 0)) return;
         int hechasAhora = 0;
         for (Object[] f : repo.findAllIdsYRutas()) {
             if (hechasAhora >= POR_VUELTA) break;

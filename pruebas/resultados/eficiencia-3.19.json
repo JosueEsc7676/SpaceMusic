@@ -1,0 +1,412 @@
+{
+  "version": "3.19",
+  "fechaLocal": "2026-11-21T19:04:54.270315-06:00",
+  "entorno": "Windows, localhost, H2 de desarrollo, 256 MiB Java, 2 procesadores efectivos; no producción ni teléfono físico",
+  "limitacionesMedicion": [
+    "12 muestras por operación; audio 10 muestras por pista",
+    "La lectura de audio mide primer bloque recibido, no comienzo audible",
+    "No se aisló la carga del equipo: había pruebas Java durante parte de la medición anterior; no atribuir todos los cambios de latencia al código"
+  ],
+  "antes": {
+    "base": "http://127.0.0.1:8090",
+    "fecha": "2026-11-22T01:00:36.885Z",
+    "repeticiones": 12,
+    "filas": [
+      {
+        "operacion": "Inicio (/api/inicio)",
+        "n": 12,
+        "totalP50": 25,
+        "totalP95": 258,
+        "servidorP50": 16.9,
+        "servidorP95": 240.9,
+        "bdP50": 1.9,
+        "bdP95": 19.7,
+        "redP50": 7.8,
+        "consultas": 5.8
+      },
+      {
+        "operacion": "BÃºsqueda \"a\"",
+        "n": 12,
+        "totalP50": 26,
+        "totalP95": 78,
+        "servidorP50": 21.5,
+        "servidorP95": 70.1,
+        "bdP50": 1.2,
+        "bdP95": 2.7,
+        "redP50": 4.1,
+        "consultas": 7
+      },
+      {
+        "operacion": "BÃºsqueda \"amor\"",
+        "n": 12,
+        "totalP50": 29.8,
+        "totalP95": 123.3,
+        "servidorP50": 25.1,
+        "servidorP95": 116.8,
+        "bdP50": 1.4,
+        "bdP95": 15.8,
+        "redP50": 3.9,
+        "consultas": 8
+      },
+      {
+        "operacion": "Explorar (/api/generos)",
+        "n": 12,
+        "totalP50": 6.5,
+        "totalP95": 9,
+        "servidorP50": 3.1,
+        "servidorP95": 5.6,
+        "bdP50": 0,
+        "bdP95": 0,
+        "redP50": 3.6,
+        "consultas": 0
+      },
+      {
+        "operacion": "PÃ¡gina de gÃ©nero",
+        "n": 12,
+        "totalP50": 10.9,
+        "totalP95": 27.1,
+        "servidorP50": 7.1,
+        "servidorP95": 21.3,
+        "bdP50": 0.1,
+        "bdP95": 1,
+        "redP50": 3.2,
+        "consultas": 1
+      },
+      {
+        "operacion": "PÃ¡gina de artista",
+        "n": 12,
+        "totalP50": 8.2,
+        "totalP95": 16.1,
+        "servidorP50": 4.4,
+        "servidorP95": 12.2,
+        "bdP50": 0,
+        "bdP95": 0,
+        "redP50": 3.8,
+        "consultas": 0
+      },
+      {
+        "operacion": "Mix del dÃ­a",
+        "n": 12,
+        "totalP50": 24.5,
+        "totalP95": 722.1,
+        "servidorP50": 20.9,
+        "servidorP95": 41.2,
+        "bdP50": 2,
+        "bdP95": 3.2,
+        "redP50": 3.9,
+        "consultas": 7
+      },
+      {
+        "operacion": "Radio",
+        "n": 12,
+        "totalP50": 14.2,
+        "totalP95": 71.9,
+        "servidorP50": 7.8,
+        "servidorP95": 59,
+        "bdP50": 0.1,
+        "bdP95": 3,
+        "redP50": 6.3,
+        "consultas": 1.2
+      },
+      {
+        "operacion": "Audio: primer byte #1",
+        "n": 10,
+        "totalP50": 13.5,
+        "totalP95": 194.7,
+        "servidorP50": 9,
+        "servidorP95": 174.7,
+        "bdP50": 0.1,
+        "bdP95": 0.2,
+        "redP50": 4,
+        "consultas": 1
+      },
+      {
+        "operacion": "Audio: primer byte #2",
+        "n": 10,
+        "totalP50": 11.3,
+        "totalP95": 12.6,
+        "servidorP50": 7.2,
+        "servidorP95": 9.4,
+        "bdP50": 0.1,
+        "bdP95": 0.1,
+        "redP50": 3.2,
+        "consultas": 1
+      },
+      {
+        "operacion": "Audio: primer byte #3",
+        "n": 10,
+        "totalP50": 13.2,
+        "totalP95": 22.4,
+        "servidorP50": 8.8,
+        "servidorP95": 16.7,
+        "bdP50": 0.1,
+        "bdP95": 0.1,
+        "redP50": 4.4,
+        "consultas": 1
+      },
+      {
+        "operacion": "Audio: primer byte #4",
+        "n": 10,
+        "totalP50": 12.9,
+        "totalP95": 24.3,
+        "servidorP50": 8.9,
+        "servidorP95": 11.1,
+        "bdP50": 0.1,
+        "bdP95": 0.2,
+        "redP50": 4.2,
+        "consultas": 1
+      },
+      {
+        "operacion": "Audio: primer byte #5",
+        "n": 10,
+        "totalP50": 12.9,
+        "totalP95": 34.7,
+        "servidorP50": 8.9,
+        "servidorP95": 10.8,
+        "bdP50": 0.1,
+        "bdP95": 0.2,
+        "redP50": 3.6,
+        "consultas": 1
+      }
+    ]
+  },
+  "despues": {
+    "base": "http://127.0.0.1:8090",
+    "fecha": "2026-11-22T01:03:29.110Z",
+    "repeticiones": 12,
+    "filas": [
+      {
+        "operacion": "Inicio (/api/inicio)",
+        "n": 12,
+        "totalP50": 19.7,
+        "totalP95": 147.1,
+        "servidorP50": 12.8,
+        "servidorP95": 135.2,
+        "bdP50": 1.6,
+        "bdP95": 10.6,
+        "redP50": 7.5,
+        "consultas": 5.8
+      },
+      {
+        "operacion": "BÃºsqueda \"a\"",
+        "n": 12,
+        "totalP50": 20.7,
+        "totalP95": 26.2,
+        "servidorP50": 17,
+        "servidorP95": 21.7,
+        "bdP50": 0.6,
+        "bdP95": 1.3,
+        "redP50": 3.7,
+        "consultas": 4
+      },
+      {
+        "operacion": "BÃºsqueda \"amor\"",
+        "n": 12,
+        "totalP50": 15.3,
+        "totalP95": 17.3,
+        "servidorP50": 11.2,
+        "servidorP95": 13.3,
+        "bdP50": 0.3,
+        "bdP95": 0.4,
+        "redP50": 3.8,
+        "consultas": 2
+      },
+      {
+        "operacion": "Explorar (/api/generos)",
+        "n": 12,
+        "totalP50": 6,
+        "totalP95": 8,
+        "servidorP50": 3,
+        "servidorP95": 4.4,
+        "bdP50": 0,
+        "bdP95": 0,
+        "redP50": 3.1,
+        "consultas": 0
+      },
+      {
+        "operacion": "PÃ¡gina de gÃ©nero",
+        "n": 12,
+        "totalP50": 8,
+        "totalP95": 15,
+        "servidorP50": 5.2,
+        "servidorP95": 11.2,
+        "bdP50": 0.1,
+        "bdP95": 0.4,
+        "redP50": 2.7,
+        "consultas": 1
+      },
+      {
+        "operacion": "PÃ¡gina de artista",
+        "n": 12,
+        "totalP50": 6.8,
+        "totalP95": 15.1,
+        "servidorP50": 3.7,
+        "servidorP95": 11,
+        "bdP50": 0,
+        "bdP95": 0,
+        "redP50": 3.2,
+        "consultas": 0
+      },
+      {
+        "operacion": "Mix del dÃ­a",
+        "n": 12,
+        "totalP50": 20,
+        "totalP95": 31.8,
+        "servidorP50": 15.9,
+        "servidorP95": 28.3,
+        "bdP50": 1.2,
+        "bdP95": 3.4,
+        "redP50": 3.1,
+        "consultas": 7
+      },
+      {
+        "operacion": "Radio",
+        "n": 12,
+        "totalP50": 13.1,
+        "totalP95": 47.6,
+        "servidorP50": 7.1,
+        "servidorP95": 28.9,
+        "bdP50": 0.1,
+        "bdP95": 0.4,
+        "redP50": 5,
+        "consultas": 1
+      },
+      {
+        "operacion": "Audio: primer byte #1",
+        "n": 10,
+        "totalP50": 9.5,
+        "totalP95": 80.7,
+        "servidorP50": 5.7,
+        "servidorP95": 68.3,
+        "bdP50": 0,
+        "bdP95": 0.2,
+        "redP50": 3.5,
+        "consultas": 0.1
+      },
+      {
+        "operacion": "Audio: primer byte #2",
+        "n": 10,
+        "totalP50": 10.9,
+        "totalP95": 20.5,
+        "servidorP50": 6.6,
+        "servidorP95": 17,
+        "bdP50": 0,
+        "bdP95": 0.4,
+        "redP50": 4,
+        "consultas": 0.1
+      },
+      {
+        "operacion": "Audio: primer byte #3",
+        "n": 10,
+        "totalP50": 11.1,
+        "totalP95": 27.5,
+        "servidorP50": 7.7,
+        "servidorP95": 20.4,
+        "bdP50": 0,
+        "bdP95": 0.2,
+        "redP50": 3.8,
+        "consultas": 0.1
+      },
+      {
+        "operacion": "Audio: primer byte #4",
+        "n": 10,
+        "totalP50": 8.3,
+        "totalP95": 17,
+        "servidorP50": 5.3,
+        "servidorP95": 10.1,
+        "bdP50": 0,
+        "bdP95": 0.2,
+        "redP50": 2.8,
+        "consultas": 0.1
+      },
+      {
+        "operacion": "Audio: primer byte #5",
+        "n": 10,
+        "totalP50": 7.2,
+        "totalP95": 11.3,
+        "servidorP50": 4.4,
+        "servidorP95": 7.3,
+        "bdP50": 0,
+        "bdP95": 0.1,
+        "redP50": 2.4,
+        "consultas": 0.1
+      }
+    ]
+  },
+  "pruebas": {
+    "java": 48,
+    "javascript": 19,
+    "iosActions": 44958437353,
+    "iosCode": 45,
+    "navegadorSimulado": 11,
+    "iphoneFisico": "No disponible"
+  },
+  "checklist": [
+    {
+      "id": 1,
+      "funcion": "Caché de rutas y comprobación de archivos",
+      "estado": "implementada y con pruebas locales",
+      "evidencia": "100 rangos/accesos: una consulta de ruta; invalidación y archivo ausente comprobados"
+    },
+    {
+      "id": 2,
+      "funcion": "Playlists por lotes y biblioteca selectiva",
+      "estado": "implementada y con pruebas locales",
+      "evidencia": "20 playlists: cuatro llamadas a repositorios en EficienciaTest"
+    },
+    {
+      "id": 3,
+      "funcion": "Relaciones de radio fuera de peticiones",
+      "estado": "implementada y con pruebas locales"
+    },
+    {
+      "id": 4,
+      "funcion": "Refresco automático de biblioteca conservando vista anterior",
+      "estado": "implementada y con pruebas locales",
+      "evidencia": "EficienciaTest.refrescoDeBibliotecaMantieneLecturasDisponibles"
+    },
+    {
+      "id": 5,
+      "funcion": "ETag anticipado de catálogo autenticado",
+      "estado": "implementada y con pruebas locales"
+    },
+    {
+      "id": 6,
+      "funcion": "Paginación compatible y búsquedas filtradas",
+      "estado": "implementada y con pruebas locales"
+    },
+    {
+      "id": 7,
+      "funcion": "Estadísticas por hora y días agregadas",
+      "estado": "implementada y con pruebas locales"
+    },
+    {
+      "id": 8,
+      "funcion": "Cálculo único de caché por clave e invalidación concurrente",
+      "estado": "implementada y con pruebas locales",
+      "evidencia": "20 solicitudes concurrentes: un cálculo; invalidación durante cálculo probada"
+    },
+    {
+      "id": 9,
+      "funcion": "Prioridad de audio y menor concurrencia del descargador",
+      "estado": "implementada y con pruebas locales"
+    },
+    {
+      "id": 10,
+      "funcion": "Plazos de proveedores y métricas privadas de SQL/pool/cliente",
+      "estado": "implementada y con pruebas locales"
+    }
+  ],
+  "despliegue": {
+    "servidorWebAndroid": "3.19, servicio activo, API 200 y módulos nuevos verificados públicamente",
+    "ios": "1.45, código 45, commit ab0052e, publicado y HEAD 200",
+    "apk": "Sin cambios nativos; misma firma y APK; interfaz actualizada mediante servidor y service worker",
+    "respaldoJar": "/home/admin123/spacemusic/spacemusic.jar.antes-3.19-eficiencia-20261121",
+    "sha256Jar": "4d253b29aa9830eb7f62d1e6d3321788ebd4be2499d77083c016f597280c8c3d",
+    "sha256IPA": "301998df7f2f673f52d1ebc15ab77aa2f812d37df01da1df7ec73fef538f9ea3",
+    "permisoSinSesion": "Guardadas, paginación y métricas de administración: 401",
+    "telefonoFisico": "No probado; pruebas de navegador simulado no equivalen a un teléfono"
+  },
+  "dependenciasNuevas": [],
+  "migraciones": "No se cambia el esquema ni se agregan índices sin medir planes en MySQL"
+}

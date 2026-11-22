@@ -73,9 +73,11 @@ public class SenalesExternasService {
         return m.entrySet().stream().sorted(Map.Entry.<Long, Double>comparingByValue().reversed()).map(Map.Entry::getKey).toList();
     }
 
-    private Map<Long, Map<Long, Double>> mapa() {
+    private Map<Long, Map<Long, Double>> mapa() { return mapa; }
+
+    @org.springframework.scheduling.annotation.Scheduled(initialDelay = 30000, fixedDelay = 60000)
+    public void refrescarMapa() {
         if (System.currentTimeMillis() - mapaT > 10 * 60_000) {
-            mapaT = System.currentTimeMillis();
             Map<Long, Map<Long, Double>> m = new HashMap<>();
             for (Similitud s : similitudes.findAll()) {
                 m.computeIfAbsent(s.getCancionId(), k -> new HashMap<>()).merge(s.getSimilarId(), s.getPeso(), Math::max);
@@ -83,8 +85,8 @@ public class SenalesExternasService {
                 m.computeIfAbsent(s.getSimilarId(), k -> new HashMap<>()).merge(s.getCancionId(), s.getPeso() * 0.7, Math::max);
             }
             mapa = m;
+            mapaT = System.currentTimeMillis();
         }
-        return mapa;
     }
 
     public void recargar() { mapaT = 0; }

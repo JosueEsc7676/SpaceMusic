@@ -23,17 +23,17 @@ public class TiemposBD implements BeanPostProcessor {
 
     private static final ThreadLocal<long[]> ACTUAL = new ThreadLocal<>(); // {nanos, consultas}
 
-    public static void iniciar() { ACTUAL.set(new long[2]); }
+    public static void iniciar() { ACTUAL.set(new long[3]); }
 
     public static long[] terminar() {
         long[] v = ACTUAL.get();
         ACTUAL.remove();
-        return v == null ? new long[2] : v;
+        return v == null ? new long[3] : v;
     }
 
     public static long[] parcial() {
         long[] v = ACTUAL.get();
-        return v == null ? new long[2] : v.clone();
+        return v == null ? new long[3] : v.clone();
     }
 
     @Override
@@ -48,12 +48,16 @@ public class TiemposBD implements BeanPostProcessor {
 
         @Override
         public Connection getConnection() throws SQLException {
-            return conexion(super.getConnection());
+            long inicio = System.nanoTime();
+            try { return conexion(super.getConnection()); }
+            finally { long[] v = ACTUAL.get(); if (v != null) v[2] += System.nanoTime() - inicio; }
         }
 
         @Override
         public Connection getConnection(String u, String p) throws SQLException {
-            return conexion(super.getConnection(u, p));
+            long inicio = System.nanoTime();
+            try { return conexion(super.getConnection(u, p)); }
+            finally { long[] v = ACTUAL.get(); if (v != null) v[2] += System.nanoTime() - inicio; }
         }
     }
 

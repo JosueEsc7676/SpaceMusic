@@ -39,6 +39,15 @@ public class PlaylistController {
         return service.publicas(CurrentUser.id());
     }
 
+    @GetMapping("/guardadas")
+    public List<PlaylistDTO> guardadas() { return service.guardadas(CurrentUser.id()); }
+
+    @GetMapping("/publicas/pagina")
+    public List<PlaylistDTO> publicasPagina(@RequestParam(defaultValue = "0") int pagina, @RequestParam(defaultValue = "24") int tam) {
+        if (pagina < 0 || pagina > 10000 || tam < 1 || tam > 100) throw new IllegalArgumentException("Página no válida");
+        return service.publicasPagina(CurrentUser.id(), pagina, tam);
+    }
+
     @GetMapping("/{id}")
     public PlaylistDTO detalle(@PathVariable Long id) {
         return service.detalle(id, CurrentUser.id());

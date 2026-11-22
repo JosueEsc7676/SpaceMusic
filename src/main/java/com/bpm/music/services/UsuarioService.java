@@ -208,13 +208,10 @@ public class UsuarioService {
         s.put("porMes", porMes);
 
         // Por hora del día y racha de días seguidos
-        List<LocalDateTime> fechas = reproRepo.findFechas(userId, desde);
         int[] porHora = new int[24];
+        for (Object[] fila : reproRepo.porHora(userId, desde)) porHora[((Number) fila[0]).intValue()] = ((Number) fila[1]).intValue();
         Set<LocalDate> dias_ = new HashSet<>();
-        for (LocalDateTime f : fechas) {
-            porHora[f.getHour()]++;
-            dias_.add(f.toLocalDate());
-        }
+        for (Object[] fila : reproRepo.diasActivos(userId, desde)) dias_.add(LocalDate.of(((Number) fila[0]).intValue(), ((Number) fila[1]).intValue(), ((Number) fila[2]).intValue()));
         s.put("porHora", Arrays.stream(porHora).boxed().toList());
         int racha = 0;
         LocalDate d = LocalDate.now();

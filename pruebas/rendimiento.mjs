@@ -1,5 +1,5 @@
 // Mediciones reproducibles de SpaceMusic: p50/p95 por operación, separando red, servidor y base de datos
-// (cabecera Server-Timing que pone el servidor) y el tiempo hasta el primer byte de audio.
+// (cabecera Server-Timing que pone el servidor) y el tiempo hasta el primer bloque de audio recibido (no el comienzo audible).
 //
 //   SM_USUARIO=... SM_CLAVE=... node pruebas/rendimiento.mjs [http://localhost:8090] [repeticiones]
 //
@@ -29,7 +29,7 @@ async function medir(nombre, ruta, { rango = null, veces = N } = {}) {
   for (let i = 0; i < veces; i++) {
     const t0 = performance.now();
     const r = await fetch(BASE + ruta, { headers: rango ? { ...H, Range: rango } : H });
-    // Para audio basta el primer trozo (tiempo hasta empezar a sonar)
+    // Primer bloque recibido: no mide decodificación ni el instante en que el altavoz suena.
     if (rango) { const rd = r.body.getReader(); await rd.read(); await rd.cancel(); } else await r.arrayBuffer();
     const t = performance.now() - t0;
     const s = servidor(r.headers);

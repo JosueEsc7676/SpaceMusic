@@ -145,8 +145,18 @@ public class RecomendacionService {
     private volatile Map<String, Map<String, Double>> coescuchaCache = Map.of();
     private volatile long coescuchaT = 0;
 
-    private Map<String, Map<String, Double>> coescucha() {
-        if (System.currentTimeMillis() - coescuchaT < 15 * 60_000) return coescuchaCache;
+    private Map<String, Map<String, Double>> coescucha() { return coescuchaCache; }
+
+    @Scheduled(initialDelay = 45000, fixedDelay = 900000)
+    public void refrescarCoescucha() {
+        if (!recalculando.compareAndSet(false, true)) return;
+        Thread.startVirtualThread(() -> { try { calcularCoescucha(); }
+            catch (RuntimeException ignored) { /* se conserva el último resultado */ }
+            finally { recalculando.set(false); }
+        });
+    }
+    private final java.util.concurrent.atomic.AtomicBoolean recalculando = new java.util.concurrent.atomic.AtomicBoolean();
+    private void calcularCoescucha() {
         Map<Long, Set<String>> porUsuario = new HashMap<>();
         for (Object[] r : reproRepo.findConteoGlobal(java.time.LocalDateTime.now().minusDays(120))) {
             Long uid = ((Number) r[0]).longValue();
@@ -169,7 +179,6 @@ public class RecomendacionService {
         });
         coescuchaCache = res;
         coescuchaT = System.currentTimeMillis();
-        return res;
     }
 
     /** Siguiente canción recomendada (radio automática al terminar una lista). */

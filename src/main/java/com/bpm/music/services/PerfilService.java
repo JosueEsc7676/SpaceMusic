@@ -303,10 +303,7 @@ public class PerfilService {
     public List<Map<String, Object>> buscar(String q, Long viewerId) {
         String nq = BibliotecaService.normalizar(q);
         if (nq.length() < 2) return List.of();
-        return usuarios.findAll().stream().filter(PerfilService::visible)
-                .filter(u -> BibliotecaService.normalizar(u.getUsername()).contains(nq)
-                        || BibliotecaService.normalizar(u.getNombreVisible()).contains(nq))
-                .limit(8).map(u -> mini(u, viewerId)).toList();
+        return usuarios.buscarVisibles(q.strip(), org.springframework.data.domain.PageRequest.of(0, 8)).stream().map(u -> mini(u, viewerId)).toList();
     }
 
     /** Cambia (o quita, con url = null) la foto de portada. Devuelve la anterior para borrarla. */
