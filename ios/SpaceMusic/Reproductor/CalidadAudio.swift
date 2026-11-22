@@ -16,6 +16,12 @@ final class CalidadAudio: @unchecked Sendable {
         }
         monitor.start(queue: DispatchQueue(label: "spacemusic.calidad"))
     }
+    /// Wi-Fi u otra red sin límite de datos (para las descargas automáticas).
+    var conWifi: Bool {
+        cerrojo.lock(); defer { cerrojo.unlock() }
+        return !redLigera
+    }
+
     var ligera: Bool {
         let preferencia = UserDefaults.standard.string(forKey: "calidadAudio") ?? "auto"
         if preferencia != "auto" { return preferencia == "ligera" }

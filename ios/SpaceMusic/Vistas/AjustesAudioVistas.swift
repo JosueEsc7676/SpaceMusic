@@ -89,6 +89,7 @@ struct AjustesReproduccion: View {
     @State private var guardar = Descargas.compartido.guardarAlEscuchar
     @AppStorage("calidadAudio") private var calidad = "auto"
     @AppStorage("calidadDescargas") private var calidadDescargas = "alta"
+    @AppStorage("descargasAutomaticas") private var automaticas = true
 
     var body: some View {
         Picker("Calidad del audio", selection: $calidad) {
@@ -102,6 +103,13 @@ struct AjustesReproduccion: View {
             Text("Alta").tag("alta")
             Text("Ligera (menos espacio)").tag("ligera")
         }
+        Toggle(isOn: $automaticas) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Descargas automáticas")
+                Text("Con Wi-Fi y cargando, una vez al día: tus más escuchadas, el Mix del día y lo nuevo de tus artistas").font(.caption).foregroundStyle(Tema.secundario)
+            }
+        }
+        .onChange(of: automaticas) { _, v in if v { Task { await DescargasAutomaticas.revisar(forzar: true) } } }
         Toggle(isOn: $guardar) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Guardar lo que escuchas")

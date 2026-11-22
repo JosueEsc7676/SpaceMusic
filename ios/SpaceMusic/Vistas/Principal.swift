@@ -48,6 +48,13 @@ struct Principal: View {
             await EscuchaJuntos.compartida.retomar()
             Eventos.pedirPermiso()
             await Biblioteca.compartida.cargar()
+            // Descargas automáticas (Wi-Fi y cargando): se revisa ahora y cada 10 minutos mientras la app está abierta
+            Task { @MainActor in
+                while !Task.isCancelled {
+                    await DescargasAutomaticas.revisar()
+                    try? await Task.sleep(for: .seconds(600))
+                }
+            }
             if await GustosHoja.debePreguntar() {
                 Hojas.compartidas.gustosInicial = true
                 Hojas.compartidas.gustos = true

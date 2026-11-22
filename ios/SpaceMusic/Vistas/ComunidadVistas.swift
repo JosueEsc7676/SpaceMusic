@@ -167,7 +167,10 @@ struct GustosHoja: View {
 
 struct ResumenVista: View {
     @State private var anio = Calendar.current.component(.year, from: Date())
-    @State private var mes: Int? = nil
+    /// nil: todo el año; 0: esta semana; 1–12: el mes.
+    @State private var mes: Int? = ResumenVista.empezarEnSemana ? 0 : nil
+    /// La notificación de los lunes abre «Tu semana».
+    nonisolated(unsafe) static var empezarEnSemana = false
     @State private var anios: [Int] = [Calendar.current.component(.year, from: Date())]
     @State private var r: ResumenEscucha?
     @State private var error: String?
@@ -184,6 +187,7 @@ struct ResumenVista: View {
                 HStack {
                     Picker("Año", selection: $anio) { ForEach(anios, id: \.self) { Text(String($0)).tag($0) } }
                     Picker("Período", selection: $mes) {
+                        Text("Esta semana").tag(Int?.some(0))
                         Text("Todo el año").tag(Int?.none)
                         ForEach(mesesValidos, id: \.self) { m in Text(meses[m - 1]).tag(Int?.some(m)) }
                     }
@@ -205,7 +209,8 @@ struct ResumenVista: View {
         }
         .navigationTitle("Tu resumen")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: "\(anio)-\(mes ?? 0)") { await cargar() }
+        .task(id: "\(anio)-\(mes.map(String.init) ?? "año")") { await cargar() }
+        .onAppear { ResumenVista.empezarEnSemana = false }
         .task { if let p: PeriodosResumen = try? await API.get("/api/resumen/periodos"), !p.anios.isEmpty { anios = p.anios } }
     }
 
@@ -317,7 +322,8 @@ struct ResumenVista: View {
     private func cargar() async {
         r = nil; error = nil; tarjeta = nil
         do {
-            let nuevo: ResumenEscucha = try await API.get("/api/resumen?anio=\(anio)" + (mes.map { "&mes=\($0)" } ?? ""))
+            let ruta = mes == 0 ? "/api/resumen?semana=true" : "/api/resumen?anio=\(anio)" + (mes.map { "&mes=\($0)" } ?? "")
+            let nuevo: ResumenEscucha = try await API.get(ruta)
             r = nuevo
             if nuevo.suficiente { tarjeta = TarjetaResumen.imagen(nuevo, usuario: Sesion.compartida.usuario?.username ?? "") }
         } catch { if !Task.isCancelled { self.error = error.localizedDescription } }

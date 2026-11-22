@@ -120,7 +120,9 @@ final class Navegacion {
         case "coincidimos": if let v = valor, let id = Int(v) { ir(.sesionCoincidimos(id)) } else { ir(.coincidimos) }
         case "dedicatorias": if let v = valor, let id = Int(v) { ir(.dedicatoria(id)) } else { ir(.dedicatorias) }
         case "preparar": ir(.preparar)
-        case "resumen": ir(.resumen)
+        case "resumen":
+            ResumenVista.empezarEnSemana = limpia.contains("semana")
+            ir(.resumen)
         case "admin":
             guard Sesion.compartida.esAdmin else { return }
             let consulta = URLComponents(string: "https://local/" + limpia)?.queryItems

@@ -1,3 +1,7 @@
+## iPhone 3.22: tu semana y descargas automáticas
+- Tu resumen: nueva opción «Esta semana» (`/api/resumen?semana=true`); el aviso de los lunes abre directo «Tu semana».
+- Descargas automáticas (`DescargasAutomaticas`): con Wi-Fi y el iPhone cargando, una vez al día se guardan tus más escuchadas, el Mix del día y lo nuevo de tus artistas (máximo 60). Se apaga en Ajustes → Reproducción.
+
 ## iPhone 3.21: más estilos para la pantalla bloqueada
 - 7 opciones nuevas en «Personalizar la pantalla bloqueada»: alineación (centro, izquierda, derecha), efecto de la letra (sombra, resplandor de su color o ninguno), fondo de la letra (recuadro translúcido o banda), contorno en las letras, interlineado (80–140 %), espacio entre letras y filtro de la portada (normal, blanco y negro, sepia, vivo). Lo guardado antes se conserva (`EstiloBloqueo.init(from:)` acepta opciones que faltan).
 - La vista previa queda fija arriba: al deslizar las opciones siempre se ve el resultado.
