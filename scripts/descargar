@@ -98,10 +98,17 @@ encolar() {
 }
 
 reintentar() {
-  if [ ! -s "$FALLIDAS" ]; then echo "No hay nada pendiente por reintentar."; return 0; fi
+  exec 9>"$DATOS/.fallidas.lock"
+  flock -x 9
+  if [ ! -s "$FALLIDAS" ]; then flock -u 9; echo "No hay nada pendiente por reintentar."; return 0; fi
   local tmp; tmp=$(mktemp)
-  sort -u "$FALLIDAS" > "$tmp" && : > "$FALLIDAS"
-  encolar < "$tmp"; rm -f "$tmp"
+  sort -u "$FALLIDAS" > "$tmp" || { flock -u 9; return 1; }
+  : > "$FALLIDAS"
+  if encolar < "$tmp" 9>&-; then
+    rm -f "$tmp"; flock -u 9
+  else
+    cat "$tmp" >> "$FALLIDAS"; rm -f "$tmp"; flock -u 9; return 1
+  fi
 }
 
 trabajar() {
@@ -120,7 +127,13 @@ trabajar() {
     verde "════ $(date '+%d/%m %H:%M') · Lista $(basename "$f" .txt) · ${#LINEAS[@]} entrada(s) ════"
     # 7>&-: spotdl y yt-dlp no heredan el candado de la cola; si alguno quedara colgado,
     # no impide que la cola vuelva a arrancar
-    procesar "${LINEAS[@]}" 7>&-
+    local resultado=0
+    procesar "${LINEAS[@]}" 7>&- || resultado=$?
+    mkdir -p "$DATOS/resultados"
+    local estado="completada"
+    [ "$resultado" -ne 0 ] && estado="parcial"
+    printf '{"estado":"%s","codigo":%s}\n' "$estado" "$resultado" > "$DATOS/resultados/$(basename "$f" .txt).json.tmp"
+    mv "$DATOS/resultados/$(basename "$f" .txt).json.tmp" "$DATOS/resultados/$(basename "$f" .txt).json"
     mv "$f" "$HECHAS/"
     # guardar solo las 50 listas más recientes
     ls -1t "$HECHAS" | tail -n +51 | sed "s|^|$HECHAS/|" | xargs -r rm -f
@@ -134,7 +147,7 @@ trabajar() {
 mantener() {
   local marca=$DATOS/.actualizado
   exec 8>"$DATOS/.en-uso"
-  if [ ! -f "$marca" ] || [ -n "$(find "$marca" -mmin +1440 2>/dev/null)" ]; then
+  if [ "${SM_ACTUALIZAR_HERRAMIENTAS:-0}" = 1 ] && { [ ! -f "$marca" ] || [ -n "$(find "$marca" -mmin +1440 2>/dev/null)" ]; }; then
     if flock -n -x 8; then
       amarillo "Actualizando yt-dlp (una vez al día)…"
       if timeout 180 "$ENV/pip" install -q -U --disable-pip-version-check \
@@ -219,7 +232,7 @@ spotify() {
     --audio $(fuentes "$ronda") \
     --format m4a --bitrate disable \
     --generate-lrc --lyrics synced genius \
-    --overwrite skip --scan-for-songs --detect-formats mp3 m4a --archive "$HISTORIAL" \
+    --overwrite skip --detect-formats mp3 m4a --archive "$HISTORIAL" \
     --threads "$HILOS" --max-retries 5 --print-errors --save-errors "$ERRORES" \
     --yt-dlp-args "$(ytdlp_args "$ronda")" \
     "${CRED[@]}" "${oficial[@]}"
@@ -229,11 +242,6 @@ spotify() {
 antibloqueo() {
   local args="--sleep-requests 1 --min-sleep-interval 1 --max-sleep-interval 4 --force-ipv4"
   [ -s "$DATOS/youtube-cookies.txt" ] && args="$args --cookies $DATOS/youtube-cookies.txt"
-  case "${1:-1}" in
-    2) args="$args --extractor-args youtube:player_client=tv_simply,android_vr,web_music" ;;
-    1) ;;
-    *) args="$args --extractor-args youtube:player_client=tv,web_safari,mweb,tv_embedded" ;;
-  esac
   echo "$args"
 }
 
@@ -246,7 +254,7 @@ otra() {
     --parse-metadata "%(artist,creator)s:%(artist)s" \
     --parse-metadata 'title:(?P<artist>.+?)\s+[-–]\s+(?P<title>.+)' \
     --parse-metadata "%(artist,uploader)s:%(meta_artist)s" \
-    --download-archive "$HISTORIAL_YT" --no-overwrites --ignore-errors \
+    --download-archive "$HISTORIAL_YT" --no-overwrites \
     --concurrent-fragments 1 \
     -o "$DESTINO/%(artist,uploader)s/%(title)s.%(ext)s"
 }
@@ -291,6 +299,9 @@ sin_youtube() {
 rescatar() {
   local url nombre quedan=()
   for url in "$@"; do
+    if [[ "$url" =~ open\.spotify\.com/ ]]; then
+      quedan+=("$url"); continue
+    fi
     if [[ "$url" =~ open\.spotify\.com/track/ ]] && \
        nombre=$("$ENV/python" "$BASE/buscar-audio.py" nombre "$url" 2>/dev/null | head -1) && [ -n "$nombre" ] && \
        sin_youtube "$nombre"; then
@@ -314,7 +325,13 @@ directo() {
   nombre=$(basename "${url%%\?*}" | tr -cd 'A-Za-z0-9._ -' | cut -c1-120)
   [ -z "$nombre" ] && nombre="audio-$(date +%s)"
   [ -e "$dir/$nombre" ] && { echo "  Ya estaba: $nombre"; return 0; }
-  curl -fsSL -m 600 --max-filesize 300000000 -o "$dir/$nombre.part" "$url" && mv "$dir/$nombre.part" "$dir/$nombre" && verde "  ✓ $nombre"
+  if curl -fsSL --retry 2 --connect-timeout 15 -m 600 --max-filesize 300000000 -o "$dir/$nombre.part" "$url"; then
+    if ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 "$dir/$nombre.part" 2>/dev/null | grep -q '[[:alnum:]]'; then
+      mv "$dir/$nombre.part" "$dir/$nombre" && verde "  ✓ $nombre"; return 0
+    fi
+  fi
+  amarillo "  Archivo incompleto o sin audio válido; se conserva como pendiente."
+  return 1
 }
 
 # Baja varias entradas de Spotify (canciones, álbumes, artistas, búsquedas) juntas, por tandas,
@@ -339,7 +356,14 @@ bajar_spotify() {
         echo "  Tanda $(( i / tam + 1 )) de $(( (total + tam - 1) / tam )) ($(( i + 1 ))–$(( i + tam < total ? i + tam : total )) de $total)…"
       local antes; antes=$(wc -l < "$ERRORES")
       CODIGO=0
-      spotify "$r" "${TROZO[@]}" || CODIGO=$?
+      local salida_spotify; salida_spotify=$(mktemp)
+      spotify "$r" "${TROZO[@]}" 2>&1 | tee "$salida_spotify" || CODIGO=$?
+      if grep -qiE 'premium subscription|required for the owner|invalid_client|invalid client' "$salida_spotify"; then
+        amarillo "  Spotify rechazó las credenciales o exige Premium. No se repite el mismo fallo; se conserva la lista."
+        FALLIDAS_FINAL+=("${PENDIENTES[@]}")
+        rm -f "$salida_spotify" "$ERRORES"; return 2
+      fi
+      rm -f "$salida_spotify"
       # spotdl a veces se cae (error de Spotify, un álbum raro…) y aun así termina con código 0.
       # Si en esta tanda dejó errores sin ninguna canción concreta, la tanda entera queda pendiente.
       if ! tail -n +"$((antes + 1))" "$ERRORES" | grep -q 'open.spotify.com/track/' && \
@@ -403,6 +427,13 @@ procesar() {
       fi
       continue
     fi
+    if [[ "$ENTRADA" =~ ^https://open\.spotify\.com/((intl-[a-z]{2}/)?(track|album|playlist)/|embed/(track|album|playlist)/) ]]; then
+      # Solo catálogo público: nunca audio de Spotify ni credenciales Premium.
+      if ! "$ENV/python" "$BASE/spotify-sin-api.py" bajar "$ENTRADA" "$DESTINO" "$DATOS"; then
+        FALLIDAS_FINAL+=("$ENTRADA")
+      fi
+      continue
+    fi
     if [[ "$ENTRADA" =~ ^https?://[^?#]+\.(mp3|m4a|flac|ogg|opus|wav|aac)([?#].*)?$ ]]; then
       directo "$ENTRADA" || FALLIDAS_FINAL+=("$ENTRADA")
     elif [[ "$ENTRADA" =~ ^https?:// ]] && [[ ! "$ENTRADA" =~ spotify\.com ]]; then
@@ -450,8 +481,8 @@ procesar() {
     verde "✓ Todo descargado ($(date '+%H:%M')). Aparecerá en SpaceMusic en menos de un minuto."
     return 0
   fi
-  printf '%s\n' "${FALLIDAS_FINAL[@]}" >> "$FALLIDAS"
-  rojo "✗ No se pudo bajar ${#FALLIDAS_FINAL[@]} después de $RONDAS intentos:"
+  ( flock -x 9; printf '%s\n' "${FALLIDAS_FINAL[@]}" >> "$FALLIDAS" ) 9>"$DATOS/.fallidas.lock"
+  rojo "✗ No se pudo bajar ${#FALLIDAS_FINAL[@]} — pendientes de revisión o reintento:"
   printf '   %s\n' "${FALLIDAS_FINAL[@]}"
   echo "  Quedaron anotadas: usa la opción F del menú más tarde para reintentarlas."
   return 2

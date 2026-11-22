@@ -1,5 +1,15 @@
 # Registro de cambios
 
+## Descargas — 22 de noviembre de 2026
+- Spotify se usa como catálogo público de canciones, álbumes y playlists, sin obtener audio de Spotify ni depender de credenciales de la API de desarrolladores. El catálogo parcial o ambiguo permanece pendiente.
+- Coincidencia de título, artistas e invitados, duración ±10 s, versión y marca explícita/limpia; preferencia por álbum coincidente. No se eligen automáticamente coincidencias ambiguas ni se evitan restricciones de acceso.
+- Progreso por canción con archivo JSON atómico y bloqueo entre procesos. Parciales fuera de la biblioteca, reanudación de yt-dlp, comprobación de audio con ffprobe/ffmpeg y huella SHA-256 por bloques; publicación atómica únicamente tras validar y etiquetar. Se conservan álbum, artista de álbum y número de pista verificados.
+- Quitado --scan-for-songs de spotdl y la selección forzada de clientes obsoletos; los errores permanentes de Premium/credenciales dejan de repetirse. Las actualizaciones de herramientas pasan a ser explícitas (SM_ACTUALIZAR_HERRAMIENTAS=1), no durante cada descarga.
+- Eliminado el falso éxito de --ignore-errors. La cola registra trabajos parciales y conserva las fallidas cuando no puede encolar un reintento, con bloqueo para evitar carreras.
+- El BAT de escritorio y el del repositorio usan ~/spacemusic/descargar-api; el comando global /usr/local/bin/descargar se conserva. Se mantiene la prioridad del audio y no se reinicia Java.
+- Verificación: nueve pruebas Python, tres comprobaciones de cola aisladas y un flujo Linux con audio generado, decodificación completa, etiquetas MP4 reales y reanudación sin otra descarga. Catálogo público de Hot Pink: 12 pistas; muestra de tres canciones con coincidencia única. No se descargó el álbum como prueba.
+
+
 ## Versión 3.21
 - **TV siempre lista** (app TV 1.3, código 4): servicio en primer plano `Escucha` (tipo `connectedDevice`) que arranca con la TV (`Arranque`, BOOT_COMPLETED) y mantiene viva la app: con la app cerrada anuncia la TV cada 25 s (`POST /api/control/presencia`, plataforma `tv`) y escucha `/api/eventos` («control-orden»); ante «reproducir», «transferir» o «play» abre la app con la orden y la web la ejecuta (`ejecutarOrden`). Con la app abierta, la web se anuncia sola y el servicio solo evita que Android congele la app en segundo plano (antes la TV desaparecía de la lista).
 - La web de la TV comparte su sesión, id y nombre con la app nativa (`guardarSesion`), sigue informando en segundo plano y trae la app al frente al recibir música (`alFrente`). Para abrirse sola en Android 10+ la TV pide «Mostrar sobre otras apps».

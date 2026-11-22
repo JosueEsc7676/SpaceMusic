@@ -26,7 +26,7 @@ set /p "ENLACE=Enlace o búsqueda: "
 if "%ENLACE%"=="" goto fin
 if /i "%ENLACE%"=="C" goto spotify
 
-ssh -t %OPC% -i "%LLAVE%" %SERVIDOR% "descargar \"%ENLACE%\""
+ssh -t %OPC% -i "%LLAVE%" %SERVIDOR% "~/spacemusic/descargar-api \"%ENLACE%\""
 if errorlevel 2 (
   echo.
   echo Algunas canciones no se pudieron bajar. Puedes pegar el mismo enlace otra vez:
