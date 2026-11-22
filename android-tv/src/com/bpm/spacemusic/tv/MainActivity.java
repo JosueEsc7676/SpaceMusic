@@ -31,6 +31,12 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private SharedPreferences prefs;
+    /** La TV abierta (su vista web se anuncia sola); si no, el servicio `Escucha` la mantiene en «Dispositivos». */
+    private static volatile MainActivity actual;
+    /** Orden que llegó con la app cerrada (la ejecuta la web al cargar). */
+    private String ordenPendiente;
+
+    static boolean abierta() { MainActivity a = actual; return a != null && a.web != null; }
     private boolean sonando = false;
     private boolean errorMostrado = false;
 
@@ -38,6 +44,10 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        actual = this;
+        ordenPendiente = getIntent() == null ? null : getIntent().getStringExtra("orden");
+        // Lista para recibir música aunque se cierre la app (y no se congela en segundo plano)
+        Escucha.iniciar(this);
 
         web = new WebView(this);
         web.setBackgroundColor(Color.BLACK);
@@ -98,6 +108,33 @@ public class MainActivity extends Activity {
         String s = prefs.getString("servidor", SERVIDOR_POR_DEFECTO).trim();
         while (s.endsWith("/")) s = s.substring(0, s.length() - 1);
         return s;
+    }
+
+    @Override
+    protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        String o = intent == null ? null : intent.getStringExtra("orden");
+        if (o != null && web != null) js("window.tvOrden && window.tvOrden(" + org.json.JSONObject.quote(o) + ")", null);
+    }
+
+    /** Pide (una vez) el permiso para abrirse sola cuando le mandan música con la app cerrada. */
+    private void pedirAbrirseSola() {
+        if (Escucha.puedeAbrirse(this) || prefs.getBoolean("pidioAbrirse", false)) return;
+        prefs.edit().putBoolean("pidioAbrirse", true).apply();
+        new AlertDialog.Builder(this)
+                .setTitle("Recibir música con la app cerrada")
+                .setMessage("Para que la TV abra SpaceMusic sola cuando le mandas música desde el teléfono, permite «Mostrar sobre otras apps».")
+                .setPositiveButton("Permitir", (d, w) -> {
+                    try {
+                        startActivity(new android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:" + getPackageName())));
+                    } catch (Exception e) {
+                        new AlertDialog.Builder(this).setMessage("Esta TV no tiene ese ajuste. Igual aparecerá en tus dispositivos mientras esté encendida.")
+                                .setPositiveButton("Entendido", null).show();
+                    }
+                })
+                .setNegativeButton("Ahora no", null)
+                .show();
     }
 
     private void cargar() {
@@ -227,9 +264,41 @@ public class MainActivity extends Activity {
             runOnUiThread(MainActivity.this::cerrarDelTodo);
         }
 
+        /** La web comparte su sesión, su identificador y su nombre: así el servicio anuncia la TV con la app cerrada. */
+        @JavascriptInterface
+        public void guardarSesion(String token, String dispositivo, String nombre) {
+            if (token == null || !token.matches("[A-Za-z0-9._-]{20,4096}") || dispositivo == null || !dispositivo.matches("[A-Za-z0-9_-]{8,64}")) return;
+            prefs.edit().putString("token", token).putString("dispositivo", dispositivo)
+                    .putString("nombre", nombre == null || nombre.isEmpty() ? "TV" : nombre.substring(0, Math.min(60, nombre.length()))).apply();
+            runOnUiThread(MainActivity.this::pedirAbrirseSola);
+        }
+
+        /** Al cerrar sesión en la TV: deja de anunciarse. */
+        @JavascriptInterface
+        public void olvidarSesion() { prefs.edit().remove("token").apply(); }
+
+        /** La orden con la que se abrió la app (solo una vez). */
+        @JavascriptInterface
+        public String ordenPendiente() {
+            String o = ordenPendiente;
+            ordenPendiente = null;
+            return o == null ? "" : o;
+        }
+
+        /** Trae la app al frente (cuando le mandan música mientras se ve otra app). */
+        @JavascriptInterface
+        public void alFrente() {
+            runOnUiThread(() -> {
+                try {
+                    startActivity(new android.content.Intent(MainActivity.this, MainActivity.class)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+                } catch (Exception ignored) { }
+            });
+        }
+
         @JavascriptInterface
         public String version() {
-            return "1.2";
+            return "1.3";
         }
 
         /** Nombre del televisor (el que se le puso en Ajustes, o el modelo): así aparece en tus otros dispositivos. */
@@ -262,6 +331,9 @@ public class MainActivity extends Activity {
             web.destroy();
             web = null;
         }
+        if (actual == this) actual = null;
+        // La app se cerró: el servicio vuelve a anunciar la TV enseguida
+        Escucha.avisar(this);
         super.onDestroy();
     }
 }

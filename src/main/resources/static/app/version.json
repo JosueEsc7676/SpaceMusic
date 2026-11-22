@@ -5,8 +5,8 @@
     "url": "/app/SpaceMusic.apk"
   },
   "tv": {
-    "code": 3,
-    "nombre": "1.2",
+    "code": 4,
+    "nombre": "1.3",
     "url": "/app/SpaceMusic-TV.apk"
   }
 }

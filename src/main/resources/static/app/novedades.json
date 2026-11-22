@@ -1,14 +1,23 @@
 {
-  "version": "3.20",
-  "titulo": "Novedades: modo fiesta, tu semana, karaoke y mensajes al instante",
+  "version": "3.21",
+  "titulo": "Novedades: tu TV siempre lista para recibir música",
   "puntos": [
-    "Modo fiesta en la TV: tus invitados escanean un QR, proponen canciones y votan; la más votada suena después.",
-    "Tu semana en SpaceMusic: cada lunes, lo que más escuchaste en 7 días, listo para compartir.",
-    "TV: letra traducida debajo de cada línea (español o inglés) y karaoke que baja la voz.",
-    "Android: mensajes al instante con la app cerrada si instalas la app gratuita ntfy.",
-    "Descargas automáticas con wifi y cargando, y aviso cuando llegan canciones nuevas de tus artistas."
+    "La TV aparece en «Dispositivos» mientras esté encendida, aunque la app de SpaceMusic esté cerrada.",
+    "Al mandarle música desde el teléfono o la computadora, la TV abre SpaceMusic sola y empieza a sonar.",
+    "App de TV 1.3: arranca con la TV y ya no se «duerme» en segundo plano."
   ],
   "anteriores": [
+    {
+      "version": "3.20",
+      "titulo": "Novedades: modo fiesta, tu semana, karaoke y mensajes al instante",
+      "puntos": [
+        "Modo fiesta en la TV: tus invitados escanean un QR, proponen canciones y votan; la más votada suena después.",
+        "Tu semana en SpaceMusic: cada lunes, lo que más escuchaste en 7 días, listo para compartir.",
+        "TV: letra traducida debajo de cada línea (español o inglés) y karaoke que baja la voz.",
+        "Android: mensajes al instante con la app cerrada si instalas la app gratuita ntfy.",
+        "Descargas automáticas con wifi y cargando, y aviso cuando llegan canciones nuevas de tus artistas."
+      ]
+    },
     {
       "version": "3.19",
       "titulo": "Una biblioteca más ágil",

@@ -1,5 +1,9 @@
 # Registro de cambios
 
+## Versión 3.21
+- **TV siempre lista** (app TV 1.3, código 4): servicio en primer plano `Escucha` (tipo `connectedDevice`) que arranca con la TV (`Arranque`, BOOT_COMPLETED) y mantiene viva la app: con la app cerrada anuncia la TV cada 25 s (`POST /api/control/presencia`, plataforma `tv`) y escucha `/api/eventos` («control-orden»); ante «reproducir», «transferir» o «play» abre la app con la orden y la web la ejecuta (`ejecutarOrden`). Con la app abierta, la web se anuncia sola y el servicio solo evita que Android congele la app en segundo plano (antes la TV desaparecía de la lista).
+- La web de la TV comparte su sesión, id y nombre con la app nativa (`guardarSesion`), sigue informando en segundo plano y trae la app al frente al recibir música (`alFrente`). Para abrirse sola en Android 10+ la TV pide «Mostrar sobre otras apps».
+
 ## Versión 3.20
 - **Modo fiesta** (`FiestaService`, `FiestaController`, `fiesta.html` / `js/fiesta.js`, TV `vistaFiesta`): la TV abre una fiesta y muestra un QR; los invitados (sin cuenta) buscan, proponen (máx. 3 cada uno) y votan; la TV toma la más votada (`POST /api/fiesta/tomar/{id}`) y la pone a continuación. Público solo `/api/fiesta/publica/**`, con límite de 40 acciones por minuto. En memoria, se cierra tras 6 h sin actividad.
 - **Tu semana** (`ComunidadService.resumenSemana`, `/api/resumen?semana=true`): resumen de los últimos 7 días, opción «Esta semana» en la web y el iPhone, y aviso los lunes a las 10:00.

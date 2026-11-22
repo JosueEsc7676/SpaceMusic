@@ -9,7 +9,7 @@ import { player, prefs, fx } from './player.js';
 import { parseLrc } from './lrc.js';
 import { pintarCuerpo, ocultarSplash } from './splash.js';
 import { qrSvg } from './qr.js';
-import { iniciarRemoto, cargarDispositivos, otrosDispositivos, miDispositivo, miNombre, ordenar, posicion, escucharAqui, pasarA } from './remoto.js';
+import { iniciarRemoto, cargarDispositivos, otrosDispositivos, miDispositivo, miNombre, ordenar, posicion, escucharAqui, pasarA, ejecutarOrden } from './remoto.js';
 import { motor, objetivo, control, activar as activarSala, crearSala, retomarSala, salaActiva, unirseConCodigoTexto, salirDeSala } from './juntos-motor.js';
 
 const nativo = window.SpaceMusicTV || null; // puente con la APK (si existe)
@@ -336,6 +336,7 @@ function shell() {
     if (!b) return;
     if (b.dataset.go === 'salir') {
       try { fetch('/api/control/presencia/' + encodeURIComponent(miDispositivo()), { method: 'DELETE', keepalive: true, headers: { Authorization: 'Bearer ' + session.token } }); } catch { }
+      try { nativo?.olvidarSesion?.(); } catch { }
       session.clear(); location.reload(); return;
     }
     if (b.dataset.go === 'np') { abrirNP(); return; }
@@ -1441,6 +1442,13 @@ function conectarEventos() {
   };
 }
 
+/** La sesión y el identificador de la TV pasan a la app nativa: así sigue en «Dispositivos» con la app cerrada. */
+function compartirSesion() {
+  try { if (session.token) nativo?.guardarSesion?.(session.token, miDispositivo(), miNombre()); } catch { }
+}
+/** Orden que llegó mientras la app estaba en segundo plano (la app nativa la reenvía). */
+window.tvOrden = (json) => { try { ejecutarOrden(JSON.parse(json)); } catch { } };
+
 // ═══════════════════ Arranque ═══════════════════
 
 async function iniciar() {
@@ -1462,7 +1470,12 @@ async function iniciar() {
   retomarSala().catch(() => { });
   api('/api/fiesta').then((e) => { fiesta.activa = true; fiesta.estado = e; sondearFiesta(); }).catch(() => { });
   if (estilo.karaoke === 'si') player.audio.addEventListener('playing', () => aplicarKaraoke(), { once: true });
-  api('/api/auth/refresh', { method: 'POST' }).then((r) => r?.token && session.save(r.token, r.usuario)).catch(() => { });
+  api('/api/auth/refresh', { method: 'POST' }).then((r) => { if (r?.token) { session.save(r.token, r.usuario); compartirSesion(); } }).catch(() => { });
+  compartirSesion();
+  // Se abrió porque le mandaron música con la app cerrada: se ejecuta esa orden
+  let pendiente = '';
+  try { pendiente = nativo?.ordenPendiente?.() || ''; } catch { }
+  if (pendiente) setTimeout(() => { try { ejecutarOrden(JSON.parse(pendiente)); } catch { } }, 1200);
 }
 
 iniciar().catch((e) => { pintarCuerpo(`<div class="loading">No se pudo iniciar: ${esc(e.message)}</div>`); ocultarSplash(); });

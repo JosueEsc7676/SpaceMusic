@@ -217,8 +217,13 @@ function ponerCanciones(o) {
 /** Ejecuta una orden para este dispositivo y la confirma (por WebSocket; las de la vía anterior no se confirman). */
 let quitarGuardaPausa = null;
 
+/** Orden recibida con la app cerrada o en segundo plano (la TV la guarda al abrirse y la ejecuta). */
+export function ejecutarOrden(o) { ejecutar(o, false); }
+
 function ejecutar(o, porWs) {
   if (!o || o.para !== miDispositivo()) return;
+  // TV mostrando otra app: si le mandan música, SpaceMusic pasa al frente
+  if ((o.accion === 'reproducir' || o.accion === 'transferir') && document.hidden) { try { window.SpaceMusicTV?.alFrente?.(); } catch { } }
   if (o.accion === 'reproducir' || o.accion === 'transferir') {
     // Traen la música a este dispositivo: se deja de controlar el otro
     const d = controlandoA();
@@ -562,7 +567,8 @@ export function iniciarRemoto() {
   informar(true);
   cargarDispositivos();
   // Respaldo: sin WebSocket se informa por HTTP cada 30 s (el servidor quita a quien no informa en 75 s)
-  setInterval(() => { if (!enVivo() && (!document.hidden || player.playing || app)) informar(true); }, 30000);
+  // La TV se anuncia también en segundo plano (como la app de Android): así siempre aparece mientras está encendida
+  setInterval(() => { if (!enVivo() && (!document.hidden || player.playing || app || tv())) informar(true); }, 30000);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
     if (!enVivo()) { espera = 1000; conectar(); }
