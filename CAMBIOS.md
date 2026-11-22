@@ -1,3 +1,7 @@
+## iPhone 3.21: más estilos para la pantalla bloqueada
+- 7 opciones nuevas en «Personalizar la pantalla bloqueada»: alineación (centro, izquierda, derecha), efecto de la letra (sombra, resplandor de su color o ninguno), fondo de la letra (recuadro translúcido o banda), contorno en las letras, interlineado (80–140 %), espacio entre letras y filtro de la portada (normal, blanco y negro, sepia, vivo). Lo guardado antes se conserva (`EstiloBloqueo.init(from:)` acepta opciones que faltan).
+- La vista previa queda fija arriba: al deslizar las opciones siempre se ve el resultado.
+
 ## iPhone 3.20: agregar al instante, botón Radio y pantalla bloqueada a tu gusto
 - Agregar a una playlist o a Me gusta se ve al instante: `Biblioteca` avisa con `.bibliotecaCambio` y la playlist abierta (o Me gusta) se recarga sola, sin cambiar de pestaña.
 - Artista: el botón «Radio» es una cápsula de tamaño fijo con el texto en una línea (antes se aplastaba y quedaba casi redondo).

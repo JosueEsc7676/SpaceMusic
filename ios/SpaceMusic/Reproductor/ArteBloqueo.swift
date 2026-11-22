@@ -87,6 +87,29 @@ enum ArteBloqueo {
         return UIImage(cgImage: hecho)
     }
 
+    /// Filtro de color de la portada (blanco y negro, sepia o colores vivos).
+    private static func filtrar(_ img: UIImage, _ f: EstiloBloqueo.Filtro) -> UIImage {
+        guard f != .normal, let cg = img.cgImage else { return img }
+        let ci = CIImage(cgImage: cg)
+        let filtro: CIFilter?
+        switch f {
+        case .blancoNegro: filtro = CIFilter(name: "CIPhotoEffectMono")
+        case .sepia:
+            filtro = CIFilter(name: "CISepiaTone")
+            filtro?.setValue(0.85, forKey: kCIInputIntensityKey)
+        case .vivo:
+            filtro = CIFilter(name: "CIColorControls")
+            filtro?.setValue(1.45, forKey: kCIInputSaturationKey)
+            filtro?.setValue(1.06, forKey: kCIInputContrastKey)
+        case .normal: filtro = nil
+        }
+        guard let filtro else { return img }
+        filtro.setValue(ci, forKey: kCIInputImageKey)
+        guard let salida = filtro.outputImage,
+              let hecho = CIContext(options: [.useSoftwareRenderer: false]).createCGImage(salida, from: ci.extent) else { return img }
+        return UIImage(cgImage: hecho)
+    }
+
     /// Portada a pantalla completa con el estilo elegido: desenfoque, oscurecido y, donde va la letra, un poco más
     /// de sombra para leerla (fuera del hilo principal).
     static func base(_ portada: UIImage?, estilo: EstiloBloqueo = .guardado) -> Base {
@@ -98,7 +121,7 @@ enum ArteBloqueo {
         if let portada {
             let solo = UIGraphicsImageRenderer(size: tamano, format: formato).image { _ in portada.draw(in: cubrir(portada.size, en: marco)) }
             claridad = luz(de: solo, zona: CGRect(x: (lado - columna) / 2, y: max(0, cy - lado * 0.13), width: columna, height: lado * 0.26))
-            cuadrada = desenfocar(solo, radio: CGFloat(estilo.desenfoque) * 42)
+            cuadrada = desenfocar(filtrar(solo, estilo.filtro), radio: CGFloat(estilo.desenfoque) * 42)
         }
         let s = CGFloat(estilo.sombra)
         let fondo = UIGraphicsImageRenderer(size: tamano, format: formato).image { ctx in
@@ -140,16 +163,32 @@ enum ArteBloqueo {
         let columna = lado * visible
         let ancho = columna * 0.86
         let estiloP = NSMutableParagraphStyle()
-        estiloP.alignment = .center
+        estiloP.alignment = e.alineacion == .izquierda ? .left : e.alineacion == .derecha ? .right : .center
         estiloP.lineBreakMode = .byWordWrapping
-        estiloP.lineHeightMultiple = e.fuente == .manuscrita ? 0.82 : 0.95
-        let sombra = NSShadow()
-        sombra.shadowColor = UIColor(white: 0, alpha: (0.55 + 0.3 * base.luz) * alfa)
-        sombra.shadowBlurRadius = 14
-        sombra.shadowOffset = CGSize(width: 0, height: 2)
+        estiloP.lineHeightMultiple = (e.fuente == .manuscrita ? 0.82 : 0.95) * CGFloat(e.interlineado)
         let color = EstiloBloqueo.uiColor(e.color)
+        let sombra = NSShadow()
+        switch e.efecto {
+        case .sombra:
+            sombra.shadowColor = UIColor(white: 0, alpha: (0.55 + 0.3 * base.luz) * alfa)
+            sombra.shadowBlurRadius = 14
+            sombra.shadowOffset = CGSize(width: 0, height: 2)
+        case .resplandor:
+            sombra.shadowColor = color.withAlphaComponent(0.85 * alfa)
+            sombra.shadowBlurRadius = 30
+            sombra.shadowOffset = .zero
+        case .ninguno:
+            sombra.shadowColor = UIColor.clear
+        }
         func atributos(_ tam: CGFloat, _ a: CGFloat) -> [NSAttributedString.Key: Any] {
-            [.font: EstiloBloqueo.fuente(e.fuente, tam), .foregroundColor: color.withAlphaComponent(a), .paragraphStyle: estiloP, .shadow: sombra]
+            var r: [NSAttributedString.Key: Any] = [.font: EstiloBloqueo.fuente(e.fuente, tam), .foregroundColor: color.withAlphaComponent(a),
+                                                   .paragraphStyle: estiloP, .shadow: sombra, .kern: tam * CGFloat(e.espaciado)]
+            if e.contorno {
+                // Ancho negativo: relleno y contorno a la vez
+                r[.strokeColor] = UIColor(white: 0, alpha: 0.9 * a)
+                r[.strokeWidth] = -3.5
+            }
+            return r
         }
         func alto(_ t: String, _ a: [NSAttributedString.Key: Any]) -> CGFloat {
             ceil((t as NSString).boundingRect(with: CGSize(width: ancho, height: .greatestFiniteMagnitude),
@@ -176,11 +215,31 @@ enum ArteBloqueo {
         }
         let separacion: CGFloat = sigTexto == nil ? 0 : 18
         let total = h + separacion + sigH
+        let anchoTexto = min(ancho, ceil((texto as NSString).boundingRect(with: CGSize(width: ancho, height: .greatestFiniteMagnitude),
+                                                                            options: .usesLineFragmentOrigin, attributes: a, context: nil).width))
         // Centrado en la posición elegida y siempre dentro de la portada
         var y = centroY(e.posicion) - total / 2 + dy
         y = min(max(y, lado * 0.05), lado * 0.95 - total)
         let cx = lado / 2
         let c = UIGraphicsGetCurrentContext()
+        // Fondo detrás de la letra: recuadro translúcido redondeado o banda de lado a lado
+        if e.fondoLetra != .ninguno, let c {
+            let margen: CGFloat = 36
+            let x0: CGFloat
+            switch e.alineacion {
+            case .izquierda: x0 = cx - ancho / 2
+            case .derecha: x0 = cx + ancho / 2 - anchoTexto
+            case .centro: x0 = cx - anchoTexto / 2
+            }
+            let caja = e.fondoLetra == .banda
+                ? CGRect(x: 0, y: y - margen, width: lado, height: total + margen * 2)
+                : CGRect(x: x0 - margen, y: y - margen * 0.7, width: anchoTexto + margen * 2, height: total + margen * 1.4)
+            c.saveGState()
+            c.setFillColor(UIColor(white: 0, alpha: 0.38 * alfa).cgColor)
+            c.addPath(UIBezierPath(roundedRect: caja, cornerRadius: e.fondoLetra == .banda ? 0 : 40).cgPath)
+            c.fillPath()
+            c.restoreGState()
+        }
         c?.saveGState()
         if e.desordenada {
             // Movido e inclinado un poco (−4° a 4°), nunca al revés

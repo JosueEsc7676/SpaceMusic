@@ -6,6 +6,10 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
     enum Posicion: String, Codable, CaseIterable, Sendable { case abajo, centro, arriba }
     enum Fuente: String, Codable, CaseIterable, Sendable { case manuscrita, moderna, elegante, maquina, gruesa }
     enum ColorLetra: String, Codable, CaseIterable, Sendable { case blanco, crema, amarillo, rosa, celeste }
+    enum Alineacion: String, Codable, CaseIterable, Sendable { case centro, izquierda, derecha }
+    enum Efecto: String, Codable, CaseIterable, Sendable { case sombra, resplandor, ninguno }
+    enum FondoLetra: String, Codable, CaseIterable, Sendable { case ninguno, caja, banda }
+    enum Filtro: String, Codable, CaseIterable, Sendable { case normal, blancoNegro, sepia, vivo }
 
     var modo: Modo = .letra
     /// Dónde va la letra, siempre dentro de la portada y centrada.
@@ -23,6 +27,47 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
     var desenfoque: Double = 0
     /// Oscurecido de la portada (0 nada … 1 fuerte).
     var sombra: Double = 0.5
+    /// Alineación del verso (siempre dentro de la portada).
+    var alineacion: Alineacion = .centro
+    /// Sombra oscura, resplandor del color de la letra o nada.
+    var efecto: Efecto = .sombra
+    /// Contorno oscuro alrededor de cada letra (se lee sobre cualquier portada).
+    var contorno = false
+    /// Recuadro translúcido detrás del verso o una banda de lado a lado.
+    var fondoLetra: FondoLetra = .ninguno
+    /// Espacio entre renglones (0,8 a 1,4).
+    var interlineado: Double = 1
+    /// Espacio entre letras (0 a 0,2 del tamaño).
+    var espaciado: Double = 0
+    /// Filtro de la portada: normal, blanco y negro, sepia o colores vivos.
+    var filtro: Filtro = .normal
+
+    init() {}
+
+    /// Lee lo guardado aunque falten opciones nuevas (cada una toma su valor normal).
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = EstiloBloqueo.base
+        modo = (try? c.decodeIfPresent(Modo.self, forKey: .modo)) ?? d.modo
+        posicion = (try? c.decodeIfPresent(Posicion.self, forKey: .posicion)) ?? d.posicion
+        fuente = (try? c.decodeIfPresent(Fuente.self, forKey: .fuente)) ?? d.fuente
+        tamano = (try? c.decodeIfPresent(Double.self, forKey: .tamano)) ?? d.tamano
+        color = (try? c.decodeIfPresent(ColorLetra.self, forKey: .color)) ?? d.color
+        desordenada = (try? c.decodeIfPresent(Bool.self, forKey: .desordenada)) ?? d.desordenada
+        siguiente = (try? c.decodeIfPresent(Bool.self, forKey: .siguiente)) ?? d.siguiente
+        mayusculas = (try? c.decodeIfPresent(Bool.self, forKey: .mayusculas)) ?? d.mayusculas
+        desenfoque = (try? c.decodeIfPresent(Double.self, forKey: .desenfoque)) ?? d.desenfoque
+        sombra = (try? c.decodeIfPresent(Double.self, forKey: .sombra)) ?? d.sombra
+        alineacion = (try? c.decodeIfPresent(Alineacion.self, forKey: .alineacion)) ?? d.alineacion
+        efecto = (try? c.decodeIfPresent(Efecto.self, forKey: .efecto)) ?? d.efecto
+        contorno = (try? c.decodeIfPresent(Bool.self, forKey: .contorno)) ?? d.contorno
+        fondoLetra = (try? c.decodeIfPresent(FondoLetra.self, forKey: .fondoLetra)) ?? d.fondoLetra
+        interlineado = (try? c.decodeIfPresent(Double.self, forKey: .interlineado)) ?? d.interlineado
+        espaciado = (try? c.decodeIfPresent(Double.self, forKey: .espaciado)) ?? d.espaciado
+        filtro = (try? c.decodeIfPresent(Filtro.self, forKey: .filtro)) ?? d.filtro
+    }
+
+    private static let base = EstiloBloqueo()
 
     private static let clave = "estiloBloqueo"
 
@@ -49,6 +94,22 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
 
     static func nombre(_ p: Posicion) -> String {
         switch p { case .abajo: "Abajo"; case .centro: "Centro"; case .arriba: "Arriba" }
+    }
+
+    static func nombre(_ a: Alineacion) -> String {
+        switch a { case .centro: "Centro"; case .izquierda: "Izquierda"; case .derecha: "Derecha" }
+    }
+
+    static func nombre(_ e: Efecto) -> String {
+        switch e { case .sombra: "Sombra"; case .resplandor: "Resplandor"; case .ninguno: "Ninguno" }
+    }
+
+    static func nombre(_ f: FondoLetra) -> String {
+        switch f { case .ninguno: "Sin fondo"; case .caja: "Recuadro"; case .banda: "Banda" }
+    }
+
+    static func nombre(_ f: Filtro) -> String {
+        switch f { case .normal: "Normal"; case .blancoNegro: "Blanco y negro"; case .sepia: "Sepia"; case .vivo: "Vivo" }
     }
 
     static func nombre(_ c: ColorLetra) -> String {
