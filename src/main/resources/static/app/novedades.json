@@ -1,13 +1,24 @@
 {
-  "version": "3.19",
-  "titulo": "Una biblioteca más ágil",
+  "version": "3.20",
+  "titulo": "Novedades: modo fiesta, tu semana, karaoke y mensajes al instante",
   "puntos": [
-    "Audio con menos consultas repetidas y tareas en segundo plano con prioridad para la reproducción.",
-    "Biblioteca y búsquedas más ligeras; carga incremental de artistas y álbumes en iPhone.",
-    "Recomendaciones precalculadas, cachés coordinadas y estadísticas agrupadas.",
-    "Nuevas mediciones de rendimiento en Administración → Soporte → Monitor."
+    "Modo fiesta en la TV: tus invitados escanean un QR, proponen canciones y votan; la más votada suena después.",
+    "Tu semana en SpaceMusic: cada lunes, lo que más escuchaste en 7 días, listo para compartir.",
+    "TV: letra traducida debajo de cada línea (español o inglés) y karaoke que baja la voz.",
+    "Android: mensajes al instante con la app cerrada si instalas la app gratuita ntfy.",
+    "Descargas automáticas con wifi y cargando, y aviso cuando llegan canciones nuevas de tus artistas."
   ],
   "anteriores": [
+    {
+      "version": "3.19",
+      "titulo": "Una biblioteca más ágil",
+      "puntos": [
+        "Audio con menos consultas repetidas y tareas en segundo plano con prioridad para la reproducción.",
+        "Biblioteca y búsquedas más ligeras; carga incremental de artistas y álbumes en iPhone.",
+        "Recomendaciones precalculadas, cachés coordinadas y estadísticas agrupadas.",
+        "Nuevas mediciones de rendimiento en Administración → Soporte → Monitor."
+      ]
+    },
     {
       "version": "3.18",
       "titulo": "Sincronía de letras compartida",

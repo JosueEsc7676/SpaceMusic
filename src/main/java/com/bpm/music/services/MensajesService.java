@@ -158,7 +158,14 @@ public class MensajesService {
         aOtro.put("mensaje", dto(m, otro.getId()));
         eventos.enviar(otro.getId(), "mensaje", aOtro);
         eventos.enviar(yo, "mensaje", Map.of("con", otro.getUsername(), "nombre", otro.getNombreVisible(), "mensaje", dto(m, yo)));
+        if (push != null) push.avisar(otro.getId());
     }
+
+    private PushService push;
+
+    /** Avisos al instante en Android (opcional: en las pruebas no hace falta). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setPush(PushService push) { this.push = push; }
 
     // ═══════════════════ Bloqueos, borrar y archivos (imágenes y audios cifrados) ═══════════════════
 

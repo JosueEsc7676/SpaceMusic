@@ -53,7 +53,9 @@ public class ComunidadController {
     // ── Resumen ──
 
     @GetMapping("/api/resumen")
-    public Map<String, Object> resumen(@RequestParam(required = false) Integer anio, @RequestParam(required = false) Integer mes) {
+    public Map<String, Object> resumen(@RequestParam(required = false) Integer anio, @RequestParam(required = false) Integer mes,
+                                       @RequestParam(defaultValue = "false") boolean semana) {
+        if (semana) return service.resumenSemana(CurrentUser.id());
         return service.resumen(CurrentUser.id(), anio == null ? LocalDate.now().getYear() : anio, mes);
     }
 

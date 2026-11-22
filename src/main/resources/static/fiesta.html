@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0a12">
+  <title>Modo fiesta · SpaceMusic</title>
+  <link rel="icon" href="/img/icon.svg">
+  <style>
+    :root { --bg: #0b0a12; --card: rgba(255,255,255,.06); --line: rgba(255,255,255,.1); --text: #f5f5f7; --text-2: rgba(255,255,255,.6); --acento: #ff6fb5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(40rem 30rem at 90% -10%, rgba(255,111,181,.25), transparent 70%), radial-gradient(36rem 28rem at -10% 110%, rgba(110,90,255,.25), transparent 70%), var(--bg);
+      color: var(--text); font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+    main { max-width: 560px; margin: 0 auto; padding: 22px 16px calc(40px + env(safe-area-inset-bottom)); }
+    header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    header img { width: 34px; height: 34px; }
+    h1 { font-size: 24px; margin: 4px 0 2px; letter-spacing: -.02em; }
+    .sub { color: var(--text-2); margin: 0 0 16px; font-size: 14px; line-height: 1.45; }
+    .ahora { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 16px; background: var(--card); margin-bottom: 16px; }
+    .ahora img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: #222; }
+    .ahora small { color: var(--acento); font-weight: 700; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+    .buscar { display: flex; gap: 8px; margin: 6px 0 10px; }
+    input { flex: 1; height: 46px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.07); color: var(--text); padding: 0 16px; font-size: 16px; outline: none; }
+    input:focus { border-color: var(--acento); }
+    .nombre { width: 100%; height: 40px; font-size: 14px; margin-bottom: 14px; }
+    h2 { font-size: 15px; margin: 22px 0 10px; color: var(--text-2); font-weight: 700; }
+    .fila { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px; border-radius: 14px; }
+    .fila + .fila { margin-top: 4px; }
+    .fila:nth-child(odd) { background: rgba(255,255,255,.03); }
+    .fila img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; background: #222; }
+    .fila b, .ahora b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fila span small, .ahora span small.s { display: block; color: var(--text-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    button { font: inherit; border: 0; cursor: pointer; }
+    .proponer { height: 36px; padding: 0 14px; border-radius: 999px; background: #f5f5f7; color: #000; font-weight: 700; font-size: 14px; }
+    .proponer:disabled { opacity: .5; }
+    .voto { min-width: 64px; height: 36px; padding: 0 12px; border-radius: 999px; background: var(--card); color: var(--text); font-weight: 800; border: 1px solid var(--line); }
+    .voto.si { background: var(--acento); color: #000; border-color: transparent; }
+    .vacio { color: var(--text-2); font-size: 14px; padding: 8px 2px; }
+    .aviso { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: #f5f5f7; color: #000; padding: 10px 16px; border-radius: 14px; font-weight: 600; font-size: 14px; max-width: 90vw; opacity: 0; transition: opacity .25s; pointer-events: none; }
+    .aviso.ver { opacity: 1; }
+    .fin { text-align: center; padding: 60px 10px; color: var(--text-2); }
+  </style>
+</head>
+<body>
+  <main id="app"><p class="sub">Cargando la fiesta…</p></main>
+  <div class="aviso" id="aviso"></div>
+  <script type="module" src="/js/fiesta.js"></script>
+</body>
+</html>

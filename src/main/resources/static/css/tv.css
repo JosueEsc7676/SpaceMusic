@@ -454,3 +454,14 @@ h1.title { font-family: var(--display); font-size: 2.9rem; font-weight: 800; let
 .np.solo .np-lyrics .l:not(.active) { opacity: max(var(--o, .3), .38); }
 .np.solo .np-lyrics { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 91%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 91%, transparent 100%); }
 .np.solo .np-lyrics .verso { top: 50%; filter: none; }
+/* Traducción debajo de cada línea */
+.np-lyrics .l .tr, .np-lyrics .verso .tr { display: block; font-size: .5em; font-weight: 600; line-height: 1.25; margin-top: .3em; opacity: .72; letter-spacing: 0;
+  color: rgba(255,255,255,.85); -webkit-text-fill-color: rgba(255,255,255,.85); background: none; font-style: normal; font-family: "Inter", system-ui, sans-serif; }
+/* Modo fiesta */
+.fiesta-lista { display: flex; flex-direction: column; gap: .6rem; max-width: 46rem; }
+.fiesta-fila { display: grid; grid-template-columns: 2rem 3.4rem minmax(0, 1fr) auto; gap: 1rem; align-items: center; padding: .6rem .9rem; border-radius: 1rem; background: rgba(255,255,255,.05); }
+.fiesta-fila.primera { background: rgba(255,255,255,.12); box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+.fiesta-fila img, .fiesta-fila .ph { width: 3.4rem; height: 3.4rem; border-radius: .6rem; object-fit: cover; }
+.fiesta-fila b { display: block; font-size: 1.1rem; } .fiesta-fila small { display: block; color: var(--text-2); }
+.fiesta-n { font-weight: 800; color: var(--text-2); text-align: center; }
+.fiesta-votos { font-weight: 800; font-size: 1.1rem; color: #ff7ab8; }

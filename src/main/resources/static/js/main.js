@@ -660,6 +660,8 @@ async function boot() {
   import('./remoto.js').then((m) => m.iniciarRemoto()).catch(() => { });
   // Una TV de tu misma red wifi espera para iniciar sesión: se ofrece con un toque
   import('./views/tv-vincular.js').then((m) => m.vigilarTvCercanas()).catch(() => { });
+  // App de Android: descargas automáticas (wifi y cargando) y avisos al instante con ntfy
+  if (window.SpaceMusicApp) import('./automatico.js').then((m) => m.iniciarAutomatico()).catch(() => { });
   // SyncPlay: si estabas en un SyncPlay al cerrar la app, se retoma (el módulo solo se carga si hace falta)
   setTimeout(() => {
     if (sinConexion()) return;

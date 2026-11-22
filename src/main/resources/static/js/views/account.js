@@ -8,6 +8,7 @@ import { toast, errorToast, modal, registerList, trackList, emptyState } from '.
 import { bus } from '../util.js';
 import { cancionesGuardadas, sinConexion } from '../offline.js';
 import { elegirGustos } from '../comunidad.js';
+import { descargasAutomaticas } from '../automatico.js';
 
 export const ACCENTS = {
   Perla: ['#f5f5f7', '#000000'],
@@ -101,10 +102,14 @@ export async function profileView(el, _p, _q, isStale) {
           <select data-calidad="escucha" aria-label="Calidad al escuchar"><option value="auto">Automática</option><option value="alta">Siempre alta</option><option value="ligera">Siempre ligera</option></select></div>
         <div class="setting-row"><div><div class="t">Calidad de las descargas</div><div class="s">Ligera ocupa unas 3 veces menos espacio en el teléfono</div></div>
           <select data-calidad="descargas" aria-label="Calidad de las descargas"><option value="alta">Alta</option><option value="ligera">Ligera</option></select></div>
+        ${descargasAutomaticas.disponibles ? `<div class="setting-row"><div><div class="t">Descargas automáticas</div><div class="s">Con wifi y cargando, una vez al día: tus más escuchadas, el Mix del día y lo nuevo de tus artistas</div></div>
+          <label class="switch"><input type="checkbox" data-auto-descargas ${descargasAutomaticas.activas ? 'checked' : ''}><span></span></label></div>` : ''}
+        ${window.SpaceMusicApp?.pushEstado ? `<div class="setting-row"><div><div class="t">Avisos al instante</div><div class="s" data-push-txt></div></div>
+          <a class="btn sm" data-push href="https://play.google.com/store/apps/details?id=io.heckel.ntfy">${icon('bell', 'sm')} ntfy</a></div>` : ''}
         <div class="setting-row"><div><div class="t">Tus gustos</div><div class="s">Géneros y artistas para tu inicio y tus mixes</div></div>
           <button class="btn sm" data-gustos>${icon('heart', 'sm')} Elegir</button></div>
-        <div class="setting-row"><div><div class="t">Tu resumen</div><div class="s">Lo que más escuchaste este mes y este año</div></div>
-          <a class="btn sm" href="#/resumen">${icon('gift', 'sm')} Ver</a></div>
+        <div class="setting-row"><div><div class="t">Tu resumen</div><div class="s">Lo que más escuchaste esta semana, este mes y este año</div></div>
+          <a class="btn sm" href="#/resumen?semana=1">${icon('gift', 'sm')} Tu semana</a></div>
         <div class="setting-row"><div><div class="t">Color de la app</div></div>
           <div class="swatches">${Object.entries(ACCENTS).map(([n, [c]]) => `<button class="swatch ${n === accent ? 'active' : ''}" data-accent="${n}" title="${n}" style="background:${c}"></button>`).join('')}</div></div>
         <div class="setting-row"><div><div class="t">Sonido de inicio</div><div class="s">Suena al abrir la app junto al logo</div></div>
@@ -185,6 +190,18 @@ export async function profileView(el, _p, _q, isStale) {
     },
   }).then((r) => r && profileView(el, {}, {}, () => false));
   $('[data-gustos]')?.addEventListener('click', () => elegirGustos().catch(errorToast));
+  $('[data-auto-descargas]')?.addEventListener('change', (e) => {
+    descargasAutomaticas.activas = e.target.checked;
+    toast(e.target.checked ? 'Descargas automáticas activadas (con wifi y cargando)' : 'Descargas automáticas desactivadas');
+  });
+  const pushTxt = $('[data-push-txt]');
+  if (pushTxt) {
+    let est = '';
+    try { est = window.SpaceMusicApp.pushEstado(); } catch { }
+    pushTxt.textContent = est === 'activo' ? 'Activados: los mensajes llegan al momento aunque la app esté cerrada'
+      : est === 'pendiente' ? 'Conectando con ntfy…' : 'Instala la app gratuita ntfy para recibir los mensajes al momento con la app cerrada';
+    if (est === 'activo') $('[data-push]')?.remove();
+  }
   el.querySelectorAll('[data-calidad]').forEach((sel) => {
     sel.value = ajustesCalidad[sel.dataset.calidad];
     sel.addEventListener('change', () => { ajustesCalidad[sel.dataset.calidad] = sel.value; toast('Preferencia guardada'); });

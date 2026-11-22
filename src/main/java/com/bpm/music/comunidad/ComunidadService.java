@@ -192,11 +192,20 @@ public class ComunidadService {
      * calculado con las reproducciones reales de la persona.
      */
     public Map<String, Object> resumen(Long uid, int anio, Integer mes) {
+        return resumen(uid, anio, mes, false);
+    }
+
+    /** Resumen de los últimos 7 días (hoy incluido): «Tu semana en SpaceMusic». */
+    public Map<String, Object> resumenSemana(Long uid) {
+        return resumen(uid, LocalDate.now().getYear(), null, true);
+    }
+
+    private Map<String, Object> resumen(Long uid, int anio, Integer mes, boolean semana) {
         LocalDate hoy = LocalDate.now();
-        if (anio < 2020 || anio > hoy.getYear()) throw new IllegalArgumentException("Año no válido");
+        if (!semana && (anio < 2020 || anio > hoy.getYear())) throw new IllegalArgumentException("Año no válido");
         if (mes != null && (mes < 1 || mes > 12)) throw new IllegalArgumentException("Mes no válido");
-        LocalDate desde = mes == null ? LocalDate.of(anio, 1, 1) : LocalDate.of(anio, mes, 1);
-        LocalDate hasta = mes == null ? desde.plusYears(1) : desde.plusMonths(1);
+        LocalDate desde = semana ? hoy.minusDays(6) : mes == null ? LocalDate.of(anio, 1, 1) : LocalDate.of(anio, mes, 1);
+        LocalDate hasta = semana ? hoy.plusDays(1) : mes == null ? desde.plusYears(1) : desde.plusMonths(1);
         if (desde.isAfter(hoy)) throw new IllegalArgumentException("Ese período todavía no empieza");
 
         List<Object[]> filas = jdbc.query("SELECT cancion_id, fecha, segundos FROM usuario_reproduccion WHERE usuario_id = ? AND fecha >= ? AND fecha < ? ORDER BY fecha",
@@ -206,7 +215,8 @@ public class ComunidadService {
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("anio", anio);
         r.put("mes", mes);
-        r.put("titulo", mes == null ? "Tu " + anio + " en SpaceMusic"
+        r.put("semana", semana);
+        r.put("titulo", semana ? "Tu semana en SpaceMusic" : mes == null ? "Tu " + anio + " en SpaceMusic"
                 : "Tu " + Month.of(mes).getDisplayName(TextStyle.FULL, ES) + " en SpaceMusic");
         r.put("desde", desde);
         r.put("hasta", hasta.minusDays(1));
@@ -243,7 +253,7 @@ public class ComunidadService {
             porHora[t.getHour()]++;
             porDiaSemana[t.getDayOfWeek().getValue() - 1]++;
             dias.add(t.toLocalDate());
-            serie.merge(mes == null ? t.toLocalDate().toString().substring(0, 7) : t.toLocalDate().toString(), s / 60, Long::sum);
+            serie.merge(mes == null && !semana ? t.toLocalDate().toString().substring(0, 7) : t.toLocalDate().toString(), s / 60, Long::sum);
             if (oc.isEmpty()) continue;
             CancionDTO c = oc.get();
             if (primera == null) primera = c;
@@ -293,7 +303,7 @@ public class ComunidadService {
         r.put("diaFavorito", DayOfWeek.of(dia + 1).getDisplayName(TextStyle.FULL, ES));
         r.put("primeraCancion", primera);
         r.put("serie", serie.entrySet().stream().map(e -> Map.of("periodo", e.getKey(), "minutos", e.getValue())).toList());
-        if (mes == null && !serie.isEmpty()) {
+        if (mes == null && !semana && !serie.isEmpty()) {
             String mejor = Collections.max(serie.entrySet(), Map.Entry.comparingByValue()).getKey();
             r.put("mesMasActivo", Month.of(Integer.parseInt(mejor.substring(5, 7))).getDisplayName(TextStyle.FULL, ES));
         }
@@ -302,7 +312,7 @@ public class ComunidadService {
         r.put("estilo", variedad > 0.5 ? "Explorador" : variedad > 0.25 ? "Equilibrado" : "Fiel a sus favoritos");
 
         // Comparación con el período anterior del mismo largo
-        LocalDate antDesde = mes == null ? desde.minusYears(1) : desde.minusMonths(1);
+        LocalDate antDesde = semana ? desde.minusDays(7) : mes == null ? desde.minusYears(1) : desde.minusMonths(1);
         Long antes = jdbc.queryForObject("SELECT COUNT(*) FROM usuario_reproduccion WHERE usuario_id = ? AND fecha >= ? AND fecha < ?",
                 Long.class, uid, Timestamp.valueOf(antDesde.atStartOfDay()), Timestamp.valueOf(desde.atStartOfDay()));
         r.put("reproduccionesAnterior", antes == null ? 0 : antes);
@@ -339,6 +349,19 @@ public class ComunidadService {
             try {
                 notificaciones.crear(uid, "RESUMEN", null, "Ya está tu resumen de " + mes + ": tus artistas, canciones y tu descubrimiento del mes",
                         "#/resumen?anio=" + desde.getYear() + "&mes=" + desde.getMonthValue());
+            } catch (RuntimeException ignored) { /* un usuario con problema no frena a los demás */ }
+        }
+    }
+
+    /** Los lunes (10:00, hora de El Salvador): «Ya está tu semana en SpaceMusic» a quien escuchó lo suficiente. */
+    @org.springframework.scheduling.annotation.Scheduled(cron = "0 0 10 * * MON", zone = "America/El_Salvador")
+    public void avisarResumenSemana() {
+        LocalDate hoy = LocalDate.now(ZoneId.of("America/El_Salvador"));
+        List<Long> quienes = jdbc.queryForList("SELECT usuario_id FROM usuario_reproduccion WHERE fecha >= ? AND fecha < ? GROUP BY usuario_id HAVING COUNT(*) >= 5",
+                Long.class, Timestamp.valueOf(hoy.minusDays(7).atStartOfDay()), Timestamp.valueOf(hoy.atStartOfDay()));
+        for (Long uid : quienes) {
+            try {
+                notificaciones.crear(uid, "RESUMEN", null, "Ya está tu semana en SpaceMusic: lo que más escuchaste en los últimos 7 días", "#/resumen?semana=1");
             } catch (RuntimeException ignored) { /* un usuario con problema no frena a los demás */ }
         }
     }

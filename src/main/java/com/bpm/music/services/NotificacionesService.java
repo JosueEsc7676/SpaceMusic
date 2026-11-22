@@ -43,10 +43,17 @@ public class NotificacionesService {
         this.eventos = eventos;
     }
 
+    private PushService push;
+
+    /** Avisos al instante en Android (opcional: en las pruebas no hace falta). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setPush(PushService push) { this.push = push; }
+
     public void crear(Long para, String tipo, Long de, String texto, String ruta) {
         repo.save(Notificacion.builder().usuarioId(para).tipo(tipo).deId(de)
                 .texto(texto.length() > 300 ? texto.substring(0, 297) + "…" : texto).ruta(ruta).build());
         eventos.enviar(para, "notificacion", Map.of("tipo", tipo));
+        if (push != null) push.avisar(para);
     }
 
     private List<Usuario> activos() {

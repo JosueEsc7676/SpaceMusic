@@ -191,6 +191,8 @@ public class MainActivity extends Activity {
         vigilarRed();
         // Mensajes y avisos con la app cerrada (revisión periódica de Android)
         Revisar.programar(this);
+        // Avisos al instante con UnifiedPush (si hay una app distribuidora como ntfy)
+        Push.registrar(this);
         // Si la app se abrió desde una notificación, ir a esa pantalla cuando cargue
         final Intent inicio = getIntent();
         web.postDelayed(() -> abrirRuta(inicio), 4000);
@@ -533,6 +535,27 @@ public class MainActivity extends Activity {
             try { startService(i); } catch (Exception e) { android.util.Log.w("SpaceMusic", "Letra: " + e); }
         }
 
+        /** Estado de los avisos al instante: «sin-distribuidora», «pendiente» o «activo». */
+        @JavascriptInterface
+        public String pushEstado() { return Push.estado(MainActivity.this); }
+
+        /** Vuelve a pedir el registro de avisos al instante (después de instalar ntfy). */
+        @JavascriptInterface
+        public void pushRegistrar() { runOnUiThread(() -> Push.registrar(MainActivity.this)); }
+
+        /** true con wifi (o red sin límite de datos) y el teléfono cargando: para las descargas automáticas. */
+        @JavascriptInterface
+        public boolean wifiYCargando() {
+            try {
+                android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+                boolean sinLimite = cm != null && !cm.isActiveNetworkMetered();
+                android.content.Intent b = registerReceiver(null, new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
+                int estado = b == null ? -1 : b.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1);
+                boolean cargando = estado == android.os.BatteryManager.BATTERY_STATUS_CHARGING || estado == android.os.BatteryManager.BATTERY_STATUS_FULL;
+                return sinLimite && cargando;
+            } catch (Exception e) { return false; }
+        }
+
         /** Notificación de un mensaje con la foto de perfil de quien escribe (solo fotos de nuestro servidor). */
         @JavascriptInterface
         public void notificarConFoto(String titulo, String texto, String ruta, String foto) {
@@ -630,7 +653,12 @@ public class MainActivity extends Activity {
             web.evaluateJavascript("(function(){try{return localStorage.getItem('sm_token')||''}catch(e){return ''}})()", v -> {
                 String t = v == null ? "" : v.replace("\"", "").trim();
                 if (t.equals("null")) t = "";
-                if (t.isEmpty() || t.matches("[A-Za-z0-9._-]{20,4096}")) prefs.edit().putString("token", t).apply();
+                if (t.isEmpty() || t.matches("[A-Za-z0-9._-]{20,4096}")) {
+                    boolean nuevo = !t.equals(prefs.getString("token", ""));
+                    prefs.edit().putString("token", t).apply();
+                    // Con sesión nueva, la dirección de avisos se vuelve a registrar en el servidor con esta cuenta
+                    if (nuevo && !t.isEmpty()) { prefs.edit().putBoolean("pushEnviado", false).apply(); Push.enviarAlServidor(MainActivity.this); }
+                }
             });
         } catch (Exception ignored) { }
     }

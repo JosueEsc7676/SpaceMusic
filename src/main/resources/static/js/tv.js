@@ -5,7 +5,7 @@ window.SM_TV = true;
 import { api, session } from './api.js';
 import { esc, cover, fmtTime, fmtLong, plural, dominantColor, bus, store, albumHref } from './util.js';
 import { icon } from './icons.js';
-import { player, prefs } from './player.js';
+import { player, prefs, fx } from './player.js';
 import { parseLrc } from './lrc.js';
 import { pintarCuerpo, ocultarSplash } from './splash.js';
 import { qrSvg } from './qr.js';
@@ -30,7 +30,7 @@ if (navigator.onLine !== false && !document.querySelector('link[data-fuentes-tv]
 // color: portada | blanco | lima | rosa | celeste | ambar | lila · sep: junta | normal | separada
 // alinear: centro | izquierda · brillo: si | no
 const ESTILO_DEF = { reproductor: 'clasico', fuente: 'normal', tam: 100, orden: 'ordenada',
-  mostrar: 'lineas', color: 'portada', sep: 'normal', alinear: 'centro', brillo: 'si' };
+  mostrar: 'lineas', color: 'portada', sep: 'normal', alinear: 'centro', brillo: 'si', traduccion: 'no', karaoke: 'no' };
 const COLORES_LETRA = { blanco: '#ffffff', lima: '#d7ff4f', rosa: '#ff6fb5', celeste: '#7cd3ff', ambar: '#ffc24a', lila: '#b9a5ff' };
 const SEPARACION = { junta: 0.45, normal: 1, separada: 1.9 };
 let estilo = { ...ESTILO_DEF, ...(store.get('sm_tv_estilo', {}) || {}) };
@@ -295,6 +295,7 @@ const SECCIONES = [
   ['historial', 'history', 'Recientes'],
   ['dispositivos', 'devices', 'Dispositivos'],
   ['syncplay', 'headphones', 'SyncPlay'],
+  ['fiesta', 'sparkles', 'Modo fiesta'],
 ];
 
 function shell() {
@@ -350,7 +351,7 @@ function navegar(seccion) {
   vistaActual(null);
   $$('.nav').forEach((n) => n.classList.toggle('active', n.dataset.go === seccion));
   const vistas = { inicio: vistaInicio, buscar: vistaBuscar, megusta: vistaMeGusta, playlists: vistaPlaylists,
-    artistas: vistaArtistas, albumes: vistaAlbumes, historial: vistaHistorial, dispositivos: vistaDispositivos, syncplay: vistaSyncPlay };
+    artistas: vistaArtistas, albumes: vistaAlbumes, historial: vistaHistorial, dispositivos: vistaDispositivos, syncplay: vistaSyncPlay, fiesta: vistaFiesta };
   ir(vistas[seccion] || vistaInicio);
 }
 
@@ -908,6 +909,7 @@ async function cargarLetra(s) {
       <div class="verso" data-verso></div>`;
     sintonia('sincronizada', lineas.filter((l) => !l.interlude).length);
     actualizarLetra(true);
+    traducirLetra(s);
   } else if (d.letra) {
     box.innerHTML = `<div class="plain">${d.letra.split('\n').filter((x) => x.trim()).map((x) => `<p>${esc(x)}</p>`).join('')}</div>`;
     sintonia('texto');
@@ -1098,7 +1100,8 @@ function pintarVerso(i) {
   const texto = !l ? (lineas[0]?.text ? '♪' : '') : l.interlude ? '♪ ♪ ♪' : l.text;
   v.classList.remove('entra');
   void v.offsetWidth; // reinicia la animación de entrada
-  v.textContent = texto;
+  const tr = l && !l.interlude ? traduccionDe(l.text) : '';
+  v.innerHTML = esc(texto) + (tr ? `<small class="tr">${esc(tr)}</small>` : '');
   if (estilo.mostrar === 'flotante') {
     // Un lugar distinto al anterior en cada verso (el mismo verso cae siempre en el mismo sitio)
     let k = Math.abs(Math.floor(Math.sin((i + 3) * 91.7) * 1000)) % LUGARES.length;
@@ -1150,6 +1153,8 @@ function abrirAjustes() {
     <div class="aj-fila"><span>Orden</span>${op('orden', 'ordenada', 'Ordenada')}${op('orden', 'desordenada', 'Desordenada')}</div>
     <div class="aj-fila"><span>Alineación</span>${op('alinear', 'centro', 'Al centro')}${op('alinear', 'izquierda', 'A la izquierda')}</div>
     <div class="aj-fila"><span>Resplandor</span>${op('brillo', 'si', 'Con brillo')}${op('brillo', 'no', 'Sin brillo')}</div>
+    <div class="aj-fila"><span>Traducción</span>${op('traduccion', 'no', 'Sin traducir')}${op('traduccion', 'es', 'Al español')}${op('traduccion', 'en', 'Al inglés')}</div>
+    <div class="aj-fila"><span>Karaoke</span>${op('karaoke', 'no', 'Con voz')}${op('karaoke', 'si', 'Baja la voz')}</div>
     <div class="aj-fila aj-fin"><button class="aj-op f grande" data-aj="solo">${icon('expand')} Solo letra en pantalla completa</button><button class="aj-op f" data-aj="cerrar">Listo</button></div>
     <p class="aj-nota">La letra sigue sincronizada en todos los estilos. Se guarda en esta TV.</p></div>`;
   p.classList.add('open');
@@ -1172,6 +1177,8 @@ function cambiarAjuste(v) {
   else estilo[clave] = valor;
   const otroReproductor = clave === 'reproductor';
   guardarEstilo();
+  if (clave === 'traduccion' && player.current) traducirLetra(player.current);
+  if (clave === 'karaoke') aplicarKaraoke(true);
   if (otroReproductor) pintarNP(true);
   activa = -2;
   ultimoLugar = -1;
@@ -1179,6 +1186,126 @@ function cambiarAjuste(v) {
   abrirAjustes();
   if (antes) enfocar($(`[data-aj="${antes}"]`, $('#ajustes')), { scroll: false });
 }
+
+// ═══════════════════ Letra traducida (debajo de cada línea) ═══════════════════
+
+let traduccion = new Map(); // texto original → traducido
+function traduccionDe(texto) { return traduccion.get(String(texto || '').trim()) || ''; }
+async function traducirLetra(s) {
+  traduccion = new Map();
+  $$('#lyr .l .tr').forEach((n) => n.remove());
+  if (estilo.traduccion === 'no' || !s) { pintarVerso(activa); return; }
+  let d;
+  try { d = await api(`/api/letras/${s.id}/traduccion?a=${estilo.traduccion}`); } catch (e) { toast(e.message || 'No se pudo traducir la letra'); return; }
+  if (player.current?.id !== s.id) return;
+  if (d.mismoIdioma) { toast('La letra ya está en ese idioma'); return; }
+  (d.originales || []).forEach((o, i) => { const t = d.lineas?.[i]; if (o && t && t !== o) traduccion.set(String(o).trim(), t); });
+  $$('#lyr .l').forEach((n) => {
+    const l = lineas[+n.dataset.i];
+    const t = l && traduccionDe(l.text);
+    if (t) n.insertAdjacentHTML('beforeend', `<span class="tr">${esc(t)}</span>`);
+  });
+  activa = -2;
+  actualizarLetra(true);
+}
+
+// ═══════════════════ Karaoke (baja la voz) ═══════════════════
+
+function aplicarKaraoke(avisar = false) {
+  const on = estilo.karaoke === 'si';
+  if (!on && !fx.ctx) return;
+  const ok = fx.karaoke(on);
+  if (avisar) toast(!ok ? 'El karaoke no está disponible en esta TV' : on ? 'Karaoke: la voz baja (funciona mejor con canciones en estéreo)' : 'Karaoke desactivado');
+}
+
+// ═══════════════════ Modo fiesta: tus invitados proponen y votan desde su teléfono ═══════════════════
+
+const fiesta = { activa: false, estado: null, pendiente: null, sondeo: 0 };
+
+async function vistaFiesta() {
+  vistaActual('fiesta');
+  if (!fiesta.activa) {
+    await api('/api/fiesta').then((e) => { fiesta.activa = true; fiesta.estado = e; }).catch(() => { });
+  }
+  if (!fiesta.activa) {
+    await pantalla(`<h1 class="title">Modo fiesta</h1>
+      <p class="sub">Tus invitados escanean un código con su teléfono (sin cuenta ni app), buscan canciones del servidor, las proponen y votan.
+        La más votada suena después de la actual.</p>
+      <div class="actions"><button class="btn primary f" data-fi="abrir">${icon('sparkles')} Empezar la fiesta</button></div>`);
+    $('#screen [data-fi="abrir"]').addEventListener('click', async () => {
+      try { fiesta.estado = await api('/api/fiesta', { method: 'POST' }); fiesta.activa = true; sondearFiesta(); pintarFiesta(); } catch (e) { fallo(e); }
+    });
+    return;
+  }
+  sondearFiesta();
+  pintarFiesta();
+}
+
+async function pintarFiesta() {
+  if (enPantalla !== 'fiesta' || !fiesta.estado || $('.np.open')) return;
+  const e = fiesta.estado;
+  const enlace = `${location.origin}/fiesta.html#${e.token}`;
+  const antes = focused?.dataset.fi;
+  const props = e.propuestas || [];
+  await pantalla(`<div class="sala">
+    <div class="sala-izq">
+      <div class="eyebrow">${icon('sparkles')} Modo fiesta</div>
+      <h1 class="title">La fiesta de ${esc(e.anfitrion || '')}</h1>
+      ${player.current ? `<div class="sala-ahora">${img(player.current.portadaUrl, 300)}<span style="min-width:0"><div class="t ellipsis">${esc(player.current.nombre)}</div>
+        <div class="s ellipsis">${esc(player.current.artista)} · sonando</div></span></div>` : '<p class="sub">Cuando propongan canciones, la más votada empieza a sonar.</p>'}
+      <h2 class="sala-h">Lo más votado (${props.length})</h2>
+      <div class="fiesta-lista">${props.slice(0, 6).map((p, i) => `<div class="fiesta-fila ${i === 0 ? 'primera' : ''}">
+        <span class="fiesta-n">${i + 1}</span>${img(p.cancion.portadaUrl, 120)}
+        <span style="min-width:0"><b class="ellipsis">${esc(p.cancion.nombre)}</b><small class="ellipsis">${esc(p.cancion.artista)} · la propuso ${esc(p.de)}</small></span>
+        <span class="fiesta-votos">♥ ${p.votos}</span></div>`).join('') || '<p class="sub">Todavía nadie propone canciones.</p>'}</div>
+      <div class="actions" style="margin-top:1.4rem"><button class="btn f" data-fi="cerrar">${icon('close')} Terminar la fiesta</button></div>
+    </div>
+    <div class="sala-der"><div class="qr">${qrSvg(enlace)}</div>
+      <div class="sala-codigo"><small>Escanea y propone canciones</small><b>${esc(location.host)}</b></div>
+      <p class="sub">Sin cuenta ni app: se abre en el navegador del teléfono.</p></div>
+  </div>`, { foco: true });
+  if (antes) enfocar($(`[data-fi="${antes}"]`), { scroll: false });
+  $('#screen [data-fi="cerrar"]')?.addEventListener('click', async () => {
+    try { await api('/api/fiesta', { method: 'DELETE' }); } catch { }
+    fiesta.activa = false; fiesta.estado = null; fiesta.pendiente = null;
+    toast('Fiesta terminada');
+    vistaFiesta();
+  });
+}
+
+/** Cada 3 s: estado de la fiesta y, si hace falta, pone la más votada a continuación. */
+async function sondearFiesta() {
+  clearTimeout(fiesta.sondeo);
+  if (!fiesta.activa) return;
+  try {
+    fiesta.estado = await api('/api/fiesta');
+    await ponerLaMasVotada();
+    const firma = JSON.stringify((fiesta.estado.propuestas || []).map((p) => [p.id, p.votos]));
+    if (enPantalla === 'fiesta' && firma !== fiesta.firma) { fiesta.firma = firma; pintarFiesta(); }
+  } catch (e) {
+    if (e?.status === 404) { fiesta.activa = false; fiesta.estado = null; return; }
+  }
+  fiesta.sondeo = setTimeout(sondearFiesta, 3000);
+}
+
+async function ponerLaMasVotada() {
+  // La que ya se puso a continuación salió de la cola (alguien cambió de canción): se puede poner otra
+  if (fiesta.pendiente && !player.items.slice(player.index).some((x) => x.id === fiesta.pendiente)) fiesta.pendiente = null;
+  const top = fiesta.estado?.propuestas?.[0];
+  if (!top || fiesta.pendiente) return;
+  const r = await api(`/api/fiesta/tomar/${top.id}`, { method: 'POST' });
+  const c = r.cancion;
+  if (!player.current || (!player.playing && player.audio.ended)) player.play([c], 0, { type: 'fiesta', label: 'Modo fiesta' });
+  else if (player.current?.id !== c.id && player.items[player.index + 1]?.id !== c.id) player.playNext([c]); // sin repetirla
+  fiesta.pendiente = c.id;
+  toast(`A continuación: ${c.nombre} · la propuso ${r.propuestaPor}`);
+}
+
+bus.on('player:song', () => {
+  if (!fiesta.activa) return;
+  if (player.current?.id === fiesta.pendiente) fiesta.pendiente = null;
+  api('/api/fiesta/sonando', { method: 'POST', body: { cancionId: player.current?.id ?? null } }).catch(() => { });
+});
 
 // ═══════════════════ Eventos del reproductor ═══════════════════
 
@@ -1333,6 +1460,8 @@ async function iniciar() {
   conectarEventos();
   iniciarRemoto();
   retomarSala().catch(() => { });
+  api('/api/fiesta').then((e) => { fiesta.activa = true; fiesta.estado = e; sondearFiesta(); }).catch(() => { });
+  if (estilo.karaoke === 'si') player.audio.addEventListener('playing', () => aplicarKaraoke(), { once: true });
   api('/api/auth/refresh', { method: 'POST' }).then((r) => r?.token && session.save(r.token, r.usuario)).catch(() => { });
 }
 

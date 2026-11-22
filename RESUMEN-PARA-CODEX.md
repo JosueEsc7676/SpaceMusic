@@ -1,6 +1,6 @@
 # SpaceMusic: resumen para quien continúe el trabajo (Codex u otra persona)
 
-Estado al 21 de noviembre de 2026, versión **3.19** (servidor y web), **Android 2.7** (código 18), **Android TV 1.2** (código 3) e **iPhone 1.45** (rama `app-ios`, la compilación de GitHub numera la versión).
+Estado al 21 de noviembre de 2026, versión **3.20** (servidor y web), **Android 2.8** (código 19), **Android TV 1.2** (código 3) e **iPhone 1.48** (rama `app-ios`, la compilación de GitHub numera la versión).
 El detalle de cada versión está en `CAMBIOS.md` (servidor, web y Android) y en `CAMBIOS.md` de la rama `app-ios` (iPhone).
 
 ## 1. Qué es y dónde está cada parte
@@ -43,7 +43,11 @@ Android carga la web: **toda función nueva de la web ya está en Android**. El 
 
 ## 3. Lo que se hizo en las últimas versiones
 
-**3.17** (esta): Órbita con los colores reales de la portada (`paleta()`), opciones de letra nuevas (mostrar varias líneas / solo el verso / verso flotante, color, separación, alineación, brillo), letra centrada, barra flotante y acceso rápido al reproductor (↑ y «Reproduciendo» primero en el menú).
+**3.20** (esta): modo fiesta (TV + `fiesta.html` sin cuenta), «Tu semana», letra traducida (MyMemory, caché en disco) y karaoke en la TV, avisos al instante en Android con UnifiedPush/ntfy (`Push.java`, `PushService`), descargas automáticas (wifi y cargando) y aviso de canciones nuevas de tus artistas. Detalle en `CAMBIOS.md`.
+
+**3.18 y 3.19** (Codex): ver `CAMBIOS.md`.
+
+**3.17**: Órbita con los colores reales de la portada (`paleta()`), opciones de letra nuevas (mostrar varias líneas / solo el verso / verso flotante, color, separación, alineación, brillo), letra centrada, barra flotante y acceso rápido al reproductor (↑ y «Reproduciendo» primero en el menú).
 
 **3.16**: reproductor «Órbita» en la TV (dinámico, con los colores de la portada), modo «solo letra» a pantalla completa y letra configurable (normal/cursiva/elegante, tamaño, ordenada/desordenada). Todo en `tv.js` / `tv.css`; preferencias en `localStorage` `sm_tv_estilo`.
 

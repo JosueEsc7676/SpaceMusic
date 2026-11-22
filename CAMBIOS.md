@@ -1,5 +1,15 @@
 # Registro de cambios
 
+## Versión 3.20
+- **Modo fiesta** (`FiestaService`, `FiestaController`, `fiesta.html` / `js/fiesta.js`, TV `vistaFiesta`): la TV abre una fiesta y muestra un QR; los invitados (sin cuenta) buscan, proponen (máx. 3 cada uno) y votan; la TV toma la más votada (`POST /api/fiesta/tomar/{id}`) y la pone a continuación. Público solo `/api/fiesta/publica/**`, con límite de 40 acciones por minuto. En memoria, se cierra tras 6 h sin actividad.
+- **Tu semana** (`ComunidadService.resumenSemana`, `/api/resumen?semana=true`): resumen de los últimos 7 días, opción «Esta semana» en la web y el iPhone, y aviso los lunes a las 10:00.
+- **Letra traducida** (`TraduccionService`, `GET /api/letras/{id}/traduccion?a=es|en|…`): MyMemory (gratis, detecta el idioma), por tandas de ~450 caracteres, guardada en disco con la huella de la letra; devuelve también las líneas originales para emparejar por texto. TV: opción «Traducción» en Estilo.
+- **Karaoke en la TV** (`fx.karaoke`): resta los canales (quita la voz del centro) y vuelve a sumar los graves.
+- **Avisos al instante en Android** (app 2.8, código 19): UnifiedPush sin Google (`Push.java`, receptor y registro con la distribuidora, p. ej. ntfy); el servidor guarda la dirección (`PushDestino`, `/api/push/destino`, solo https a servidores públicos) y manda un aviso vacío con cada mensaje y notificación; la app consulta el resumen. Ajustes muestra el estado y sugiere instalar ntfy.
+- **Descargas automáticas** (`js/automatico.js`, Android; `DescargasAutomaticas` en el iPhone): con wifi y cargando, una vez al día, tus más escuchadas, el Mix del día y lo nuevo de tus artistas (máx. 60).
+- **Canciones nuevas de tus artistas** (`NuevasCancionesService`, 18:00): aviso a quien tiene en Me gusta o escuchó en 30 días a ese artista.
+- Pruebas: `FiestaYPushTest` (4); `ComunidadTest`, `MensajesArchivosTest` y `control-remoto.mjs` 14/14 siguen bien.
+
 ## Versión 3.19
 - Caché de rutas de audio de 60 s (máximo 10.000); invalidación por cambios de catálogo y comprobación del archivo en cada acceso. Se conservan autenticación, rangos y validadores.
 - Resúmenes de playlists con consultas por lotes; búsqueda de playlists y usuarios filtrada antes de materializar; biblioteca solicita solo lo guardado. Nuevos endpoints paginados conservando los anteriores.

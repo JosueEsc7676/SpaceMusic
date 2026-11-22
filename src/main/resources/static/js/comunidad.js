@@ -118,17 +118,18 @@ export async function resumenView(el, _p, query, isStale) {
     return;
   }
   const hoy = new Date();
+  const semana = query?.semana === '1' || query?.semana === 'true';
   const anio = Number(query?.anio) || hoy.getFullYear();
-  const mes = query?.mes ? Number(query.mes) : null;
+  const mes = !semana && query?.mes ? Number(query.mes) : null;
   const [r, per] = await Promise.all([
-    api(`/api/resumen?anio=${anio}${mes ? '&mes=' + mes : ''}`),
+    api(semana ? '/api/resumen?semana=true' : `/api/resumen?anio=${anio}${mes ? '&mes=' + mes : ''}`),
     api('/api/resumen/periodos').catch(() => ({ anios: [anio] })),
   ]);
   if (isStale?.()) return;
   const anios = per.anios?.length ? per.anios : [anio];
   const selector = `<div class="row wrap resumen-sel" style="gap:8px">
     <select data-anio aria-label="Año">${anios.map((a) => `<option value="${a}" ${a === anio ? 'selected' : ''}>${a}</option>`).join('')}</select>
-    <select data-mes aria-label="Período"><option value="">Todo el año</option>${MESES.map((m, i) => (anio === hoy.getFullYear() && i > hoy.getMonth()) ? '' : `<option value="${i + 1}" ${mes === i + 1 ? 'selected' : ''}>${m}</option>`).join('')}</select>
+    <select data-mes aria-label="Período"><option value="semana" ${semana ? 'selected' : ''}>Esta semana</option><option value="" ${!semana && !mes ? 'selected' : ''}>Todo el año</option>${MESES.map((m, i) => (anio === hoy.getFullYear() && i > hoy.getMonth()) ? '' : `<option value="${i + 1}" ${mes === i + 1 ? 'selected' : ''}>${m}</option>`).join('')}</select>
   </div>`;
   const cabecera = `<div class="row wrap" style="justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px">
     <h1 class="page-title" style="margin:0">${esc(r.titulo)}</h1>${selector}</div>`;
@@ -148,7 +149,7 @@ export async function resumenView(el, _p, query, isStale) {
         <div class="resumen-card"><span class="rc-k">Artistas</span><b class="rc-v">${fmtNum(r.artistasDistintos)}</b><span class="rc-s">${esc(r.estilo)}</span></div>
         <div class="resumen-card"><span class="rc-k">Mejor racha</span><b class="rc-v">${plural(r.racha, 'día', 'días')}</b><span class="rc-s">seguidos escuchando</span></div>
         <div class="resumen-card"><span class="rc-k">Tu momento</span><b class="rc-v" style="font-size:22px">${esc(r.momento)}</b><span class="rc-s">sobre todo los ${esc(r.diaFavorito)}${r.mesMasActivo ? ` · tu mes: ${esc(r.mesMasActivo)}` : ''}</span></div>
-        ${r.cambioPorcentaje != null ? `<div class="resumen-card"><span class="rc-k">Comparado con ${mes ? 'el mes anterior' : 'el año anterior'}</span>
+        ${r.cambioPorcentaje != null ? `<div class="resumen-card"><span class="rc-k">Comparado con ${semana ? 'la semana anterior' : mes ? 'el mes anterior' : 'el año anterior'}</span>
           <b class="rc-v" style="color:${r.cambioPorcentaje >= 0 ? 'var(--accent)' : 'inherit'}">${r.cambioPorcentaje > 0 ? '+' : ''}${r.cambioPorcentaje}%</b>
           <span class="rc-s">${r.cambioPorcentaje >= 0 ? 'escuchaste más' : 'escuchaste menos'} (${fmtNum(r.reproduccionesAnterior)} → ${fmtNum(r.reproducciones)})</span></div>` : ''}
         ${r.descubrimiento ? `<a class="resumen-card resumen-descubrimiento" href="#/artista/${encodeURIComponent(r.descubrimiento.nombre)}">
@@ -162,7 +163,7 @@ export async function resumenView(el, _p, query, isStale) {
       ${lista.length ? `<h2 class="resumen-h">Tus canciones</h2>${trackList(lista, { context: { type: 'resumen', label: r.titulo }, showAlbum: false })}` : ''}
       ${r.topGeneros?.length ? `<h2 class="resumen-h">Tus géneros</h2><div class="resumen-generos">${r.topGeneros.map((g) => `
         <div class="rg"><span>${esc(g.nombre)}</span><span class="rg-bar"><i style="width:${Math.max(4, g.porcentaje)}%"></i></span><b>${g.porcentaje}%</b></div>`).join('')}</div>` : ''}
-      ${r.serie?.length > 1 ? `<h2 class="resumen-h">${mes ? 'Minutos por día' : 'Minutos por mes'}</h2>${barrasResumen(r.serie, !mes)}` : ''}
+      ${r.serie?.length > 1 ? `<h2 class="resumen-h">${mes || semana ? 'Minutos por día' : 'Minutos por mes'}</h2>${barrasResumen(r.serie, !mes && !semana)}` : ''}
       ${r.primeraCancion ? `<p class="muted" style="margin-top:24px">La primera canción del período fue <b>${esc(r.primeraCancion.nombre)}</b> de ${esc(r.primeraCancion.artista)}.</p>` : ''}
       <div class="row wrap" style="gap:10px;margin-top:20px">
         ${lista.length ? `<button class="btn primary" data-oir>${icon('play', 'sm')} Escuchar tus favoritas</button>` : ''}
@@ -173,7 +174,7 @@ export async function resumenView(el, _p, query, isStale) {
   }
   const ir = () => {
     const a = el.querySelector('[data-anio]').value, m = el.querySelector('[data-mes]').value;
-    location.hash = `#/resumen?anio=${a}${m ? '&mes=' + m : ''}`;
+    location.hash = m === 'semana' ? '#/resumen?semana=1' : `#/resumen?anio=${a}${m ? '&mes=' + m : ''}`;
   };
   el.querySelector('[data-anio]').onchange = () => { el.querySelector('[data-mes]').value = ''; ir(); };
   el.querySelector('[data-mes]').onchange = ir;

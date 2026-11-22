@@ -16,6 +16,17 @@ import java.util.Map;
 public class LyricsController {
 
     private final LetrasService letras;
+    private com.bpm.music.services.TraduccionService traduccion;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setTraduccion(com.bpm.music.services.TraduccionService t) { this.traduccion = t; }
+
+    /** La letra traducida línea por línea (es, en, pt, fr, it, de). */
+    @GetMapping("/{id}/traduccion")
+    public Map<String, Object> traduccion(@PathVariable Long id, @RequestParam(defaultValue = "es") String a) throws Exception {
+        if (traduccion == null) throw new IllegalStateException("Traducción no disponible");
+        return traduccion.traducir(id, a);
+    }
 
     public LyricsController(LetrasService letras) {
         this.letras = letras;

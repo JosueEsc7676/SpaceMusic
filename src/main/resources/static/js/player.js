@@ -742,7 +742,11 @@ export const fx = {
       this.limitador.ratio.value = 20;
       this.limitador.attack.value = 0.003;
       this.limitador.release.value = 0.25;
-      let node = src;
+      // Entrada común: por aquí pasa el audio normal o el de karaoke (voz central quitada)
+      this.src = src;
+      this.entrada = this.ctx.createGain();
+      src.connect(this.entrada);
+      let node = this.entrada;
       for (const f of this.filters) { node.connect(f); node = f; }
       node.connect(this.medidor);
       node.connect(this.nivel);
@@ -758,6 +762,38 @@ export const fx = {
     }
   },
   resume() { if (this.ctx?.state === 'suspended') this.ctx.resume().catch(() => { }); },
+  /**
+   * Karaoke: resta el canal derecho al izquierdo (la voz suele ir al centro y se cancela) y vuelve a sumar los
+   * graves (también van al centro) para que la música no quede hueca. Devuelve false si no hay Web Audio.
+   */
+  karaoke(on) {
+    if (!this.ensure()) return false;
+    const ctx = this.ctx;
+    if (!this._kar) {
+      const sp = ctx.createChannelSplitter(2), inv = ctx.createGain(), resta = ctx.createGain(), mezcla = ctx.createGain();
+      inv.gain.value = -1;
+      sp.connect(resta, 0);
+      sp.connect(inv, 1);
+      inv.connect(resta);
+      const graves = ctx.createBiquadFilter();
+      graves.type = 'lowpass';
+      graves.frequency.value = 160;
+      resta.connect(mezcla);
+      graves.connect(mezcla);
+      this._kar = { sp, graves, mezcla };
+    }
+    try { this.src.disconnect(); } catch { }
+    try { this._kar.mezcla.disconnect(); } catch { }
+    if (on) {
+      this.src.connect(this._kar.sp);
+      this.src.connect(this._kar.graves);
+      this._kar.mezcla.connect(this.entrada);
+    } else {
+      this.src.connect(this.entrada);
+    }
+    this.resume();
+    return true;
+  },
   apply() {
     if (!this.ctx) return;
     const g = prefs.eqEnabled ? prefs.eq : [0, 0, 0, 0, 0];

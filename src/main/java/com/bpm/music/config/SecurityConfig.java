@@ -52,6 +52,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/me", "/api/auth/me/**", "/api/auth/refresh").authenticated()
                 // ── Registro, login, recuperación ──
                 .requestMatchers("/api/auth/**").permitAll()
+                // ── Modo fiesta: los invitados entran con el enlace del QR, sin cuenta ──
+                .requestMatchers("/api/fiesta/publica/**").permitAll()
                 // ── Imágenes públicas (portadas y avatares) ──
                 .requestMatchers(HttpMethod.GET,
                         "/api/portada/**",
