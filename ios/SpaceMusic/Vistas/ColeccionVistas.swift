@@ -25,6 +25,7 @@ struct Cargador<T, Contenido: View>: View {
         }
         .task { if valor == nil { await traer() } }
         .onReceive(NotificationCenter.default.publisher(for: .cancionActualizada)) { _ in Task { await traer() } }
+        .onReceive(NotificationCenter.default.publisher(for: .bibliotecaCambio)) { _ in Task { await traer() } }
     }
 
     private func traer() async {
@@ -143,9 +144,21 @@ struct ArtistaVista: View {
                                 }
                             }
                         } label: {
-                            Label("Radio", systemImage: "dot.radiowaves.left.and.right")
+                            // Cápsula de tamaño fijo: el texto nunca se corta ni la vuelve redonda
+                            HStack(spacing: 6) {
+                                Image(systemName: "dot.radiowaves.left.and.right").font(.subheadline.weight(.semibold))
+                                Text("Radio").font(.subheadline.weight(.semibold))
+                            }
+                            .lineLimit(1)
+                            .fixedSize()
+                            .padding(.horizontal, 16)
+                            .frame(height: 40)
+                            .background(Capsule().fill(Tema.tarjeta))
+                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.12)))
+                            .foregroundStyle(Tema.texto)
                         }
-                        .buttonStyle(BotonSecundario())
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Radio del artista")
                         Button { Reproductor.compartido.reproducir(a.canciones, contexto: "artista", mezclar: true) } label: {
                             Image(systemName: "shuffle").font(.title3.weight(.semibold)).frame(width: 48, height: 48)
                                 .background(Circle().fill(Tema.tarjeta))
@@ -222,6 +235,10 @@ struct PlaylistVista: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { if playlist == nil { await cargar() } }
         .onReceive(NotificationCenter.default.publisher(for: .cancionActualizada)) { _ in Task { await cargar() } }
+        .onReceive(NotificationCenter.default.publisher(for: .bibliotecaCambio)) { n in
+            // Solo si cambió esta playlist (o un cambio general)
+            if n.object == nil || (n.object as? Int) == id { Task { await cargar() } }
+        }
         .sheet(isPresented: $editando) {
             if let p = playlist { EditarPlaylistHoja(playlist: p) { nueva in Task { await cargar(); _ = nueva } } }
         }

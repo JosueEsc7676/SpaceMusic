@@ -1,3 +1,8 @@
+## iPhone 3.20: agregar al instante, botón Radio y pantalla bloqueada a tu gusto
+- Agregar a una playlist o a Me gusta se ve al instante: `Biblioteca` avisa con `.bibliotecaCambio` y la playlist abierta (o Me gusta) se recarga sola, sin cambiar de pestaña.
+- Artista: el botón «Radio» es una cápsula de tamaño fijo con el texto en una línea (antes se aplastaba y quedaba casi redondo).
+- Pantalla bloqueada: la letra va dentro de la portada, abajo y centrada. Nueva pantalla «Personalizar la pantalla bloqueada» (menú ⋯ → Letra) con vista previa: posición (abajo/centro/arriba), 5 tipografías (manuscrita, moderna, elegante, máquina de escribir, gruesa), tamaño 70–150 %, 5 colores, desordenada (movida e inclinada un poco, siempre legible y sincronizada), verso siguiente, mayúsculas, desenfoque y sombra de la portada, y «Original» (solo la portada, sin letra ni sombra). `EstiloBloqueo` (se guarda en el iPhone) y `ArteBloqueo` dibuja con él.
+
 ## iPhone 3.15: iniciar sesión en la TV
 
 ## Versión 3.19

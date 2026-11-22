@@ -52,4 +52,7 @@ final class Conexion {
 
 extension Notification.Name {
     static let cancionActualizada = Notification.Name("SpaceMusic.cancionActualizada")
+    /// Cambió la biblioteca (playlist con canciones nuevas, Me gusta): las pantallas abiertas se recargan al instante.
+    /// `object`: id de la playlist (Int) o nil para favoritos y cambios generales.
+    static let bibliotecaCambio = Notification.Name("SpaceMusic.bibliotecaCambio")
 }

@@ -21,6 +21,7 @@ struct ReproductorVista: View {
     @State private var dispositivos = false
     @State private var letraAmpliada = false
     @State private var ajusteSincronia = false
+    @State private var estiloBloqueo = false
 
     var body: some View {
         GeometryReader { espacio in
@@ -55,6 +56,7 @@ struct ReproductorVista: View {
         .accessibilityAction(.escape) { cerrar() }
         .sheet(isPresented: $dispositivos) { DispositivosVista() }
         .sheet(isPresented: $ajusteSincronia) { AjustarSincroniaVista() }
+        .sheet(isPresented: $estiloBloqueo) { EstiloBloqueoVista() }
         .fullScreenCover(isPresented: $letraAmpliada) { if let c = r.actual { LetraAmpliadaVista(cancion: c) } }
         .hojasGlobales()
     }
@@ -276,6 +278,7 @@ struct ReproductorVista: View {
                 withAnimation(.spring(duration: 0.4)) { panel = .letra }
                 letras.seleccionando = true
             } label: { Label("Compartir versos como imagen", systemImage: "square.and.arrow.up") }
+            Button { estiloBloqueo = true } label: { Label("Personalizar la pantalla bloqueada", systemImage: "paintbrush") }
             if letras.sincronizada {
                 Toggle(isOn: $r.letraEnBloqueo) { Label("Letra en la pantalla bloqueada", systemImage: "lock.iphone") }
                 Button { ajusteSincronia = true } label: {

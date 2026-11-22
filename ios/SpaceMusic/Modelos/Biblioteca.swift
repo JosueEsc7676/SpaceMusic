@@ -61,6 +61,7 @@ final class Biblioteca {
                 guard cuenta == Sesion.compartida.usuario?.id else { return }
                 favoritos.insert(cancion.id)
             }
+            NotificationCenter.default.post(name: .bibliotecaCambio, object: nil)
             Avisos.compartido.mostrar("Canciones agregadas a favoritos")
         } catch { Avisos.compartido.error(error) }
     }
@@ -77,6 +78,7 @@ final class Biblioteca {
             defer { if versionActual == version { favoritosPendientes.remove(c.id) } }
             do {
                 try await API.hacer(antes ? "DELETE" : "POST", "/api/usuario/favoritos/\(c.id)")
+                NotificationCenter.default.post(name: .bibliotecaCambio, object: nil)
             } catch {
                 guard cuenta == Sesion.compartida.usuario?.id, versionActual == version else { return }
                 if antes { favoritos.insert(c.id) } else { favoritos.remove(c.id) }
@@ -132,6 +134,7 @@ final class Biblioteca {
         var cuerpo: [String: Any] = ["nombre": nombre, "descripcion": descripcion, "publica": publica]
         if !canciones.isEmpty { cuerpo["canciones"] = canciones }
         let p: Playlist = try await API.enviar("POST", "/api/playlists", cuerpo)
+        NotificationCenter.default.post(name: .bibliotecaCambio, object: p.id)
         await recargarPlaylists()
         return p
     }
@@ -140,6 +143,8 @@ final class Biblioteca {
         do {
             try await API.hacer("POST", "/api/playlists/\(p.id)/canciones", ["ids": canciones.map(\.id)])
             Avisos.compartido.mostrar("Agregada a “\(p.nombre)”")
+            // Al instante: la playlist abierta (o la que abras) ya trae la canción
+            NotificationCenter.default.post(name: .bibliotecaCambio, object: p.id)
             await recargarPlaylists()
         } catch {
             Avisos.compartido.error(error)

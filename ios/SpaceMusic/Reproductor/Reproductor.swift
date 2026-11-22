@@ -353,6 +353,36 @@ final class Reproductor {
             mostrarBloqueo(animar: true)
         }
     }
+    /// Cómo se ve la pantalla bloqueada (posición, tipografía, tamaño, color, desenfoque, sombra… o «Original»).
+    var estiloBloqueo: EstiloBloqueo = .guardado {
+        didSet {
+            guard estiloBloqueo != oldValue else { return }
+            estiloBloqueo.guardar()
+            rehacerBloqueo()
+        }
+    }
+
+    /// Vuelve a dibujar la portada de la pantalla bloqueada con el estilo nuevo.
+    private func rehacerBloqueo() {
+        precargadas = [:]
+        letraMostrada = nil
+        arteBloqueo = nil
+        baseBloqueo = nil
+        guard let c = actual, let p = portadaImagen, p.id == c.id, estiloBloqueo.modo == .letra else { actualizarNowPlaying(); return }
+        prepararBaseBloqueo(c, p.img)
+    }
+
+    /// Vista previa de la pantalla bloqueada con un estilo (para la pantalla de ajustes).
+    func vistaPreviaBloqueo(_ e: EstiloBloqueo) async -> UIImage? {
+        guard let p = portadaImagen, p.id == actual?.id else { return nil }
+        let img = p.img
+        if e.modo == .original { return img }
+        let linea: ArteBloqueo.Letra = (lineaBloqueo ?? "Así se verá tu letra en la pantalla bloqueada", siguienteBloqueo ?? "y aquí el verso que sigue")
+        return await Task.detached(priority: .userInitiated) {
+            ArteBloqueo.cuadro(ArteBloqueo.base(img, estilo: e), de: nil, a: linea, p: 1)
+        }.value
+    }
+
     @ObservationIgnored private var lineaBloqueo: String?
     @ObservationIgnored private var siguienteBloqueo: String?
     /// Portada original (para dibujar la letra encima) y la última imagen con letra.
@@ -376,14 +406,17 @@ final class Reproductor {
 
     /// Lo que debería verse ahora en la pantalla bloqueada (la letra, si está activada y hay una línea sonando).
     private var letraDeseada: ArteBloqueo.Letra? {
-        guard letraEnBloqueo, let l = lineaBloqueo else { return nil }
+        guard letraEnBloqueo, estiloBloqueo.modo == .letra, let l = lineaBloqueo else { return nil }
         return (l, siguienteBloqueo)
     }
 
     /// Prepara la portada vertical (nítida y desenfocada) de la canción para la pantalla bloqueada.
     private func prepararBaseBloqueo(_ c: Cancion, _ img: UIImage) {
+        let estilo = estiloBloqueo
+        guard estilo.modo == .letra else { return }
         Task { @MainActor [weak self] in
-            let base = await Task.detached(priority: .utility) { ArteBloqueo.base(img) }.value
+            let base = await Task.detached(priority: .utility) { ArteBloqueo.base(img, estilo: estilo) }.value
+            guard self?.estiloBloqueo == estilo else { return }
             guard let self, self.actual?.id == c.id else { return }
             self.baseBloqueo = (c.id, base)
             self.letraMostrada = nil
@@ -400,6 +433,12 @@ final class Reproductor {
     /// (la animación se veía a saltos): ahora se cambia la imagen una sola vez, en el momento justo, porque la del
     /// verso siguiente ya está dibujada de antemano; el sistema hace el fundido.
     private func mostrarBloqueo(animar: Bool) {
+        // «Original»: solo la portada, sin letra ni sombra
+        if estiloBloqueo.modo == .original {
+            if arteBloqueo != nil { arteBloqueo = nil }
+            actualizarNowPlaying()
+            return
+        }
         guard let c = actual, let b = baseBloqueo, b.id == c.id else { actualizarNowPlaying(); return }
         let a = letraDeseada
         if letraMostrada?.actual == a?.actual, arteBloqueo?.id == c.id { return }
@@ -408,11 +447,13 @@ final class Reproductor {
         let id = c.id
         let base = b.base
         let clave = claveBloqueo(id, a?.actual)
-        let siguiente = letraEnBloqueo ? siguienteBloqueo : nil
+        // Con «verso siguiente» cada imagen depende de dos versos: se dibuja en el momento (sin la precarga)
+        let conSiguiente = estiloBloqueo.siguiente
+        let siguiente = letraEnBloqueo && !conSiguiente ? siguienteBloqueo : nil
         animacionBloqueo = Task { @MainActor [weak self] in
             guard let self else { return }
             let img: UIImage
-            if let lista = self.precargadas[clave] {
+            if !conSiguiente, let lista = self.precargadas[clave] {
                 img = lista
             } else {
                 img = await Task.detached(priority: .userInitiated) { ArteBloqueo.cuadro(base, de: nil, a: a, p: 1) }.value
