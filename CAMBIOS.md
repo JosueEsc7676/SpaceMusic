@@ -1,3 +1,10 @@
+## iPhone 3.23: letra viva en la pantalla bloqueada
+- Más fluida: el reloj revisa cada 0,25 s (antes 0,5 s) y el verso cambia 0,25 s antes, porque el fundido del sistema tarda; el verso siguiente ya está dibujado (precarga con la clave correcta aunque haya pausas en la letra).
+- «Iluminar cada palabra»: las palabras que ya sonaron brillan y las que faltan quedan atenuadas (con los tiempos de la letra si los trae; si no, repartidas en el verso). Como mucho unas 3 imágenes por segundo.
+- Posición «Flotante»: cada verso aparece en otro lugar (8 lugares dentro de lo visible, nunca fuera) y, con «Mecer», se mueve suave mientras suena.
+- «Portada a pantalla completa (alta resolución)»: imagen de 2048 px para verla nítida al tocar la portada en la pantalla bloqueada (como Apple Music).
+- 5 tipografías nuevas: Futura condensada, Clarendon, Rockwell, Copperplate y Hecha a mano (Bradley Hand).
+
 ## iPhone 3.22: tu semana y descargas automáticas
 - Tu resumen: nueva opción «Esta semana» (`/api/resumen?semana=true`); el aviso de los lunes abre directo «Tu semana».
 - Descargas automáticas (`DescargasAutomaticas`): con Wi-Fi y el iPhone cargando, una vez al día se guardan tus más escuchadas, el Mix del día y lo nuevo de tus artistas (máximo 60). Se apaga en Ajustes → Reproducción.

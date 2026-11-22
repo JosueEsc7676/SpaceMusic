@@ -90,6 +90,10 @@ struct EstiloBloqueoVista: View {
                             Text("Espacio entre letras · \(Int((e.espaciado * 100).rounded()))")
                             Slider(value: $e.espaciado, in: 0...0.2, step: 0.01)
                         }
+                        Toggle("Iluminar cada palabra al cantarla", isOn: $e.iluminar)
+                        if e.posicion == .flotante {
+                            Toggle("Mecer la letra mientras suena", isOn: $e.mecer)
+                        }
                         Toggle("Desordenada (siempre sincronizada)", isOn: $e.desordenada)
                         Toggle("Mostrar el verso siguiente", isOn: $e.siguiente)
                         Toggle("En mayúsculas", isOn: $e.mayusculas)
@@ -106,8 +110,9 @@ struct EstiloBloqueoVista: View {
                             Text("Sombra · \(Int((e.sombra * 100).rounded())) %")
                             Slider(value: $e.sombra, in: 0...1, step: 0.05)
                         }
+                        Toggle("Portada a pantalla completa (alta resolución)", isOn: $e.pantallaCompleta)
                     } header: { Text("Portada") } footer: {
-                        Text("Desenfocar y oscurecer la portada ayuda a leer la letra con álbumes claros o con mucho detalle.")
+                        Text("Desenfocar y oscurecer la portada ayuda a leer la letra. Para verla en toda la pantalla, como en Apple Music, toca la portada en la pantalla bloqueada; con «alta resolución» se ve nítida y la letra queda siempre dentro de lo visible.")
                     }
                     if !r.letraEnBloqueo {
                         Section {

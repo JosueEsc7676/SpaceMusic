@@ -75,6 +75,7 @@ final class Reproductor {
     private init() {
         radioAutomatica = UserDefaults.standard.object(forKey: "radioAutomatica") as? Bool ?? true
         ArteBloqueo.ajustarPantalla()
+        ArteBloqueo.lado = EstiloBloqueo.guardado.pantallaCompleta ? 2048 : 1500
         jugador.actionAtItemEnd = .pause
         jugador.automaticallyWaitsToMinimizeStalling = true
         configurarAudio()
@@ -364,6 +365,7 @@ final class Reproductor {
 
     /// Vuelve a dibujar la portada de la pantalla bloqueada con el estilo nuevo.
     private func rehacerBloqueo() {
+        ArteBloqueo.lado = estiloBloqueo.pantallaCompleta ? 2048 : 1500
         precargadas = [:]
         letraMostrada = nil
         arteBloqueo = nil
@@ -379,24 +381,45 @@ final class Reproductor {
         if e.modo == .original { return img }
         let linea: ArteBloqueo.Letra = (lineaBloqueo ?? "Así se verá tu letra en la pantalla bloqueada", siguienteBloqueo ?? "y aquí el verso que sigue")
         return await Task.detached(priority: .userInitiated) {
-            ArteBloqueo.cuadro(ArteBloqueo.base(img, estilo: e), de: nil, a: linea, p: 1)
+            ArteBloqueo.cuadro(ArteBloqueo.base(img, estilo: e), de: nil, a: linea, p: 1, encendidas: e.iluminar ? 3 : nil, indice: 1)
         }.value
     }
 
     @ObservationIgnored private var lineaBloqueo: String?
     @ObservationIgnored private var siguienteBloqueo: String?
+    /// Verso (para el lugar del modo flotante) y palabras ya cantadas (para iluminarlas una a una).
+    @ObservationIgnored private var indiceBloqueo = 0
+    @ObservationIgnored private var indiceSiguienteBloqueo = 1
+    @ObservationIgnored private var encendidasBloqueo = 0
+    @ObservationIgnored private var encendidasMostradas = -1
+    @ObservationIgnored private var ultimoCuadroPalabra = Date.distantPast
     /// Portada original (para dibujar la letra encima) y la última imagen con letra.
     @ObservationIgnored private var portadaImagen: (id: Int, img: UIImage)?
 
     /// Línea de la letra sincronizada que suena ahora y la siguiente (nil en las pausas o sin letra con tiempos).
-    private func lineaActualLetra(_ t: Double) -> (actual: String, siguiente: String?)? {
+    private func lineaActualLetra(_ t: Double) -> (actual: String, siguiente: String?, indice: Int, encendidas: Int, indiceSiguiente: Int)? {
         let letras = Letras.compartido
+        // Un poco antes de tiempo: el sistema tarda en hacer el fundido de la portada
+        let tl = letras.tiempoLetra(t) + 0.25
         guard let c = actual, letras.cancionId == c.id, letras.sincronizada,
-              let i = letras.indice(en: letras.tiempoLetra(t)), letras.lineas.indices.contains(i) else { return nil }
-        let texto = letras.lineas[i].texto.trimmingCharacters(in: .whitespaces)
+              let i = letras.indice(en: tl), letras.lineas.indices.contains(i) else { return nil }
+        let linea = letras.lineas[i]
+        let texto = linea.texto.trimmingCharacters(in: .whitespaces)
         guard !texto.isEmpty else { return nil }
-        let siguiente = letras.lineas[(i + 1)...].first { !$0.texto.trimmingCharacters(in: .whitespaces).isEmpty }?.texto
-        return (texto, siguiente)
+        let sig = letras.lineas[(i + 1)...].first { !$0.texto.trimmingCharacters(in: .whitespaces).isEmpty }
+        let siguiente = sig?.texto
+        let indiceSiguiente = sig.flatMap { s in letras.lineas.firstIndex { $0.id == s.id } } ?? (i + 1)
+        // Palabras que ya sonaron: con los tiempos de la letra si los trae; si no, repartidas en la duración del verso
+        let total = texto.split(separator: " ").count
+        var encendidas: Int
+        if !linea.palabras.isEmpty {
+            encendidas = linea.palabras.filter { $0.tiempo <= tl }.count
+        } else {
+            let fin = linea.fin > linea.tiempo ? min(linea.fin, linea.tiempo + 8) : linea.tiempo + 4
+            let avance = (tl - linea.tiempo) / max(0.5, (fin - linea.tiempo) * 0.85)
+            encendidas = Int((avance * Double(total)).rounded(.up))
+        }
+        return (texto, siguiente, i, min(max(encendidas, 1), max(total, 1)), indiceSiguiente)
     }
 
     @ObservationIgnored private var baseBloqueo: (id: Int, base: ArteBloqueo.Base)?
@@ -432,7 +455,7 @@ final class Reproductor {
     /// Pasa la pantalla bloqueada al verso que suena. La pantalla bloqueada no muestra bien muchos cuadros seguidos
     /// (la animación se veía a saltos): ahora se cambia la imagen una sola vez, en el momento justo, porque la del
     /// verso siguiente ya está dibujada de antemano; el sistema hace el fundido.
-    private func mostrarBloqueo(animar: Bool) {
+    private func mostrarBloqueo(animar: Bool, palabra: Bool = false) {
         // «Original»: solo la portada, sin letra ni sombra
         if estiloBloqueo.modo == .original {
             if arteBloqueo != nil { arteBloqueo = nil }
@@ -441,22 +464,34 @@ final class Reproductor {
         }
         guard let c = actual, let b = baseBloqueo, b.id == c.id else { actualizarNowPlaying(); return }
         let a = letraDeseada
-        if letraMostrada?.actual == a?.actual, arteBloqueo?.id == c.id { return }
+        let estilo = estiloBloqueo
+        let vivo = estilo.iluminar || (estilo.posicion == .flotante && estilo.mecer)
+        if letraMostrada?.actual == a?.actual, arteBloqueo?.id == c.id, !(palabra && vivo) { return }
         letraMostrada = a
+        ultimoCuadroPalabra = Date()
+        let encendidas = estilo.iluminar ? encendidasBloqueo : nil
+        let indice = indiceBloqueo
+        let indiceSig = indiceSiguienteBloqueo
+        // El lugar en pantalla solo depende del verso en el modo flotante
+        let lugar = estilo.posicion == .flotante ? indice : 0
+        let lugarSig = estilo.posicion == .flotante ? indiceSig : 0
+        let deriva = CGFloat(Date().timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1000))
         animacionBloqueo?.cancel()
         let id = c.id
         let base = b.base
-        let clave = claveBloqueo(id, a?.actual)
+        let clave = claveBloqueo(id, a?.actual) + "|\(lugar)|\(encendidas ?? -1)"
         // Con «verso siguiente» cada imagen depende de dos versos: se dibuja en el momento (sin la precarga)
         let conSiguiente = estiloBloqueo.siguiente
         let siguiente = letraEnBloqueo && !conSiguiente ? siguienteBloqueo : nil
         animacionBloqueo = Task { @MainActor [weak self] in
             guard let self else { return }
             let img: UIImage
-            if !conSiguiente, let lista = self.precargadas[clave] {
+            if !conSiguiente, !palabra, let lista = self.precargadas[clave] {
                 img = lista
             } else {
-                img = await Task.detached(priority: .userInitiated) { ArteBloqueo.cuadro(base, de: nil, a: a, p: 1) }.value
+                img = await Task.detached(priority: .userInitiated) {
+                    ArteBloqueo.cuadro(base, de: nil, a: a, p: 1, encendidas: encendidas, indice: indice, deriva: deriva)
+                }.value
             }
             guard !Task.isCancelled, self.actual?.id == id else { return }
             self.arteBloqueo = (id, MPMediaItemArtwork(boundsSize: img.size) { _ in img })
@@ -464,8 +499,12 @@ final class Reproductor {
             // Se prepara ya el verso siguiente (y se olvida lo demás)
             self.precargadas = [clave: img]
             guard let siguiente, !siguiente.isEmpty else { return }
-            let claveSig = self.claveBloqueo(id, siguiente)
-            let sig = await Task.detached(priority: .utility) { ArteBloqueo.cuadro(base, de: nil, a: (siguiente, nil), p: 1) }.value
+            // El verso siguiente ya listo para cambiar justo a tiempo (con su primera palabra encendida)
+            let encSig: Int? = estilo.iluminar ? 1 : nil
+            let claveSig = self.claveBloqueo(id, siguiente) + "|\(lugarSig)|\(encSig ?? -1)"
+            let sig = await Task.detached(priority: .utility) {
+                ArteBloqueo.cuadro(base, de: nil, a: (siguiente, nil), p: 1, encendidas: encSig, indice: indiceSig, deriva: deriva)
+            }.value
             guard !Task.isCancelled, self.actual?.id == id else { return }
             self.precargadas[claveSig] = sig
         }
@@ -1005,7 +1044,7 @@ final class Reproductor {
                 self.actualizarNowPlaying()
             }
         }
-        obsTiempo = jugador.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
+        obsTiempo = jugador.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
                                                     queue: .main) { [weak self] t in
             MainActor.assumeIsolated { self?.tick(t.seconds) }
         }
@@ -1143,10 +1182,20 @@ final class Reproductor {
         quizaPrecargar()
         if letraEnBloqueo {
             let linea = lineaActualLetra(t)
-            if linea?.actual != lineaBloqueo {
+            if linea?.actual != lineaBloqueo || (linea != nil && linea?.indice != indiceBloqueo) {
                 lineaBloqueo = linea?.actual
                 siguienteBloqueo = linea?.siguiente
+                indiceBloqueo = linea?.indice ?? 0
+                indiceSiguienteBloqueo = linea?.indiceSiguiente ?? (indiceBloqueo + 1)
+                encendidasBloqueo = linea?.encendidas ?? 0
                 mostrarBloqueo(animar: true)
+            } else if let linea, estiloBloqueo.iluminar || (estiloBloqueo.posicion == .flotante && estiloBloqueo.mecer) {
+                // Palabra por palabra (y el vaivén del flotante): como mucho unas 3 imágenes por segundo
+                let cambio = linea.encendidas != encendidasBloqueo
+                encendidasBloqueo = linea.encendidas
+                if (cambio || !estiloBloqueo.iluminar) && Date().timeIntervalSince(ultimoCuadroPalabra) >= (estiloBloqueo.iluminar ? 0.3 : 0.5) {
+                    mostrarBloqueo(animar: true, palabra: true)
+                }
             }
         }
         if Date().timeIntervalSince(ultimoGuardado) >= 5 { guardarEstado(); ultimoGuardado = Date() }

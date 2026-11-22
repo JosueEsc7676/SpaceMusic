@@ -3,8 +3,12 @@ import UIKit
 /// Cómo se ve la pantalla bloqueada (se guarda en el iPhone). «Original» deja solo la portada, sin letra ni sombra.
 struct EstiloBloqueo: Codable, Equatable, Sendable {
     enum Modo: String, Codable, CaseIterable, Sendable { case letra, original }
-    enum Posicion: String, Codable, CaseIterable, Sendable { case abajo, centro, arriba }
-    enum Fuente: String, Codable, CaseIterable, Sendable { case manuscrita, moderna, elegante, maquina, gruesa }
+    enum Posicion: String, Codable, CaseIterable, Sendable { case abajo, centro, arriba, flotante }
+    enum Fuente: String, Codable, CaseIterable, Sendable {
+        case manuscrita, moderna, elegante, maquina, gruesa
+        // 3.23: modernas y extravagantes, y una hecha a mano con estilo
+        case futura, clarendon, rockwell, copperplate, aMano
+    }
     enum ColorLetra: String, Codable, CaseIterable, Sendable { case blanco, crema, amarillo, rosa, celeste }
     enum Alineacion: String, Codable, CaseIterable, Sendable { case centro, izquierda, derecha }
     enum Efecto: String, Codable, CaseIterable, Sendable { case sombra, resplandor, ninguno }
@@ -41,6 +45,12 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
     var espaciado: Double = 0
     /// Filtro de la portada: normal, blanco y negro, sepia o colores vivos.
     var filtro: Filtro = .normal
+    /// Cada palabra se ilumina cuando suena (karaoke); las que faltan quedan atenuadas.
+    var iluminar = false
+    /// Con «Flotante» la letra además se mece suavemente mientras suena.
+    var mecer = true
+    /// Imagen de más resolución para verla nítida a pantalla completa (al tocar la portada en la pantalla bloqueada).
+    var pantallaCompleta = false
 
     init() {}
 
@@ -65,6 +75,9 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
         interlineado = (try? c.decodeIfPresent(Double.self, forKey: .interlineado)) ?? d.interlineado
         espaciado = (try? c.decodeIfPresent(Double.self, forKey: .espaciado)) ?? d.espaciado
         filtro = (try? c.decodeIfPresent(Filtro.self, forKey: .filtro)) ?? d.filtro
+        iluminar = (try? c.decodeIfPresent(Bool.self, forKey: .iluminar)) ?? d.iluminar
+        mecer = (try? c.decodeIfPresent(Bool.self, forKey: .mecer)) ?? d.mecer
+        pantallaCompleta = (try? c.decodeIfPresent(Bool.self, forKey: .pantallaCompleta)) ?? d.pantallaCompleta
     }
 
     private static let base = EstiloBloqueo()
@@ -89,11 +102,16 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
         case .elegante: "Elegante"
         case .maquina: "Máquina de escribir"
         case .gruesa: "Gruesa"
+        case .futura: "Futura condensada"
+        case .clarendon: "Clarendon"
+        case .rockwell: "Rockwell"
+        case .copperplate: "Copperplate"
+        case .aMano: "Hecha a mano"
         }
     }
 
     static func nombre(_ p: Posicion) -> String {
-        switch p { case .abajo: "Abajo"; case .centro: "Centro"; case .arriba: "Arriba" }
+        switch p { case .abajo: "Abajo"; case .centro: "Centro"; case .arriba: "Arriba"; case .flotante: "Flotante" }
     }
 
     static func nombre(_ a: Alineacion) -> String {
@@ -141,11 +159,24 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
             return UIFont(name: "AmericanTypewriter-Semibold", size: tam * 0.56) ?? .monospacedSystemFont(ofSize: tam * 0.52, weight: .semibold)
         case .gruesa:
             return UIFont(name: "AvenirNextCondensed-Heavy", size: tam * 0.7) ?? .systemFont(ofSize: tam * 0.62, weight: .black)
+        case .futura:
+            return UIFont(name: "Futura-CondensedExtraBold", size: tam * 0.72) ?? .systemFont(ofSize: tam * 0.62, weight: .heavy)
+        case .clarendon:
+            return UIFont(name: "Superclarendon-Black", size: tam * 0.5) ?? UIFont(name: "Georgia-Bold", size: tam * 0.56) ?? .systemFont(ofSize: tam * 0.52, weight: .black)
+        case .rockwell:
+            return UIFont(name: "Rockwell-Bold", size: tam * 0.6) ?? .systemFont(ofSize: tam * 0.56, weight: .bold)
+        case .copperplate:
+            return UIFont(name: "Copperplate-Bold", size: tam * 0.58) ?? .systemFont(ofSize: tam * 0.54, weight: .semibold)
+        case .aMano:
+            return UIFont(name: "BradleyHandITCTT-Bold", size: tam * 0.68) ?? UIFont(name: "Noteworthy-Bold", size: tam * 0.6) ?? .italicSystemFont(ofSize: tam * 0.6)
         }
     }
 
     /// Alto de un renglón respecto al tamaño pedido (para limitar a 3 renglones).
     static func renglon(_ f: Fuente) -> CGFloat {
-        switch f { case .manuscrita: 0.95; case .moderna: 0.78; case .elegante: 0.9; case .maquina: 0.72; case .gruesa: 0.86 }
+        switch f {
+        case .manuscrita: 0.95; case .moderna: 0.78; case .elegante: 0.9; case .maquina: 0.72; case .gruesa: 0.86
+        case .futura: 0.86; case .clarendon: 0.7; case .rockwell: 0.74; case .copperplate: 0.66; case .aMano: 0.86
+        }
     }
 }

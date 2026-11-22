@@ -24,7 +24,7 @@ enum ArteBloqueo {
 
     /// Centro vertical de la letra según la posición elegida (siempre dentro de la portada).
     static func centroY(_ p: EstiloBloqueo.Posicion) -> CGFloat {
-        switch p { case .abajo: lado * 0.79; case .centro: lado * 0.53; case .arriba: lado * 0.26 }
+        switch p { case .abajo: lado * 0.79; case .centro: lado * 0.53; case .arriba: lado * 0.26; case .flotante: lado * 0.53 }
     }
 
     /// Luz promedio de una zona de la imagen (0 a 1), leyendo una versión de 8 × 8 píxeles.
@@ -50,7 +50,8 @@ enum ArteBloqueo {
     }
 
     /// Lado de la imagen cuadrada.
-    static let lado: CGFloat = 1500
+    /// 1500 normal; 2048 con «pantalla completa» (se ve nítida al tocar la portada en la pantalla bloqueada).
+    nonisolated(unsafe) static var lado: CGFloat = 1500
     static var tamano: CGSize { CGSize(width: lado, height: lado) }
     /// Parte del ancho que se ve a pantalla completa (ancho ÷ alto de la pantalla). Lo fija `ajustarPantalla()`.
     nonisolated(unsafe) static var visible: CGFloat = 0.462
@@ -139,6 +140,7 @@ enum ArteBloqueo {
                 case .abajo: return ([c0, c0, c1, c1], [0, 0.5, 0.85, 1])
                 case .arriba: return ([c1, c1, c0, c0], [0, 0.12, 0.5, 1])
                 case .centro: return ([c0, c1, c0], [0.25, 0.53, 0.8])
+                case .flotante: return ([c1, c1], [0, 1])
                 }
             }()
             if let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colores as CFArray, locations: lugares) {
@@ -156,12 +158,16 @@ enum ArteBloqueo {
     }
 
     /// Dibuja el verso (y, si se pidió, el siguiente) centrado dentro de la portada en la posición elegida.
-    private static func dibujar(_ letra: Letra, alfa: CGFloat, desplazamiento dy: CGFloat, base: Base) {
+    /// Lugares del verso flotante dentro de la columna visible: (desplazamiento horizontal, alto), siempre legibles.
+    private static let lugares: [(CGFloat, CGFloat)] = [(-0.1, 0.24), (0.1, 0.4), (-0.06, 0.58), (0.08, 0.74), (0, 0.32), (-0.1, 0.68), (0.1, 0.5), (0, 0.8)]
+
+    private static func dibujar(_ letra: Letra, alfa: CGFloat, desplazamiento dy: CGFloat, base: Base,
+                                encendidas: Int? = nil, indice: Int = 0, deriva: CGFloat = 0) {
         let e = base.estilo
         let texto = e.mayusculas ? letra.actual.uppercased() : letra.actual
         guard alfa > 0.01, !texto.isEmpty else { return }
         let columna = lado * visible
-        let ancho = columna * 0.86
+        let ancho = columna * (e.posicion == .flotante ? 0.72 : 0.86) // flotante: más angosta, así nunca se sale al moverse
         let estiloP = NSMutableParagraphStyle()
         estiloP.alignment = e.alineacion == .izquierda ? .left : e.alineacion == .derecha ? .right : .center
         estiloP.lineBreakMode = .byWordWrapping
@@ -217,10 +223,21 @@ enum ArteBloqueo {
         let total = h + separacion + sigH
         let anchoTexto = min(ancho, ceil((texto as NSString).boundingRect(with: CGSize(width: ancho, height: .greatestFiniteMagnitude),
                                                                             options: .usesLineFragmentOrigin, attributes: a, context: nil).width))
-        // Centrado en la posición elegida y siempre dentro de la portada
-        var y = centroY(e.posicion) - total / 2 + dy
+        // Centrado en la posición elegida y siempre dentro de la portada; «flotante» cambia de lugar en cada verso
+        var centro = centroY(e.posicion)
+        var cx = lado / 2
+        if e.posicion == .flotante {
+            let l = lugares[abs(indice) % lugares.count]
+            cx += l.0 * columna
+            centro = lado * l.1
+            if e.mecer {
+                // Vaivén suave mientras suena (cambia en cada palabra o cada medio segundo)
+                cx += sin(deriva * 1.3) * columna * 0.025
+                centro += cos(deriva) * lado * 0.012
+            }
+        }
+        var y = centro - total / 2 + dy
         y = min(max(y, lado * 0.05), lado * 0.95 - total)
-        let cx = lado / 2
         let c = UIGraphicsGetCurrentContext()
         // Fondo detrás de la letra: recuadro translúcido redondeado o banda de lado a lado
         if e.fondoLetra != .ninguno, let c {
@@ -250,8 +267,22 @@ enum ArteBloqueo {
             c?.rotate(by: giro)
             c?.translateBy(x: -cx, y: -(y + h / 2))
         }
-        (texto as NSString).draw(with: CGRect(x: cx - ancho / 2, y: y, width: ancho, height: h + 10),
-                                 options: .usesLineFragmentOrigin, attributes: a, context: nil)
+        let rect = CGRect(x: cx - ancho / 2, y: y, width: ancho, height: h + 10)
+        if let n = encendidas, e.iluminar {
+            let s = NSMutableAttributedString(string: texto, attributes: a)
+            let palabras = texto.split(separator: " ", omittingEmptySubsequences: false)
+            var pos = 0
+            for (k, p) in palabras.enumerated() {
+                let largo = (String(p) as NSString).length
+                if k >= n, largo > 0 {
+                    s.addAttribute(.foregroundColor, value: color.withAlphaComponent(alfa * 0.38), range: NSRange(location: pos, length: largo))
+                }
+                pos += largo + 1
+            }
+            s.draw(with: rect, options: .usesLineFragmentOrigin, context: nil)
+        } else {
+            (texto as NSString).draw(with: rect, options: .usesLineFragmentOrigin, attributes: a, context: nil)
+        }
         c?.restoreGState()
         if let sigTexto {
             (sigTexto as NSString).draw(with: CGRect(x: cx - ancho / 2, y: y + h + separacion, width: ancho, height: sigH + 6),
@@ -260,14 +291,14 @@ enum ArteBloqueo {
     }
 
     /// Un cuadro de la transición de `de` a `a` (p de 0 a 1).
-    static func cuadro(_ base: Base, de: Letra?, a: Letra?, p: CGFloat) -> UIImage {
+    static func cuadro(_ base: Base, de: Letra?, a: Letra?, p: CGFloat, encendidas: Int? = nil, indice: Int = 0, deriva: CGFloat = 0) -> UIImage {
         let marco = CGRect(origin: .zero, size: tamano)
         let e = p * p * (3 - 2 * p) // suavizado (entra y sale despacio)
         return UIGraphicsImageRenderer(size: tamano, format: formato).image { _ in
             base.fondo.draw(in: marco)
             let salto = lado * 0.03
             if let de { dibujar(de, alfa: 1 - e, desplazamiento: -salto * e, base: base) }
-            if let a { dibujar(a, alfa: e, desplazamiento: salto * (1 - e), base: base) }
+            if let a { dibujar(a, alfa: e, desplazamiento: salto * (1 - e), base: base, encendidas: encendidas, indice: indice, deriva: deriva) }
         }
     }
 }
