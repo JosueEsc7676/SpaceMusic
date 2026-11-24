@@ -286,10 +286,6 @@ struct TarjetaGenero: View {
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(Formato.canciones(genero.totalCanciones))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .lineLimit(1)
             }
             .padding(.leading, 12).padding(.top, 12).padding(.trailing, 58)
             .frame(maxWidth: .infinity, minHeight: alto, alignment: .topLeading)

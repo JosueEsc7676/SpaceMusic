@@ -49,12 +49,14 @@ final class Delegado: NSObject, UIApplicationDelegate, UNUserNotificationCenterD
         SegundoPlano.registrar()
         // Barra de pestañas siempre con fondo: en pantallas como los álbumes iOS la dejaba transparente
         // (apariencia «al borde del desplazamiento») y los íconos quedaban encima de la lista.
-        let barra = UITabBarAppearance()
-        barra.configureWithDefaultBackground()
-        barra.backgroundEffect = UIBlurEffect(style: .systemChromeMaterialDark)
-        barra.backgroundColor = UIColor.black.withAlphaComponent(0.55)
-        UITabBar.appearance().standardAppearance = barra
-        UITabBar.appearance().scrollEdgeAppearance = barra
+        if !Cristal.activo {
+            let barra = UITabBarAppearance()
+            barra.configureWithDefaultBackground()
+            barra.backgroundEffect = UIBlurEffect(style: .systemChromeMaterialDark)
+            barra.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+            UITabBar.appearance().standardAppearance = barra
+            UITabBar.appearance().scrollEdgeAppearance = barra
+        }
         return true
     }
 

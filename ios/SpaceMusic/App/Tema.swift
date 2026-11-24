@@ -68,9 +68,20 @@ struct BotonSecundario: ButtonStyle {
             .font(.subheadline.weight(.semibold))
             .padding(.horizontal, 16)
             .padding(.vertical, 9)
-            .background(Capsule().strokeBorder(Color.white.opacity(0.25)))
+            .modifier(BordeSecundario())
             .foregroundStyle(Tema.texto)
             .opacity(configuration.isPressed ? 0.7 : 1)
+    }
+}
+
+/// Botón secundario: cápsula de vidrio con Liquid Glass, o con borde en el diseño clásico.
+private struct BordeSecundario: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *), Cristal.activo {
+            content.glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            content.background(Capsule().strokeBorder(Color.white.opacity(0.25)))
+        }
     }
 }
 

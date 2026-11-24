@@ -239,7 +239,7 @@ struct ChatVista: View {
             // Grabando un mensaje de voz
             HStack(spacing: 12) {
                 Button { grabadora.cancelar() } label: {
-                    Image(systemName: "trash").font(.body.weight(.semibold)).frame(width: 38, height: 38).background(Circle().fill(Tema.tarjeta))
+                    Image(systemName: "trash").font(.body.weight(.semibold)).frame(width: 38, height: 38).fondoCristal(Circle(), interactivo: true)
                 }
                 .accessibilityLabel("Cancelar el mensaje de voz")
                 Circle().fill(Color.red).frame(width: 10, height: 10)
@@ -260,11 +260,11 @@ struct ChatVista: View {
             HStack(spacing: 10) {
                 Button { VozMensajes.compartida.detener(); vozPendiente = nil } label: {
                     Image(systemName: "trash").font(.body.weight(.semibold)).foregroundStyle(.red)
-                        .frame(width: 38, height: 38).background(Circle().fill(Tema.tarjeta))
+                        .frame(width: 38, height: 38).fondoCristal(Circle(), interactivo: true)
                 }
                 .accessibilityLabel("Descartar el mensaje de voz")
                 AudioMensaje(clave: "previa", url: nil, datos: voz.datos, duracion: voz.duracion, mio: false)
-                    .background(Capsule().fill(Tema.tarjeta))
+                    .fondoCristal(Capsule())
                 Spacer(minLength: 0)
                 Button { Task { await enviarVoz() } } label: {
                     Image(systemName: "arrow.up").font(.body.weight(.bold)).foregroundStyle(.black)
@@ -288,7 +288,7 @@ struct ChatVista: View {
                     Button { Task { await iniciarCoincidimos() } } label: { Label("Iniciar Coincidimos", systemImage: "person.2") }
                     NavigationLink(value: Destino.dedicatorias) { Label("Mis dedicatorias", systemImage: "heart.text.square") }
                 } label: {
-                    Image(systemName: "plus").font(.body.weight(.semibold)).frame(width: 38, height: 38).background(Circle().fill(Tema.tarjeta))
+                    Image(systemName: "plus").font(.body.weight(.semibold)).frame(width: 38, height: 38).fondoCristal(Circle(), interactivo: true)
                 }
                 .accessibilityLabel("Compartir música y conectar")
                 .disabled(enviando)
@@ -296,12 +296,12 @@ struct ChatVista: View {
                     .lineLimit(1...5)
                     .focused($escribiendo)
                     .padding(.horizontal, 14).padding(.vertical, 9)
-                    .background(RoundedRectangle(cornerRadius: 20).fill(Tema.tarjeta))
+                    .fondoCristal(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 if texto.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     // Sin texto: el botón graba un mensaje de voz (como en las apps de mensajes)
                     Button { Task { _ = await grabadora.empezar() } } label: {
                         Image(systemName: "mic.fill").font(.body.weight(.semibold))
-                            .frame(width: 38, height: 38).background(Circle().fill(Tema.tarjeta))
+                            .frame(width: 38, height: 38).fondoCristal(Circle(), interactivo: true)
                     }
                     .disabled(enviando)
                     .accessibilityLabel("Grabar mensaje de voz")

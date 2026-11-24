@@ -1,3 +1,10 @@
+## iPhone 3.24: Liquid Glass
+- Diseño Liquid Glass de iOS 26 (`App/Cristal.swift`): barra de pestañas de vidrio que se encoge al desplazar, mini reproductor como accesorio de la barra (como Apple Music), botones secundarios y tarjetas de vidrio. Se apaga en Ajustes → Reproducción («Diseño Liquid Glass»); en iOS 17 y 18 sigue el diseño clásico.
+- La compilación usa macOS 26 con Xcode 26.6.
+- Buscar: sin el conteo de canciones en «Explorar todo».
+- Editar canción: elegir si la portada nueva es solo de la canción, solo del álbum o de ambos.
+- Soporte → Alertas: cada cuánto avisar por tipo de alerta.
+
 ## iPhone 3.23: letra viva en la pantalla bloqueada
 - Más fluida: el reloj revisa cada 0,25 s (antes 0,5 s) y el verso cambia 0,25 s antes, porque el fundido del sistema tarda; el verso siguiente ya está dibujado (precarga con la clave correcta aunque haya pausas en la letra).
 - «Iluminar cada palabra»: las palabras que ya sonaron brillan y las que faltan quedan atenuadas (con los tiempos de la letra si los trae; si no, repartidas en el verso). Como mucho unas 3 imágenes por segundo.

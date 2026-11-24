@@ -401,7 +401,17 @@ struct SeccionSoporteVista: View {
         } footer: { Text("Desliza una alerta para reconocerla o resolverla.") }
         if let cfg = extra {
             Section {
-                ForEach(cfg.objeto.sorted(by: { $0.key < $1.key }), id: \.key) { par in
+                ForEach(cfg.objeto.filter { $0.key.hasPrefix("aviso.") }.sorted(by: { $0.key < $1.key }), id: \.key) { par in
+                    let k = par.key, c = par.value
+                    FrecuenciaAviso(descripcion: c["descripcion"].cadena, valor: Int(c["valor"].numero ?? 0)) { v in
+                        Task { await guardarConfig(k, Double(v)) }
+                    }
+                }
+            } header: { Text("Cada cuánto avisar") } footer: {
+                Text("Elige cada cuánto llega a la campana un aviso de cada tipo. Con «No avisar» la alerta solo queda en esta lista.")
+            }
+            Section {
+                ForEach(cfg.objeto.filter { !$0.key.hasPrefix("aviso.") && $0.key != "alerta.repetirMinutos" }.sorted(by: { $0.key < $1.key }), id: \.key) { par in
                     let k = par.key, c = par.value
                     AjusteDecimal(descripcion: c["descripcion"].cadena, valor: c["valor"].numero ?? 0, minimo: c["min"].numero ?? 0, maximo: c["max"].numero ?? 1000,
                                   cambiadoPor: c["actualizadaPor"].cadena) { v in
@@ -409,7 +419,7 @@ struct SeccionSoporteVista: View {
                     }
                 }
             } header: { Text("Umbrales y retención") } footer: {
-                Text("Las alertas se revisan cada minuto con las métricas reales. Una misma condición no se repite antes de «\(cfg["alerta.repetirMinutos"]["valor"].texto)» minutos.")
+                Text("Las alertas se revisan cada minuto con las métricas reales. Una misma condición actualiza su alerta en vez de crear otra.")
             }
         }
     }
@@ -744,5 +754,29 @@ struct AjusteDecimal: View {
             if !cambiadoPor.isEmpty { Text("Cambiado por @\(cambiadoPor)").font(.caption2).foregroundStyle(Tema.secundario) }
         }
         .onAppear { if original == nil { original = valor } }
+    }
+}
+
+/// Selector de cada cuánto avisar de un tipo de alerta (0 = no avisar).
+struct FrecuenciaAviso: View {
+    let descripcion: String
+    @State var valor: Int
+    let guardar: (Int) -> Void
+
+    static let opciones: [(Int, String)] = [(0, "No avisar"), (15, "Cada 15 min"), (30, "Cada 30 min"), (60, "Cada hora"), (180, "Cada 3 horas"),
+                                            (360, "Cada 6 horas"), (720, "Cada 12 horas"), (1440, "Una vez al día"), (10080, "Una vez a la semana")]
+
+    init(descripcion: String, valor: Int, guardar: @escaping (Int) -> Void) {
+        self.descripcion = descripcion
+        _valor = State(initialValue: valor)
+        self.guardar = guardar
+    }
+
+    var body: some View {
+        Picker(descripcion, selection: $valor) {
+            ForEach(Self.opciones, id: \.0) { Text($0.1).tag($0.0) }
+            if !Self.opciones.contains(where: { $0.0 == valor }) { Text("Cada \(valor) min").tag(valor) }
+        }
+        .onChange(of: valor) { _, v in guardar(v) }
     }
 }

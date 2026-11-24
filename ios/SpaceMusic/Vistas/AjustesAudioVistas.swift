@@ -90,8 +90,18 @@ struct AjustesReproduccion: View {
     @AppStorage("calidadAudio") private var calidad = "auto"
     @AppStorage("calidadDescargas") private var calidadDescargas = "alta"
     @AppStorage("descargasAutomaticas") private var automaticas = true
+    @AppStorage(Cristal.clave) private var cristal = true
 
     var body: some View {
+        if Cristal.disponible {
+            Toggle(isOn: $cristal) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Diseño Liquid Glass")
+                    Text(cristal == Cristal.activo ? "Barra y mini reproductor de vidrio (iOS 26). Apágalo para volver al diseño clásico."
+                         : "Se aplica al volver a abrir la app.").font(.caption).foregroundStyle(Tema.secundario)
+                }
+            }
+        }
         Picker("Calidad del audio", selection: $calidad) {
             Text("Automática").tag("auto")
             Text("Alta").tag("alta")

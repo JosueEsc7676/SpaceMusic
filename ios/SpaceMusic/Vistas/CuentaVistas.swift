@@ -114,7 +114,7 @@ struct EstadisticasVista: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Tema.tarjeta))
+        .fondoCristal(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func cargar() async {

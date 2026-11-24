@@ -21,6 +21,13 @@ struct EditarCancionHoja: View {
     @State private var importar = false
     @State private var confirmarBorrado = false
     @State private var buscarPortada = false
+    /// Qué portada cambiar: "cancion" (el álbum conserva la suya), "album" (solo el álbum) o "todo".
+    @State private var alcancePortada = "cancion"
+
+    private var tieneAlbum: Bool {
+        let a = cancion.album.trimmingCharacters(in: .whitespaces).lowercased()
+        return !a.isEmpty && !["single", "sencillo", "desconocido"].contains(a)
+    }
 
     var body: some View {
         NavigationStack {
@@ -36,13 +43,24 @@ struct EditarCancionHoja: View {
                     Button("Guardar información") { Task { await guardarInformacion() } }
                         .disabled(nombre.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                Section("Portada") {
+                Section {
                     Portada(ruta: (actualizada ?? cancion).portadaUrl, tamano: 120)
+                    if tieneAlbum {
+                        Picker("Cambiar", selection: $alcancePortada) {
+                            Text("Solo esta canción").tag("cancion")
+                            Text("Solo el álbum").tag("album")
+                            Text("Álbum y canciones").tag("todo")
+                        }
+                    }
                     PhotosPicker(selection: $foto, matching: .images) {
                         Label("Cambiar portada", systemImage: "photo")
                     }
                     Button { buscarPortada = true } label: {
                         Label("Buscar portada original (HD)", systemImage: "magnifyingglass")
+                    }
+                } header: { Text("Portada") } footer: {
+                    if tieneAlbum {
+                        Text(alcancePortada == "cancion" ? "El álbum conserva su portada." : alcancePortada == "album" ? "Las canciones conservan sus portadas." : "Cambia la portada del álbum y de todas sus canciones.")
                     }
                 }
                 Section("Letra") {
@@ -59,7 +77,7 @@ struct EditarCancionHoja: View {
             }
             .disabled(ocupada)
             .sheet(isPresented: $buscarPortada) {
-                PortadaEnLineaHoja(cancion: actualizada ?? cancion) { c in
+                PortadaEnLineaHoja(cancion: actualizada ?? cancion, alcance: tieneAlbum ? alcancePortada : "cancion") { c in
                     actualizada = c
                     Reproductor.compartido.actualizar(c)
                 }
@@ -133,14 +151,19 @@ struct EditarCancionHoja: View {
                   let jpg = Fotos.jpeg(datos, maximo: 1200) else {
                 error = "No se pudo leer la foto."; return
             }
-            var c: Cancion = try await API.subir("/api/canciones/\(cancion.id)/portada", archivos: [
+            var c: Cancion = try await API.subir("/api/canciones/\(cancion.id)/portada?alcance=\(tieneAlbum ? alcancePortada : "cancion")", archivos: [
                 ArchivoSubida(campo: "file", nombre: "portada.jpg", tipo: "image/jpeg", datos: jpg)
             ])
             if let ruta = c.portadaUrl {
                 c.portadaUrl = ruta + (ruta.contains("?") ? "&" : "?") + "v=\(UUID().uuidString)"
             }
+            if alcancePortada == "album" && tieneAlbum {
+                NotificationCenter.default.post(name: .bibliotecaCambio, object: nil)
+                Avisos.compartido.mostrar("Portada del álbum guardada"); return
+            }
             actualizada = c
             Reproductor.compartido.actualizar(c)
+            NotificationCenter.default.post(name: .bibliotecaCambio, object: nil)
             Avisos.compartido.mostrar("Portada guardada")
         } catch { self.error = error.localizedDescription }
     }
@@ -204,6 +227,7 @@ struct OpcionPortada: Decodable, Identifiable {
 /// y la pone al elegirla. Igual que «Buscar portada original (HD)» de la web.
 struct PortadaEnLineaHoja: View {
     let cancion: Cancion
+    var alcance: String = "cancion"
     var alCambiar: (Cancion) -> Void
     @Environment(\.dismiss) private var cerrar
     @State private var consulta = ""
@@ -282,7 +306,9 @@ struct PortadaEnLineaHoja: View {
         poniendo = o.url
         defer { poniendo = nil }
         do {
-            var c: Cancion = try await API.enviar("POST", "/api/canciones/\(cancion.id)/portada/en-linea", ["url": o.url])
+            var c: Cancion = try await API.enviar("POST", "/api/canciones/\(cancion.id)/portada/en-linea", ["url": o.url, "alcance": alcance])
+            NotificationCenter.default.post(name: .bibliotecaCambio, object: nil)
+            if alcance == "album" { Avisos.compartido.mostrar("Portada del álbum actualizada"); cerrar(); return }
             if let ruta = c.portadaUrl { c.portadaUrl = ruta + (ruta.contains("?") ? "&" : "?") + "v=\(UUID().uuidString)" }
             alCambiar(c)
             Avisos.compartido.mostrar("Portada actualizada")

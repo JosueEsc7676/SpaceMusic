@@ -10,6 +10,30 @@ struct Principal: View {
     @State private var altoBarra: CGFloat = 0
 
     var body: some View {
+        conCristal(pestanas)
+        // Pantalla completa como Apple Music y Spotify (sin la tarjeta de hoja ni bandas arriba y abajo).
+        // Se cierra deslizando hacia abajo; el fondo transparente deja ver la app mientras se arrastra.
+        .fullScreenCover(isPresented: $nav.reproductorAbierto) {
+            ReproductorVista()
+                .presentationBackground(.clear)
+        }
+        .sheet(isPresented: $nav.verActualizacion) { ActualizacionVista() }
+        .hojasGlobales(activas: !nav.reproductorAbierto)
+        .task { await arrancar() }
+    }
+
+    /// Liquid Glass (iOS 26): la barra se encoge al desplazar y el mini reproductor va sobre ella.
+    @ViewBuilder
+    private func conCristal<V: View>(_ v: V) -> some View {
+        if #available(iOS 26, *), Cristal.activo {
+            v.tabBarMinimizeBehavior(.onScrollDown)
+                .modifier(AccesorioReproductor(activo: reproductor.actual != nil && eventos.chatAbierto == nil))
+        } else {
+            v
+        }
+    }
+
+    private var pestanas: some View {
         TabView(selection: $nav.pestana) {
             pila(.inicio) { InicioVista() }
                 .tabItem { Label("Inicio", systemImage: "house.fill") }
@@ -29,15 +53,9 @@ struct Principal: View {
                 .tag(Pestana.perfil)
                 .badge(eventos.notificacionesSinLeer)
         }
-        // Pantalla completa como Apple Music y Spotify (sin la tarjeta de hoja ni bandas arriba y abajo).
-        // Se cierra deslizando hacia abajo; el fondo transparente deja ver la app mientras se arrastra.
-        .fullScreenCover(isPresented: $nav.reproductorAbierto) {
-            ReproductorVista()
-                .presentationBackground(.clear)
-        }
-        .sheet(isPresented: $nav.verActualizacion) { ActualizacionVista() }
-        .hojasGlobales(activas: !nav.reproductorAbierto)
-        .task {
+    }
+
+    private func arrancar() async {
             Descargas.compartido.cargar()
             Reproductor.compartido.restaurar()
             Despertador.compartido.vigilar()
@@ -59,7 +77,6 @@ struct Principal: View {
                 Hojas.compartidas.gustosInicial = true
                 Hojas.compartidas.gustos = true
             }
-        }
     }
 
     private func pila<V: View>(_ p: Pestana, @ViewBuilder _ raiz: () -> V) -> some View {
@@ -100,15 +117,15 @@ struct Principal: View {
                     .onTapGesture { avisos.ejecutarAccion() }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                if reproductor.actual != nil, eventos.chatAbierto == nil {
+                if reproductor.actual != nil, eventos.chatAbierto == nil, !Cristal.activo {
                     MiniReproductor()
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .padding(.vertical, avisos.texto != nil || (reproductor.actual != nil && eventos.chatAbierto == nil) ? 4 : 0)
+            .padding(.vertical, avisos.texto != nil || (reproductor.actual != nil && eventos.chatAbierto == nil && !Cristal.activo) ? 4 : 0)
             // Fondo hasta la barra de pestañas: las filas ya no asoman entre el mini reproductor y las pestañas.
             .background(alignment: .bottom) {
-                if reproductor.actual != nil, eventos.chatAbierto == nil {
+                if reproductor.actual != nil, eventos.chatAbierto == nil, !Cristal.activo {
                     LinearGradient(stops: [.init(color: .black.opacity(0), location: 0), .init(color: .black.opacity(0.92), location: 0.35),
                                            .init(color: .black, location: 1)], startPoint: .top, endPoint: .bottom)
                         .allowsHitTesting(false)

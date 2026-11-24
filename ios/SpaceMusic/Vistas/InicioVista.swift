@@ -80,7 +80,7 @@ struct InicioVista: View {
             }
             .padding(10)
             .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Tema.tarjeta))
+            .fondoCristal(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -229,7 +229,7 @@ struct TarjetaAmigo: View {
         }
         .padding(12)
         .frame(width: 290, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Tema.tarjeta))
+        .fondoCristal(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -350,7 +350,7 @@ struct BannerResumen: View {
                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(Tema.secundario)
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Tema.tarjeta))
+            .fondoCristal(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
         .padding(.horizontal)
