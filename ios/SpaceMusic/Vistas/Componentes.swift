@@ -387,6 +387,8 @@ struct Encabezado<Arte: View, Extra: View>: View {
     var detalle: String? = nil
     let canciones: [Cancion]
     let contexto: String
+    /// false cuando la pantalla ya trae su propio menú «…» (álbum y playlist): así hay un solo menú.
+    var conMenu = true
     @ViewBuilder var arte: () -> Arte
     @ViewBuilder var extra: () -> Extra
 
@@ -404,12 +406,19 @@ struct Encabezado<Arte: View, Extra: View>: View {
             .padding(.horizontal)
             HStack(spacing: 14) {
                 extra()
+                if conMenu {
+                    Menu {
+                        OpcionesLista(canciones: canciones)
+                    } label: { Image(systemName: "ellipsis").font(.title2).frame(width: 40, height: 40) }
+                    .disabled(canciones.isEmpty)
+                    .accessibilityLabel("Opciones de la lista")
+                }
                 Spacer()
                 Button {
                     Reproductor.compartido.reproducir(canciones, contexto: contexto, mezclar: true)
                 } label: {
                     Image(systemName: "shuffle").font(.title3.weight(.semibold)).frame(width: 48, height: 48)
-                        .background(Circle().fill(Tema.tarjeta))
+                        .fondoCristal(Circle(), interactivo: true)
                 }
                 .disabled(canciones.isEmpty)
                 Button {
@@ -422,13 +431,23 @@ struct Encabezado<Arte: View, Extra: View>: View {
             }
             .buttonStyle(.plain)
             .padding(.horizontal)
-            Menu {
-                Button("Agregar todas a favoritos") { Task { await Biblioteca.compartida.agregarFavoritos(canciones) } }
-                Button("Agregar todas a la cola") { Reproductor.compartido.agregarAlFinal(canciones) }
-                Button("Agregar a una playlist") { Hojas.compartidas.agregarAPlaylist = canciones }
-            } label: { Label("Opciones de la lista", systemImage: "ellipsis") }
-            .font(.subheadline)
-            .disabled(canciones.isEmpty)
+        }
+    }
+}
+
+/// Acciones para todas las canciones de una lista (van dentro del único menú «…» de cada pantalla).
+struct OpcionesLista: View {
+    let canciones: [Cancion]
+
+    var body: some View {
+        Button { Task { await Biblioteca.compartida.agregarFavoritos(canciones) } } label: {
+            Label("Agregar todas a favoritos", systemImage: "heart")
+        }
+        Button { Reproductor.compartido.agregarAlFinal(canciones) } label: {
+            Label("Agregar todas a la cola", systemImage: "text.append")
+        }
+        Button { Hojas.compartidas.agregarAPlaylist = canciones } label: {
+            Label("Agregar a una playlist", systemImage: "text.badge.plus")
         }
     }
 }

@@ -42,6 +42,12 @@ struct EstiloBloqueoVista: View {
                     Text(e.modo == .original ? "Solo la portada, como antes: sin letra, sin sombra y sin desenfoque." : "La letra sincronizada sobre la portada, con el estilo que elijas.")
                 }
 
+                Section {
+                    Toggle("Portada en toda la pantalla", isOn: $e.pantallaCompleta)
+                } footer: {
+                    Text("Como Apple Music: con iOS 26 la portada ocupa toda la pantalla bloqueada y se mueve muy despacio. iOS la muestra fija con el modo de bajo consumo o «Reducir movimiento».")
+                }
+
                 if e.modo == .letra {
                     Section("Letra") {
                         Picker("Posición", selection: $e.posicion) {
@@ -110,9 +116,8 @@ struct EstiloBloqueoVista: View {
                             Text("Sombra · \(Int((e.sombra * 100).rounded())) %")
                             Slider(value: $e.sombra, in: 0...1, step: 0.05)
                         }
-                        Toggle("Portada a pantalla completa (alta resolución)", isOn: $e.pantallaCompleta)
                     } header: { Text("Portada") } footer: {
-                        Text("Desenfocar y oscurecer la portada ayuda a leer la letra. Para verla en toda la pantalla, como en Apple Music, toca la portada en la pantalla bloqueada; con «alta resolución» se ve nítida y la letra queda siempre dentro de lo visible.")
+                        Text("Desenfocar y oscurecer la portada ayuda a leer la letra.")
                     }
                     if !r.letraEnBloqueo {
                         Section {

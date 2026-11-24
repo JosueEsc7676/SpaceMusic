@@ -52,7 +52,7 @@ struct AlbumVista: View {
                     Encabezado(titulo: a.nombre, subtitulo: a.artista,
                                detalle: [a.anio.map(String.init), Formato.canciones(a.canciones.count), Formato.duracionLarga(a.duracionTotal)]
                                    .compactMap { $0 }.joined(separator: " · "),
-                               canciones: a.canciones, contexto: "album") {
+                               canciones: a.canciones, contexto: "album", conMenu: false) {
                         Portada(ruta: a.portadaUrl, radio: 12, icono: "square.stack")
                     } extra: {
                         Button { biblioteca.alternarAlbum(a.nombre) } label: {
@@ -62,12 +62,7 @@ struct AlbumVista: View {
                         }
                         BotonDescargarLista(canciones: a.canciones)
                         Menu {
-                            Button { Hojas.compartidas.agregarAPlaylist = a.canciones } label: {
-                                Label("Agregar todo a una playlist", systemImage: "text.badge.plus")
-                            }
-                            Button { Reproductor.compartido.agregarAlFinal(a.canciones) } label: {
-                                Label("Agregar a la cola", systemImage: "text.append")
-                            }
+                            OpcionesLista(canciones: a.canciones)
                             Button { Navegacion.compartida.ir(.artista(a.artista)) } label: {
                                 Label("Ir al artista", systemImage: "music.mic")
                             }
@@ -306,7 +301,7 @@ struct PlaylistVista: View {
                 Encabezado(titulo: p.nombre, subtitulo: p.propia ? nil : p.autor,
                            detalle: [p.publica ? "Pública" : "Privada", Formato.canciones(p.canciones.count), Formato.duracionLarga(p.duracionTotal)]
                                .joined(separator: " · "),
-                           canciones: p.canciones, contexto: "playlist") {
+                           canciones: p.canciones, contexto: "playlist", conMenu: false) {
                     PortadaPlaylist(playlist: p, radio: 12)
                 } extra: {
                     if !p.propia {
@@ -384,6 +379,9 @@ struct PlaylistVista: View {
 
     private func menu(_ p: Playlist) -> some View {
         Menu {
+            if !p.canciones.isEmpty {
+                Section { OpcionesLista(canciones: p.canciones) }
+            }
             if p.propia {
                 Button { editando = true } label: { Label("Editar nombre y privacidad", systemImage: "pencil") }
                 Button { withAnimation { ordenando = true } } label: { Label("Ordenar o quitar canciones", systemImage: "arrow.up.arrow.down") }
@@ -392,7 +390,6 @@ struct PlaylistVista: View {
                     Button { Task { await quitarImagen() } } label: { Label("Quitar portada", systemImage: "photo.badge.minus") }
                 }
             }
-            Button { Reproductor.compartido.agregarAlFinal(p.canciones) } label: { Label("Agregar a la cola", systemImage: "text.append") }
             Button { Task { await duplicar() } } label: {
                 Label(p.propia ? "Duplicar" : "Guardar una copia en mi biblioteca", systemImage: "plus.square.on.square")
             }

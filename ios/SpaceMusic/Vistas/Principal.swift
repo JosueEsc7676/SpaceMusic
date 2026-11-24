@@ -22,12 +22,12 @@ struct Principal: View {
         .task { await arrancar() }
     }
 
-    /// Liquid Glass (iOS 26): la barra se encoge al desplazar y el mini reproductor va sobre ella.
+    /// Liquid Glass (iOS 26): barra de pestañas de vidrio con el mini reproductor sobre ella.
     @ViewBuilder
     private func conCristal<V: View>(_ v: V) -> some View {
         if #available(iOS 26, *), Cristal.activo {
-            v.tabBarMinimizeBehavior(.onScrollDown)
-                .modifier(AccesorioReproductor(activo: reproductor.actual != nil && eventos.chatAbierto == nil))
+            // Las pestañas siempre visibles (no se encogen al desplazar)
+            v.modifier(AccesorioReproductor(activo: reproductor.actual != nil && eventos.chatAbierto == nil))
         } else {
             v
         }

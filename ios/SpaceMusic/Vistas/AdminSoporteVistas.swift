@@ -401,10 +401,9 @@ struct SeccionSoporteVista: View {
         } footer: { Text("Desliza una alerta para reconocerla o resolverla.") }
         if let cfg = extra {
             Section {
-                ForEach(cfg.objeto.filter { $0.key.hasPrefix("aviso.") }.sorted(by: { $0.key < $1.key }), id: \.key) { par in
-                    let k = par.key, c = par.value
-                    FrecuenciaAviso(descripcion: c["descripcion"].cadena, valor: Int(c["valor"].numero ?? 0)) { v in
-                        Task { await guardarConfig(k, Double(v)) }
+                ForEach(FrecuenciaAviso.orden.filter { cfg[$0.0]["valor"].numero != nil }, id: \.0) { item in
+                    FrecuenciaAviso(descripcion: item.1, icono: item.2, valor: Int(cfg[item.0]["valor"].numero ?? 0)) { v in
+                        Task { await guardarConfig(item.0, Double(v)) }
                     }
                 }
             } header: { Text("Cada cuánto avisar") } footer: {
@@ -426,6 +425,9 @@ struct SeccionSoporteVista: View {
 
     @ViewBuilder
     private func auditoria(_ r: ValorAdmin) -> some View {
+        Section {
+            NavigationLink { GoogleClavesVista() } label: { Label("Iniciar sesión con Google", systemImage: "person.badge.key") }
+        } footer: { Text("Pega las claves de Google para que aparezca el botón «Continuar con Google».") }
         Section("Medidas de seguridad activas") {
             ForEach(Array(r["medidas"].lista.enumerated()), id: \.offset) { _, m in Label(m.cadena, systemImage: "checkmark").font(.caption) }
         }
@@ -760,23 +762,35 @@ struct AjusteDecimal: View {
 /// Selector de cada cuánto avisar de un tipo de alerta (0 = no avisar).
 struct FrecuenciaAviso: View {
     let descripcion: String
+    var icono = "bell"
     @State var valor: Int
     let guardar: (Int) -> Void
 
-    static let opciones: [(Int, String)] = [(0, "No avisar"), (15, "Cada 15 min"), (30, "Cada 30 min"), (60, "Cada hora"), (180, "Cada 3 horas"),
-                                            (360, "Cada 6 horas"), (720, "Cada 12 horas"), (1440, "Una vez al día"), (10080, "Una vez a la semana")]
+    /// Orden y nombres cortos (caben en una línea con el valor a la derecha).
+    static let orden: [(String, String, String)] = [
+        ("aviso.cpu", "CPU", "cpu"), ("aviso.ram", "Memoria", "memorychip"), ("aviso.disco", "Disco", "internaldrive"),
+        ("aviso.almacenamiento", "Carpeta de música", "folder"), ("aviso.db", "Base de datos", "cylinder.split.1x2"),
+        ("aviso.errores", "Errores del servidor", "exclamationmark.triangle"), ("aviso.audio", "Reproducción", "play.slash"),
+        ("aviso.seguridad", "Inicios de sesión", "lock"), ("aviso.incidencia", "Incidencias", "arrow.clockwise")]
 
-    init(descripcion: String, valor: Int, guardar: @escaping (Int) -> Void) {
+    static let opciones: [(Int, String)] = [(0, "No avisar"), (15, "15 min"), (30, "30 min"), (60, "1 hora"), (180, "3 horas"),
+                                            (360, "6 horas"), (720, "12 horas"), (1440, "1 vez al día"), (10080, "1 vez por semana")]
+
+    init(descripcion: String, icono: String = "bell", valor: Int, guardar: @escaping (Int) -> Void) {
         self.descripcion = descripcion
+        self.icono = icono
         _valor = State(initialValue: valor)
         self.guardar = guardar
     }
 
     var body: some View {
-        Picker(descripcion, selection: $valor) {
+        Picker(selection: $valor) {
             ForEach(Self.opciones, id: \.0) { Text($0.1).tag($0.0) }
             if !Self.opciones.contains(where: { $0.0 == valor }) { Text("Cada \(valor) min").tag(valor) }
+        } label: {
+            Label(descripcion, systemImage: icono).lineLimit(1)
         }
+        .pickerStyle(.menu)
         .onChange(of: valor) { _, v in guardar(v) }
     }
 }

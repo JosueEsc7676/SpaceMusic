@@ -1291,6 +1291,10 @@ final class Reproductor {
         } else if let p = portadaNowPlaying, p.id == c.id {
             info[MPMediaItemPropertyArtwork] = p.arte
         }
+        // Portada a pantalla completa (iOS 26): video vertical 3:4 hecho con la portada, como Apple Music
+        if #available(iOS 26, *), estiloBloqueo.pantallaCompleta, ArteAnimado.disponible, let p = portadaImagen, p.id == c.id {
+            info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = ArteAnimado.obra(id: c.id, portada: p.img)
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 

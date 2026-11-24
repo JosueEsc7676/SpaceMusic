@@ -101,8 +101,8 @@ struct BuscarVista: View {
                             Text(p.rawValue).font(.subheadline.weight(.semibold))
                                 .padding(.horizontal, 14).padding(.vertical, 8)
                                 .foregroundStyle(pestana == p ? Color.black : Tema.texto)
-                                .background(Capsule().fill(pestana == p ? Color.white : Tema.tarjeta))
-                                .overlay(Capsule().strokeBorder(Color.white.opacity(pestana == p ? 0 : 0.14)))
+                                .background { if pestana == p { Capsule().fill(Color.white) } }
+                                .fondoCristal(Capsule(), relleno: pestana == p ? .clear : Tema.tarjeta, interactivo: true)
                         }
                         .buttonStyle(.plain)
                         .accessibilityAddTraits(pestana == p ? .isSelected : [])
