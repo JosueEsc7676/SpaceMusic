@@ -1,0 +1,28 @@
+{
+  "feature_version": "3.28",
+  "build": 55,
+  "commit": "e75075f",
+  "previous_build": 54,
+  "workflow": 45513662255,
+  "swift_tests": "success",
+  "publisher_tests": 4,
+  "xcode_release": "success",
+  "ipa_bytes": 4633032,
+  "sha256": "787c8717501efb01e8aee45be8c7498c825df949133330ae6dca7a51393cda57",
+  "public_ipa": 200,
+  "range": 206,
+  "public_manifest": {
+    "code": 55,
+    "commit": "e75075f"
+  },
+  "api": 200,
+  "service": "active",
+  "backend_restarted": false,
+  "physical_iphone_test": false,
+  "limitations": [
+    "iOS controla las transiciones de artwork",
+    "La letra ampliable usa imagen estática, sin fondo de video por verso",
+    "No se garantiza animación continua ni sincronía perfecta en pantalla bloqueada"
+  ],
+  "rollback": "Archivos de app/ con sufijo .anterior; IPA54 conservado"
+}

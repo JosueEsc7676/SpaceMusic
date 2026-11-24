@@ -1,3 +1,13 @@
+## 24/11/2026 · iPhone 3.28, compilación 55
+
+- Código e75075f; Actions https://github.com/JosueEsc7676/SpaceMusic/actions/runs/45513662255 correcto: pruebas Swift, publicador, Xcode Release, IPA y publicación GitHub.
+- Descarga: https://spacemusic.tail8ccfdf.ts.net/app/SpaceMusic-55.ipa (4633032 bytes). SHA256 787c8717501efb01e8aee45be8c7498c825df949133330ae6dca7a51393cda57.
+- Se revisó la versión anterior 3.27/54 (ed26b57): reemplazaba un video por verso. Ahora la letra usa artwork estático HD ampliable al tocarlo; el fondo animado queda para Original. Esto evita reiniciar la superficie de video entre versos, pero no promete animación continua de letra ni el mismo fondo animado con letra. Las transiciones las decide iOS.
+- Las palabras limitadas se reintentan comparando con lo realmente dibujado. Se usa reloj monotónico y se deduplican dibujos pendientes. Se conserva la precarga y los estilos, se retira el selector de entradas de video incompatible con esta vía.
+- Publicado mediante publicar-ios.py en app/ios-staging-e75075f-55. Manifiesto 55/e75075f; descarga pública200 con SHA idéntico, Range206 ZIP correcto, página de instalación200, API200 y servicio activo. No se reinició ni sustituyó Java. Los archivos anteriores se conservan como .anterior; IPA54 sigue disponible.
+- IPA creado con la misma identidad com.bpm.spacemusic.ios y el procedimiento existente (ad hoc, para volver a firmar con SideStore/AltStore/Sideloadly). No se generaron claves ni se cambió la firma de distribución.
+- Pendiente: comprobar visualmente en iPhone físico con pantalla bloqueada, al tocar para ampliar, pausa/reanudación, salto y cambio de canción. Las pruebas automáticas no verifican la animación del sistema.
+
 # Publicación de iPhone: 13/11/2026
 
 ## Actualización 1.25: controlar otro dispositivo y accesos de Mensajes
