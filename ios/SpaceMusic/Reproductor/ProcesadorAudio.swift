@@ -87,9 +87,17 @@ final class ParametrosTap: @unchecked Sendable {
             version: Int32(kMTAudioProcessingTapCallbacksVersion_0),
             clientInfo: contexto,
             init: tapIniciar, finalize: tapTerminar, prepare: tapPreparar, unprepare: nil, process: tapProcesar)
+        // Xcode 26 entrega el «tap» ya administrado; Xcode 16 lo entregaba como Unmanaged.
+        #if compiler(>=6.2)
+        var creado: MTAudioProcessingTap?
+        let estado = MTAudioProcessingTapCreate(kCFAllocatorDefault, &llamadas, MTAudioProcessingTapCreationFlags(kMTAudioProcessingTapCreationFlag_PostEffects), &creado)
+        let tapCreado = creado
+        #else
         var creado: Unmanaged<MTAudioProcessingTap>?
-        guard MTAudioProcessingTapCreate(kCFAllocatorDefault, &llamadas, MTAudioProcessingTapCreationFlags(kMTAudioProcessingTapCreationFlag_PostEffects), &creado) == noErr,
-              let tap = creado?.takeRetainedValue() else {
+        let estado = MTAudioProcessingTapCreate(kCFAllocatorDefault, &llamadas, MTAudioProcessingTapCreationFlags(kMTAudioProcessingTapCreationFlag_PostEffects), &creado)
+        let tapCreado = creado?.takeRetainedValue()
+        #endif
+        guard estado == noErr, let tap = tapCreado else {
             Unmanaged<ContextoTap>.fromOpaque(contexto).release()
             return nil
         }
