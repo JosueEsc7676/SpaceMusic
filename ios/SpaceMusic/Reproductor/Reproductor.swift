@@ -369,6 +369,8 @@ final class Reproductor {
         precargadas = [:]
         letraMostrada = nil
         arteBloqueo = nil
+        imagenBloqueo = nil
+        versionEstilo += 1
         baseBloqueo = nil
         guard let c = actual, let p = portadaImagen, p.id == c.id, estiloBloqueo.modo == .letra else { actualizarNowPlaying(); return }
         prepararBaseBloqueo(c, p.img)
@@ -424,6 +426,10 @@ final class Reproductor {
 
     @ObservationIgnored private var baseBloqueo: (id: Int, base: ArteBloqueo.Base)?
     @ObservationIgnored private var arteBloqueo: (id: Int, arte: MPMediaItemArtwork)?
+    /// La imagen que se ve ahora en la pantalla bloqueada y su clave (para la portada a pantalla completa).
+    @ObservationIgnored private var imagenBloqueo: (id: Int, clave: String, img: UIImage)?
+    /// Cambia con cada estilo nuevo: así la pantalla completa no reutiliza videos de otro estilo.
+    @ObservationIgnored private var versionEstilo = 0
     @ObservationIgnored private var letraMostrada: ArteBloqueo.Letra?
     @ObservationIgnored private var animacionBloqueo: Task<Void, Never>?
 
@@ -458,7 +464,7 @@ final class Reproductor {
     private func mostrarBloqueo(animar: Bool, palabra: Bool = false) {
         // «Original»: solo la portada, sin letra ni sombra
         if estiloBloqueo.modo == .original {
-            if arteBloqueo != nil { arteBloqueo = nil }
+            if arteBloqueo != nil { arteBloqueo = nil; imagenBloqueo = nil }
             actualizarNowPlaying()
             return
         }
@@ -495,6 +501,7 @@ final class Reproductor {
             }
             guard !Task.isCancelled, self.actual?.id == id else { return }
             self.arteBloqueo = (id, MPMediaItemArtwork(boundsSize: img.size) { _ in img })
+            self.imagenBloqueo = (id, clave, img)
             self.actualizarNowPlaying()
             // Se prepara ya el verso siguiente (y se olvida lo demás)
             self.precargadas = [clave: img]
@@ -507,6 +514,10 @@ final class Reproductor {
             }.value
             guard !Task.isCancelled, self.actual?.id == id else { return }
             self.precargadas[claveSig] = sig
+            // Pantalla completa: el video del verso siguiente también queda listo antes de que suene
+            if #available(iOS 26, *), estilo.pantallaCompleta, ArteAnimado.disponible {
+                ArteAnimado.preparar(clave: claveSig + "|v\(self.versionEstilo)", imagen: sig)
+            }
         }
     }
 
@@ -1292,8 +1303,15 @@ final class Reproductor {
             info[MPMediaItemPropertyArtwork] = p.arte
         }
         // Portada a pantalla completa (iOS 26): video vertical 3:4 hecho con la portada, como Apple Music
-        if #available(iOS 26, *), estiloBloqueo.pantallaCompleta, ArteAnimado.disponible, let p = portadaImagen, p.id == c.id {
-            info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = ArteAnimado.obra(id: c.id, portada: p.img)
+        // Lleva lo mismo que la imagen normal: letra con su estilo, desenfoque y sombra (o la portada sola en «Original»)
+        if #available(iOS 26, *), estiloBloqueo.pantallaCompleta, ArteAnimado.disponible {
+            if let im = imagenBloqueo, im.id == c.id, estiloBloqueo.modo == .letra {
+                info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = ArteAnimado.obra(clave: im.clave + "|v\(versionEstilo)", imagen: im.img, movimiento: false)
+            } else if estiloBloqueo.modo == .letra, let b = baseBloqueo, b.id == c.id {
+                info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = ArteAnimado.obra(clave: "\(c.id)|base|v\(versionEstilo)", imagen: b.base.fondo, movimiento: false)
+            } else if let p = portadaImagen, p.id == c.id {
+                info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = ArteAnimado.obra(clave: "\(c.id)|portada", imagen: p.img, movimiento: true)
+            }
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }

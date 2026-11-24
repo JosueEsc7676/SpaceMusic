@@ -197,32 +197,12 @@ struct CuentaVista: View {
                 }
             }
 
-            Section("Tu música") {
-                NavigationLink { DespertadorVista() } label: { Label("Despertador", systemImage: "alarm") }
-                NavigationLink(value: Destino.resumen) { Label("Tu resumen (tu año y tus meses)", systemImage: "gift") }
-                NavigationLink(value: Destino.dedicatorias) { Label("Dedicatorias", systemImage: "heart.text.square") }
-                NavigationLink(value: Destino.coincidimos) { Label("Coincidimos", systemImage: "person.2") }
-                NavigationLink(value: Destino.descubrir) { Label("Descubrir", systemImage: "sparkles") }
-                NavigationLink(value: Destino.rutas) { Label("Rutas musicales", systemImage: "safari") }
-                NavigationLink(value: Destino.preparar) { Label("Preparar sin internet", systemImage: "arrow.down.circle") }
-                Button { Hojas.compartidas.gustosInicial = false; Hojas.compartidas.gustos = true } label: {
-                    Label("Tus gustos", systemImage: "heart.circle")
-                }
-            }
-
-            Section("Reproducción") {
-                Toggle("Radio automática", isOn: $reproductor.radioAutomatica)
-                AjustesReproduccion()
-            }
-            Section("App de iPhone") {
-                Button { Navegacion.compartida.verActualizacion = true } label: {
-                    LabeledContent("Versión", value: Actualizaciones.compartida.versionActual)
-                }
-                .foregroundStyle(Tema.texto)
-            }
             Section {
                 TextField("Sobre ti (máximo 160 caracteres)", text: $biografia, axis: .vertical)
-                Button("Guardar biografía") { guardarPrivacidad() }.disabled(cargandoPerfil || biografia.count > 160)
+                Button("Guardar") { guardarPrivacidad() }.disabled(cargandoPerfil || biografia.count > 160 || biografia == biografiaGuardada)
+            } header: { Text("Sobre ti") } footer: { Text("Se ve en tu perfil. \(biografia.count)/160") }
+
+            Section {
                 Toggle("Mostrar mis canciones más escuchadas", isOn: $canciones)
                 Toggle("Mostrar mis géneros", isOn: $generos)
                 Toggle("Mostrar mis vibras", isOn: $vibras)

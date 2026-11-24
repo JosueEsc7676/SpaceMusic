@@ -112,13 +112,19 @@ struct MiniReproductorCristal: View {
     }
 }
 
-/// Pone el mini reproductor como accesorio de la barra de pestañas solo cuando hay una canción.
+/// Pone el mini reproductor como accesorio de la barra de pestañas.
+/// Importante: la estructura de la vista NO debe cambiar al abrir un chat (si cambiaba, iOS rehacía todas las pestañas,
+/// el chat se cerraba y se volvía a abrir sin fin y la app se trababa). En iOS 26.1+ se activa o desactiva con `isEnabled`;
+/// en 26.0 solo depende de si hay una canción.
 @available(iOS 26, *)
 struct AccesorioReproductor: ViewModifier {
-    let activo: Bool
+    let hayCancion: Bool
+    let visible: Bool
 
     func body(content: Content) -> some View {
-        if activo {
+        if #available(iOS 26.1, *) {
+            content.tabViewBottomAccessory(isEnabled: hayCancion && visible) { MiniReproductorCristal() }
+        } else if hayCancion {
             content.tabViewBottomAccessory { MiniReproductorCristal() }
         } else {
             content

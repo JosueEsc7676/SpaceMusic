@@ -123,15 +123,28 @@ struct Entrada: View {
                             }
                             ForEach(["google", "facebook", "apple"].filter { proveedores[$0] == true }, id: \.self) { p in
                                 Button { Task { await entrarCon(p) } } label: {
-                                    HStack(spacing: 10) {
-                                        Image(systemName: p == "apple" ? "apple.logo" : p == "google" ? "g.circle.fill" : "f.circle.fill")
-                                        Text("Continuar con \(p == "google" ? "Google" : p == "facebook" ? "Facebook" : "Apple")")
+                                    if p == "google" {
+                                        // Botón con el diseño oficial de Google: fondo blanco, «G» de colores y texto oscuro
+                                        HStack(spacing: 12) {
+                                            LogoGoogle(tamano: 20)
+                                            Text("Continuar con Google")
+                                        }
+                                        .font(.system(.body, design: .default).weight(.medium))
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 15)
+                                        .background(Capsule().fill(Color.white))
+                                        .foregroundStyle(Color(red: 0.12, green: 0.12, blue: 0.12))
+                                    } else {
+                                        HStack(spacing: 10) {
+                                            Image(systemName: p == "apple" ? "apple.logo" : "f.circle.fill")
+                                            Text("Continuar con \(p == "facebook" ? "Facebook" : "Apple")")
+                                        }
+                                        .font(.subheadline.weight(.semibold))
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 15)
+                                        .background(Capsule().strokeBorder(Color.white.opacity(0.25)))
+                                        .foregroundStyle(.white)
                                     }
-                                    .font(.subheadline.weight(.semibold))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 13)
-                                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.25)))
-                                    .foregroundStyle(.white)
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(cargando)
@@ -320,7 +333,13 @@ struct Entrada: View {
         do {
             let vuelta = try await sesionWeb.authenticate(using: url, callbackURLScheme: "spacemusic", preferredBrowserSession: .ephemeral)
             let q = URLComponents(url: vuelta, resolvingAgainstBaseURL: false)?.queryItems ?? []
-            if let e = q.first(where: { $0.name == "error" })?.value { fallo(e); return }
+            // El servidor manda los espacios como %20 (antes como «+», que se veía «Tu+cuenta+quedó…»)
+            let limpio = { (t: String) in t.replacingOccurrences(of: "+", with: " ") }
+            if let a = q.first(where: { $0.name == "aviso" })?.value {
+                withAnimation(.easeOut(duration: 0.2)) { aviso = limpio(a) }
+                return
+            }
+            if let e = q.first(where: { $0.name == "error" })?.value { fallo(limpio(e)); return }
             guard let token = q.first(where: { $0.name == "token" })?.value, !token.isEmpty,
                   let pedido = URL(string: Sesion.compartida.servidor + "/api/auth/me") else { fallo("No se pudo iniciar sesión"); return }
             var r = URLRequest(url: pedido)

@@ -27,7 +27,7 @@ struct Principal: View {
     private func conCristal<V: View>(_ v: V) -> some View {
         if #available(iOS 26, *), Cristal.activo {
             // Las pestañas siempre visibles (no se encogen al desplazar)
-            v.modifier(AccesorioReproductor(activo: reproductor.actual != nil && eventos.chatAbierto == nil))
+            v.modifier(AccesorioReproductor(hayCancion: reproductor.actual != nil, visible: eventos.chatAbierto == nil))
         } else {
             v
         }

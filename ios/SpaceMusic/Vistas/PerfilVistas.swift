@@ -8,6 +8,7 @@ struct MiPerfilVista: View {
     @State private var eventos = Eventos.compartido
     @State private var reproductor = Reproductor.compartido
     @State private var confirmarSalir = false
+    @State private var dispositivos = false
 
     var body: some View {
         List {
@@ -38,31 +39,58 @@ struct MiPerfilVista: View {
                     }
                 }
                 NavigationLink(value: Destino.estadisticas) { Label("Tus estadísticas", systemImage: "chart.bar") }
-                NavigationLink(value: Destino.descargas) { Label("Descargas", systemImage: "arrow.down.circle") }
+                NavigationLink(value: Destino.resumen) { Label("Tu resumen", systemImage: "gift") }
                 NavigationLink(value: Destino.novedades) { Label("Novedades", systemImage: "sparkles") }
             }
-            Section("Reproducción") {
+            Section("Tu música") {
+                NavigationLink(value: Destino.descargas) { Label("Descargas", systemImage: "arrow.down.circle") }
+                Button { Hojas.compartidas.gustosInicial = false; Hojas.compartidas.gustos = true } label: {
+                    Label("Tus gustos", systemImage: "heart.circle")
+                }
+                .foregroundStyle(Tema.texto)
+                NavigationLink { DespertadorVista() } label: { Label("Despertador", systemImage: "alarm") }
+                NavigationLink(value: Destino.preparar) { Label("Preparar sin internet", systemImage: "airplane") }
+            }
+            Section("Descubre") {
+                NavigationLink(value: Destino.descubrir) { Label("Descubrir", systemImage: "wand.and.stars") }
+                NavigationLink(value: Destino.rutas) { Label("Rutas musicales", systemImage: "safari") }
+                NavigationLink(value: Destino.coincidimos) { Label("Coincidimos", systemImage: "person.2") }
+                NavigationLink(value: Destino.dedicatorias) { Label("Dedicatorias", systemImage: "heart.text.square") }
+            }
+            Section("Ajustes") {
                 Toggle(isOn: $reproductor.radioAutomatica) {
                     Label("Al terminar, seguir con canciones parecidas", systemImage: "dot.radiowaves.left.and.right")
                 }
                 .tint(Tema.celeste)
-            }
-            Section {
+                NavigationLink { AjustesAppVista() } label: { Label("Reproducción, audio y diseño", systemImage: "slider.horizontal.3") }
+                NavigationLink { EstiloBloqueoVista() } label: { Label("Pantalla bloqueada", systemImage: "lock.iphone") }
+                Button { dispositivos = true } label: { Label("Dispositivos y SyncPlay", systemImage: "airplayaudio") }
+                    .foregroundStyle(Tema.texto)
                 NavigationLink(value: Destino.cuenta) { Label("Cuenta y privacidad", systemImage: "person.badge.key") }
-                if sesion.puedeEditar {
-                    NavigationLink(value: Destino.subir) { Label("Subir canciones", systemImage: "square.and.arrow.up") }
-                }
-                if sesion.esAdmin {
-                    NavigationLink(value: Destino.admin) { Label("Administración", systemImage: "gearshape.2") }
+            }
+            if sesion.puedeEditar || sesion.esAdmin {
+                Section("Administración") {
+                    if sesion.puedeEditar {
+                        NavigationLink(value: Destino.subir) { Label("Subir canciones", systemImage: "square.and.arrow.up") }
+                    }
+                    if sesion.esAdmin {
+                        NavigationLink(value: Destino.admin) { Label("Panel de administración", systemImage: "gearshape.2") }
+                        NavigationLink { SoporteTecnicoVista() } label: { Label("Soporte técnico", systemImage: "stethoscope") }
+                    }
                 }
             }
             Section {
+                Button { Navegacion.compartida.verActualizacion = true } label: {
+                    LabeledContent { Text(Actualizaciones.compartida.versionActual) } label: { Label("Versión de la app", systemImage: "info.circle") }
+                }
+                .foregroundStyle(Tema.texto)
                 Button(role: .destructive) { confirmarSalir = true } label: { Label("Cerrar sesión", systemImage: "rectangle.portrait.and.arrow.right") }
             } footer: {
                 Text("SpaceMusic para iPhone \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") · \(sesion.servidor.replacingOccurrences(of: "https://", with: ""))")
             }
         }
         .navigationTitle("Tú")
+        .sheet(isPresented: $dispositivos) { DispositivosVista() }
         .confirmationDialog("¿Cerrar sesión?", isPresented: $confirmarSalir, titleVisibility: .visible) {
             Button("Cerrar sesión", role: .destructive) {
                 Biblioteca.compartida.limpiar()

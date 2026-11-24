@@ -1,3 +1,10 @@
+## iPhone 3.26: chat sin trabarse, letra en pantalla completa y todo más ordenado
+- Mensajes: con Liquid Glass el chat se trababa (al abrirlo se quitaba el mini reproductor, iOS rehacía todas las pestañas y el chat se volvía a abrir sin fin). El accesorio ya no cambia la estructura de la vista.
+- Pantalla bloqueada a pantalla completa: ahora lleva la letra con su estilo, el desenfoque y la sombra; cada verso es un video corto y el siguiente se prepara antes de que suene.
+- Botón «Continuar con Google» con el diseño oficial (blanco, «G» de colores). Los avisos de la vuelta ya no salen con «+» y la cuenta pendiente se muestra como aviso, no como error.
+- Tus gustos: géneros como tarjetas de colores (sin etiquetas genéricas), contador y botón «Listo» fijo abajo.
+- Tú, Cuenta, Administración y Soporte reorganizados en grupos (Tu música, Descubre, Ajustes, Administración; Música, Personas, Servidor; Estado ahora, Revisiones, Cuentas y seguridad, Herramientas).
+
 ## iPhone 3.24: Liquid Glass
 - Diseño Liquid Glass de iOS 26 (`App/Cristal.swift`): barra de pestañas de vidrio que se encoge al desplazar, mini reproductor como accesorio de la barra (como Apple Music), botones secundarios y tarjetas de vidrio. Se apaga en Ajustes → Reproducción («Diseño Liquid Glass»); en iOS 17 y 18 sigue el diseño clásico.
 - La compilación usa macOS 26 con Xcode 26.6.

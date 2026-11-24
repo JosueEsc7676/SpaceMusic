@@ -73,25 +73,54 @@ struct GustosHoja: View {
             ScrollView {
                 if let op = opciones {
                     VStack(alignment: .leading, spacing: 18) {
-                        Text((inicial ? "¡Bienvenido a SpaceMusic! " : "") + "Elige lo que te gusta y armaremos tu inicio y tus mixes con eso. Puedes cambiarlo cuando quieras en Tú → Ajustes.")
+                        Text((inicial ? "¡Bienvenido a SpaceMusic! " : "") + "Toca los géneros y artistas que te gustan: con eso armamos tu inicio y tus mixes. Puedes cambiarlo cuando quieras en Tú → Ajustes.")
                             .font(.subheadline).foregroundStyle(Tema.secundario)
-                        Text("Géneros").titulo()
-                        Flujo(espacio: 8) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Géneros").titulo()
+                            Spacer()
+                            if !generos.isEmpty { Text("\(generos.count) elegidos").font(.subheadline).foregroundStyle(Tema.secundario) }
+                        }
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                             ForEach(op.generos, id: \.nombre) { g in
                                 let activo = generos.contains(g.nombre)
-                                Button { alternar(&generos, g.nombre) } label: {
-                                    Text(g.nombre).font(.subheadline.weight(.semibold))
-                                        .padding(.horizontal, 14).padding(.vertical, 8)
-                                        .foregroundStyle(activo ? Color.black : Tema.texto)
-                                        .background(Capsule().fill(activo ? Color.white : Tema.tarjeta))
+                                let color = Tema.colorGenero(g.nombre)
+                                Button { withAnimation(.snappy(duration: 0.2)) { alternar(&generos, g.nombre) } } label: {
+                                    Text(g.nombre)
+                                        .font(.system(.subheadline, design: .rounded).weight(.heavy))
+                                        .foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.8)
+                                        .padding(.leading, 12).padding(.trailing, 50)
+                                        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+                                        .background {
+                                            LinearGradient(colors: [Color(red: color.0, green: color.1, blue: color.2),
+                                                                    Color(red: color.0 * 0.45, green: color.1 * 0.45, blue: color.2 * 0.45)],
+                                                           startPoint: .topLeading, endPoint: .bottomTrailing)
+                                        }
+                                        .overlay(alignment: .bottomTrailing) {
+                                            if let ruta = g.portadaUrl, !ruta.isEmpty {
+                                                Portada(ruta: ruta, tamano: 46, radio: 5).rotationEffect(.degrees(22)).offset(x: 8, y: 8)
+                                            }
+                                        }
+                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                        .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white, lineWidth: activo ? 3 : 0) }
+                                        .overlay(alignment: .topTrailing) {
+                                            if activo {
+                                                Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(.black, .white).padding(6)
+                                            }
+                                        }
+                                        .opacity(activo || generos.isEmpty ? 1 : 0.7)
+                                        .scaleEffect(activo ? 0.97 : 1)
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityAddTraits(activo ? .isSelected : [])
                             }
                         }
                         Text("Artistas").titulo()
-                        TextField("Buscar artista", text: $buscar)
-                            .textFieldStyle(.roundedBorder).autocorrectionDisabled()
+                        HStack {
+                            Image(systemName: "magnifyingglass").foregroundStyle(Tema.secundario)
+                            TextField("Buscar artista", text: $buscar).autocorrectionDisabled()
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .fondoCristal(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 12)], spacing: 14) {
                             ForEach(op.artistas.filter { buscar.isEmpty || $0.nombre.localizedCaseInsensitiveContains(buscar) }, id: \.nombre) { a in
                                 let activo = artistas.contains(a.nombre)
@@ -117,6 +146,18 @@ struct GustosHoja: View {
                     .padding()
                 } else { Cargando() }
             }
+            .safeAreaInset(edge: .bottom) {
+                if opciones != nil {
+                    Button { Task { await guardar() } } label: {
+                        Text(generos.isEmpty && artistas.isEmpty ? "Listo" : "Listo · \(generos.count + artistas.count) elegidos")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(BotonPrincipal())
+                    .disabled(guardando)
+                    .padding(.horizontal).padding(.bottom, 8)
+                    .background(LinearGradient(colors: [.black.opacity(0), .black], startPoint: .top, endPoint: .center).allowsHitTesting(false))
+                }
+            }
             .navigationTitle(inicial ? "¿Qué música te gusta?" : "Tus gustos")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -127,7 +168,6 @@ struct GustosHoja: View {
                         cerrar()
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) { Button("Listo") { Task { await guardar() } }.disabled(guardando || opciones == nil) }
             }
             .task { await cargar() }
         }

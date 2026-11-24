@@ -26,11 +26,27 @@ enum SeccionSoporte: String, CaseIterable, Identifiable {
 /// Lista de secciones del soporte técnico.
 struct SoporteTecnicoVista: View {
     var body: some View {
-        List(SeccionSoporte.allCases) { s in
-            NavigationLink { SeccionSoporteVista(seccion: s) } label: { Label(s.titulo, systemImage: s.icono) }
+        // Agrupado por lo que se busca: cómo está el servidor, revisar algo, cuentas y seguridad, herramientas.
+        List {
+            grupo("Estado ahora", [.resumen, .monitor, .alertas, .incidencias])
+            grupo("Revisiones", [.diagnostico, .biblioteca, .basedatos])
+            Section("Cuentas y seguridad") {
+                fila(.sesiones)
+                fila(.seguridad)
+                NavigationLink { GoogleClavesVista() } label: { Label("Iniciar sesión con Google", systemImage: "person.badge.key") }
+            }
+            grupo("Herramientas", [.mantenimiento, .informes])
         }
         .navigationTitle("Soporte técnico")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func grupo(_ titulo: String, _ secciones: [SeccionSoporte]) -> some View {
+        Section(titulo) { ForEach(secciones) { fila($0) } }
+    }
+
+    private func fila(_ s: SeccionSoporte) -> some View {
+        NavigationLink { SeccionSoporteVista(seccion: s) } label: { Label(s.titulo, systemImage: s.icono) }
     }
 }
 
@@ -425,9 +441,6 @@ struct SeccionSoporteVista: View {
 
     @ViewBuilder
     private func auditoria(_ r: ValorAdmin) -> some View {
-        Section {
-            NavigationLink { GoogleClavesVista() } label: { Label("Iniciar sesión con Google", systemImage: "person.badge.key") }
-        } footer: { Text("Pega las claves de Google para que aparezca el botón «Continuar con Google».") }
         Section("Medidas de seguridad activas") {
             ForEach(Array(r["medidas"].lista.enumerated()), id: \.offset) { _, m in Label(m.cadena, systemImage: "checkmark").font(.caption) }
         }

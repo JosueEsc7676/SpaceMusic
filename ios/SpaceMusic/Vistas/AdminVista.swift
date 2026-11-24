@@ -21,10 +21,13 @@ struct AdminVista: View {
             if let errorCarga {
                 Section { Text(errorCarga).foregroundStyle(Tema.peligro); Button("Reintentar") { Task { await cargar() } } }
             }
-            Section("Herramientas") {
-                NavigationLink("Estadísticas del servidor", value: Destino.resumenAdmin)
-                NavigationLink { SoporteTecnicoVista() } label: { Label("Soporte técnico", systemImage: "stethoscope") }
+            Section("Música") {
                 NavigationLink { DescargasAdminVista() } label: { Label("Descargar música", systemImage: "arrow.down.circle") }
+                NavigationLink { OrganizacionAdminVista() } label: { Label("Organización y catálogo", systemImage: "square.stack.3d.up") }
+                NavigationLink(value: Destino.generosAdmin) { Label("Géneros y artistas", systemImage: "guitars") }
+                NavigationLink(value: Destino.bibliotecaAdmin) { Label("Mantenimiento de biblioteca", systemImage: "externaldrive.badge.checkmark") }
+            }
+            Section("Personas") {
                 NavigationLink { ReportesAdminVista() } label: {
                     HStack {
                         Label("Reportes de la comunidad", systemImage: "flag")
@@ -32,11 +35,12 @@ struct AdminVista: View {
                         if reportesAbiertos > 0 { Chip(texto: "\(reportesAbiertos)", color: Tema.peligro) }
                     }
                 }
-                NavigationLink { OrganizacionAdminVista() } label: { Label("Organización y catálogo", systemImage: "square.stack.3d.up") }
-                NavigationLink("Errores recientes (vista anterior)", value: Destino.soporte)
-                NavigationLink("Géneros y artistas", value: Destino.generosAdmin)
-                NavigationLink("Mantenimiento de biblioteca", value: Destino.bibliotecaAdmin)
                 Button { aprobandoEnlace = true } label: { Label("Aprobar cuenta con el enlace del correo", systemImage: "envelope.badge") }
+            }
+            Section("Servidor") {
+                NavigationLink { SoporteTecnicoVista() } label: { Label("Soporte técnico", systemImage: "stethoscope") }
+                NavigationLink(value: Destino.resumenAdmin) { Label("Estadísticas del servidor", systemImage: "chart.xyaxis.line") }
+                NavigationLink(value: Destino.soporte) { Label("Errores recientes (vista anterior)", systemImage: "clock.arrow.circlepath") }
             }
             if let r = resumen {
                 Section("Resumen") {

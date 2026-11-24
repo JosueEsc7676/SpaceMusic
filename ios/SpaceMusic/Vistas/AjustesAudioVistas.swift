@@ -151,3 +151,21 @@ struct AjustesReproduccion: View {
         }
     }
 }
+
+/// Tú → Ajustes → «Reproducción, audio y diseño»: todo lo que cambia cómo suena y se ve la app, en un solo lugar.
+struct AjustesAppVista: View {
+    @State private var reproductor = Reproductor.compartido
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Al terminar, seguir con canciones parecidas", isOn: $reproductor.radioAutomatica).tint(Tema.celeste)
+                AjustesReproduccion()
+            } footer: {
+                Text("La calidad, las descargas automáticas y el ecualizador se aplican solo en este iPhone.")
+            }
+        }
+        .navigationTitle("Reproducción y diseño")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
