@@ -1,3 +1,8 @@
+## iPhone 3.27: letra en la pantalla bloqueada sin parpadeos y más personalización
+- Portada a pantalla completa con letra: un video por verso. El verso entra con su animación (aparecer, deslizar, crecer, escribir o ninguna) y cada palabra se enciende suave dentro del video, justo al cantarla. Ya no se cambia la imagen varias veces por verso (eso hacía parpadear la pantalla y se veía lento). El video del verso siguiente se prepara mientras suena el actual.
+- Palabras largas: el tamaño baja hasta que la palabra más larga cabe entera (antes se partía y se veía cortada).
+- Nuevas opciones: posición «Libre» (altura y lado), ancho de la letra, inclinación, transparencia, 4 colores nuevos, color de la palabra que suena, tamaño del verso siguiente, animación de entrada y viñeta.
+
 ## iPhone 3.26: chat sin trabarse, letra en pantalla completa y todo más ordenado
 - Mensajes: con Liquid Glass el chat se trababa (al abrirlo se quitaba el mini reproductor, iOS rehacía todas las pestañas y el chat se volvía a abrir sin fin). El accesorio ya no cambia la estructura de la vista.
 - Pantalla bloqueada a pantalla completa: ahora lleva la letra con su estilo, el desenfoque y la sombra; cada verso es un video corto y el siguiente se prepara antes de que suene.

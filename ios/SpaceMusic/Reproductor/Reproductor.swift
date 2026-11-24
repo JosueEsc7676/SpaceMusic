@@ -370,6 +370,7 @@ final class Reproductor {
         letraMostrada = nil
         arteBloqueo = nil
         imagenBloqueo = nil
+        versoBloqueo = nil
         versionEstilo += 1
         baseBloqueo = nil
         guard let c = actual, let p = portadaImagen, p.id == c.id, estiloBloqueo.modo == .letra else { actualizarNowPlaying(); return }
@@ -430,6 +431,30 @@ final class Reproductor {
     @ObservationIgnored private var imagenBloqueo: (id: Int, clave: String, img: UIImage)?
     /// Cambia con cada estilo nuevo: así la pantalla completa no reutiliza videos de otro estilo.
     @ObservationIgnored private var versionEstilo = 0
+    /// Verso que suena, listo para hacerse video (portada a pantalla completa).
+    @ObservationIgnored private var versoBloqueo: VersoAnimado?
+
+    /// Pantalla completa con letra (iOS 26): un video por verso, con las palabras encendiéndose dentro del video.
+    private var videoPorVerso: Bool {
+        if #available(iOS 26, *) { return estiloBloqueo.pantallaCompleta && estiloBloqueo.modo == .letra && ArteAnimado.disponible }
+        return false
+    }
+
+    /// Arma el verso `indice` de la letra para hacerlo video.
+    private func verso(_ indice: Int, base: ArteBloqueo.Base, id: Int) -> VersoAnimado? {
+        let letras = Letras.compartido
+        guard letras.cancionId == id, letras.lineas.indices.contains(indice) else { return nil }
+        let l = letras.lineas[indice]
+        let texto = l.texto.trimmingCharacters(in: .whitespaces)
+        guard !texto.isEmpty else { return nil }
+        let sig: String? = estiloBloqueo.siguiente
+            ? letras.lineas[(indice + 1)...].first { !$0.texto.trimmingCharacters(in: .whitespaces).isEmpty }?.texto : nil
+        // El video se muestra 0,25 s antes del verso y iOS tarda un poco en empezarlo: cada palabra va 0,1 s después
+        let palabras = LectorLRC.tiemposPalabras(l).map { max(0, $0.inicio - l.tiempo + 0.1) }
+        let duracion = min(24, max(2, l.fin - l.tiempo) + 6)
+        return VersoAnimado(clave: "\(id)|\(indice)|v\(versionEstilo)|\(texto)", base: base, actual: texto, siguiente: sig,
+                            palabras: palabras, duracion: duracion, indice: estiloBloqueo.posicion == .flotante ? indice : 0)
+    }
     @ObservationIgnored private var letraMostrada: ArteBloqueo.Letra?
     @ObservationIgnored private var animacionBloqueo: Task<Void, Never>?
 
@@ -464,7 +489,7 @@ final class Reproductor {
     private func mostrarBloqueo(animar: Bool, palabra: Bool = false) {
         // «Original»: solo la portada, sin letra ni sombra
         if estiloBloqueo.modo == .original {
-            if arteBloqueo != nil { arteBloqueo = nil; imagenBloqueo = nil }
+            if arteBloqueo != nil { arteBloqueo = nil; imagenBloqueo = nil; versoBloqueo = nil }
             actualizarNowPlaying()
             return
         }
@@ -502,7 +527,12 @@ final class Reproductor {
             guard !Task.isCancelled, self.actual?.id == id else { return }
             self.arteBloqueo = (id, MPMediaItemArtwork(boundsSize: img.size) { _ in img })
             self.imagenBloqueo = (id, clave, img)
+            self.versoBloqueo = self.videoPorVerso && a != nil ? self.verso(indice, base: base, id: id) : nil
             self.actualizarNowPlaying()
+            // Pantalla completa: el video del verso siguiente se prepara ya, mientras suena este
+            if #available(iOS 26, *), self.videoPorVerso, let v = self.verso(indiceSig, base: base, id: id) {
+                ArteAnimado.prepararVerso(v)
+            }
             // Se prepara ya el verso siguiente (y se olvida lo demás)
             self.precargadas = [clave: img]
             guard let siguiente, !siguiente.isEmpty else { return }
@@ -514,10 +544,7 @@ final class Reproductor {
             }.value
             guard !Task.isCancelled, self.actual?.id == id else { return }
             self.precargadas[claveSig] = sig
-            // Pantalla completa: el video del verso siguiente también queda listo antes de que suene
-            if #available(iOS 26, *), estilo.pantallaCompleta, ArteAnimado.disponible {
-                ArteAnimado.preparar(clave: claveSig + "|v\(self.versionEstilo)", imagen: sig)
-            }
+
         }
     }
 
@@ -1200,7 +1227,8 @@ final class Reproductor {
                 indiceSiguienteBloqueo = linea?.indiceSiguiente ?? (indiceBloqueo + 1)
                 encendidasBloqueo = linea?.encendidas ?? 0
                 mostrarBloqueo(animar: true)
-            } else if let linea, estiloBloqueo.iluminar || (estiloBloqueo.posicion == .flotante && estiloBloqueo.mecer) {
+            } else if let linea, !videoPorVerso, estiloBloqueo.iluminar || (estiloBloqueo.posicion == .flotante && estiloBloqueo.mecer) {
+                // (Con pantalla completa no hace falta: las palabras se encienden dentro del video del verso)
                 // Palabra por palabra (y el vaivén del flotante): como mucho unas 3 imágenes por segundo
                 let cambio = linea.encendidas != encendidasBloqueo
                 encendidasBloqueo = linea.encendidas
@@ -1305,7 +1333,9 @@ final class Reproductor {
         // Portada a pantalla completa (iOS 26): video vertical 3:4 hecho con la portada, como Apple Music
         // Lleva lo mismo que la imagen normal: letra con su estilo, desenfoque y sombra (o la portada sola en «Original»)
         if #available(iOS 26, *), estiloBloqueo.pantallaCompleta, ArteAnimado.disponible {
-            if let im = imagenBloqueo, im.id == c.id, estiloBloqueo.modo == .letra {
+            if estiloBloqueo.modo == .letra, let v = versoBloqueo, v.clave.hasPrefix("\(c.id)|") {
+                info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = ArteAnimado.obraVerso(v)
+            } else if let im = imagenBloqueo, im.id == c.id, estiloBloqueo.modo == .letra {
                 info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = ArteAnimado.obra(clave: im.clave + "|v\(versionEstilo)", imagen: im.img, movimiento: false)
             } else if estiloBloqueo.modo == .letra, let b = baseBloqueo, b.id == c.id {
                 info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = ArteAnimado.obra(clave: "\(c.id)|base|v\(versionEstilo)", imagen: b.base.fondo, movimiento: false)
