@@ -148,3 +148,6 @@ Actualizaciones: toca Descargar actualización y espera el progreso; al terminar
 - En Mensajes hay accesos a SyncPlay, Coincidimos y Dedicatorias. El botón + del chat reúne enviar una canción, dedicar e iniciar Coincidimos.
 - En Descargar música, las claves de Spotify están antes del registro, y este se despliega en un panel de alto limitado con su propio desplazamiento.
 - Los menús de canciones agrupan Cola y radio, Compartir y Más acciones. La letra ampliada tiene fondo de portada, información de la canción y controles propios.
+
+### Letra de bloqueo (3.28)
+Con letra se usa una imagen estable de alta resolución; toca la portada del sistema para ampliarla. Se evita sustituir videos en cada verso. Original conserva el fondo animado en iOS 26. La letra sigue los tiempos LRC y el ajuste de sincronía, con palabras pendientes que se reintentan. iOS controla las transiciones y no garantiza animación continua ni sincronización del video de artwork con el audio.

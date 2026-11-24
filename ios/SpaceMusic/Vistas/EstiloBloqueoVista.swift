@@ -43,9 +43,9 @@ struct EstiloBloqueoVista: View {
                 }
 
                 Section {
-                    Toggle("Portada en toda la pantalla", isOn: $e.pantallaCompleta)
+                    Toggle("Portada ampliada (alta resolución)", isOn: $e.pantallaCompleta)
                 } footer: {
-                    Text("Como Apple Music: con iOS 26 la portada ocupa toda la pantalla bloqueada. Cada verso es un video: entra con su animación y, si eliges «Iluminar», cada palabra se enciende suave al cantarla, sin parpadeos. iOS la muestra fija con el modo de bajo consumo o «Reducir movimiento».")
+                    Text("Con letra se usa una imagen de alta resolución: toca la portada de la pantalla bloqueada para ampliarla. No se reemplazan videos entre versos. iOS controla las transiciones. En «Original», iOS 26 permite la portada animada a toda la pantalla.")
                 }
 
                 if e.modo == .letra {
@@ -127,11 +127,6 @@ struct EstiloBloqueoVista: View {
                             Picker("Color de la palabra que suena", selection: $e.resaltado) {
                                 Text("El mismo de la letra").tag(EstiloBloqueo.ColorLetra?.none)
                                 ForEach(EstiloBloqueo.ColorLetra.allCases, id: \.self) { Text(EstiloBloqueo.nombre($0)).tag(Optional($0)) }
-                            }
-                        }
-                        if e.pantallaCompleta {
-                            Picker("Cómo entra cada verso", selection: $e.entrada) {
-                                ForEach(EstiloBloqueo.Entrada.allCases, id: \.self) { Text(EstiloBloqueo.nombre($0)).tag($0) }
                             }
                         }
                         if e.posicion == .flotante {

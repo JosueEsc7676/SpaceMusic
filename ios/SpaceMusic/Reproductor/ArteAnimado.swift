@@ -2,25 +2,8 @@ import AVFoundation
 import MediaPlayer
 import UIKit
 
-/// Un verso listo para hacerse video: la portada preparada, el texto, cuándo empieza cada palabra y cuánto dura.
-struct VersoAnimado: @unchecked Sendable {
-    let clave: String
-    let base: ArteBloqueo.Base
-    let actual: String
-    let siguiente: String?
-    /// Segundos (desde que se muestra el video) en que empieza cada palabra.
-    let palabras: [Double]
-    let duracion: Double
-    let indice: Int
-}
-
-/// Portada a pantalla completa en la pantalla bloqueada (iOS 26, como Apple Music).
-/// iOS solo la pone en grande si la app le da un video vertical 3:4 (`MPNowPlayingInfoProperty3x4AnimatedArtwork`).
-/// - Con letra: UN video por verso. Dentro del video el verso entra con su animación y cada palabra se enciende de a
-///   poco justo cuando se canta (15 cambios suaves por palabra en vez de cambiar la imagen de la pantalla bloqueada,
-///   que era lo que la hacía parpadear y se veía lento). El video del verso siguiente se prepara mientras suena este.
-/// - Entre versos: la portada con su estilo, quieta. «Original»: la portada se acerca y se aleja muy despacio.
-/// Con modo de bajo consumo o «Reducir movimiento», iOS muestra la imagen previa en vez del video.
+/// Portada animada únicamente para el modo Original. La letra usa imágenes estáticas:
+/// cambiar el artworkID en cada verso reinicia la superficie animada de iOS.
 @available(iOS 26, *)
 enum ArteAnimado {
     static let ancho = 1080, alto = 1440
@@ -28,7 +11,6 @@ enum ArteAnimado {
     nonisolated(unsafe) private static var obras: [String: MPMediaItemAnimatedArtwork] = [:]
     nonisolated(unsafe) private static var orden: [String] = []
     nonisolated(unsafe) private static var enCurso: [String: Task<URL?, Never>] = [:]
-    nonisolated(unsafe) private static var previas: [String: UIImage] = [:]
     private static let candado = NSLock()
 
     /// ¿Este iPhone muestra portadas animadas verticales?
@@ -75,71 +57,6 @@ enum ArteAnimado {
             if let c = img.cgImage { r.append((t * 10, c)) }
         }
         return r
-    }
-
-    // MARK: Video de un verso
-
-    private static func idVerso(_ v: VersoAnimado) -> String { "sm-v-\(huella(v.clave))" }
-
-    /// Palabras encendidas a los t segundos (con decimales: la que suena se enciende en 0,18 s).
-    private static func encendidas(_ v: VersoAnimado, _ t: Double) -> Double {
-        v.palabras.reduce(0) { $0 + min(max((t - $1) / 0.18, 0), 1) }
-    }
-
-    private static func previaVerso(_ v: VersoAnimado) -> UIImage {
-        let id = idVerso(v)
-        candado.lock()
-        if let p = previas[id] { candado.unlock(); return p }
-        candado.unlock()
-        let primera = ArteBloqueo.cuadroVerso(v.base, letra: (v.actual, v.siguiente), entrada: v.base.estilo.entrada == .ninguna ? 1 : 0,
-                                              encendidas: v.base.estilo.iluminar ? encendidas(v, 0) : nil, indice: v.indice)
-        let p = recorte(primera)
-        candado.lock()
-        previas[id] = p
-        if previas.count > 16 { previas.removeAll() }
-        candado.unlock()
-        return p
-    }
-
-    /// Los cuadros del verso: la entrada (0,4 s) y, con «iluminar», 4 cuadros por palabra para encenderla suave.
-    private static func cuadrosVerso(_ v: VersoAnimado) -> [(Double, CGImage)] {
-        let e = v.base.estilo
-        var tiempos: Set<Double> = [0]
-        if e.entrada != .ninguna { for i in 1...8 { tiempos.insert(Double(i) * 0.05) } }
-        if e.iluminar {
-            for p in v.palabras where p < v.duracion {
-                for d in [0.0, 0.06, 0.12, 0.18] { tiempos.insert(max(0, ((p + d) * 100).rounded() / 100)) }
-            }
-        }
-        var r: [(Double, CGImage)] = []
-        for t in tiempos.sorted() {
-            let entrada = e.entrada == .ninguna ? 1 : CGFloat(min(1, t / 0.4))
-            let img = ArteBloqueo.cuadroVerso(v.base, letra: (v.actual, v.siguiente), entrada: entrada,
-                                              encendidas: e.iluminar ? encendidas(v, t) : nil, indice: v.indice)
-            if let cg = recorte(img).cgImage { r.append((t, cg)) }
-        }
-        return r
-    }
-
-    /// La obra del verso que suena (se reutiliza si ya se preparó).
-    @MainActor static func obraVerso(_ v: VersoAnimado) -> MPMediaItemAnimatedArtwork {
-        let id = idVerso(v)
-        if let o = obras[id] { return o }
-        let previa = previaVerso(v)
-        let o = MPMediaItemAnimatedArtwork(artworkID: id,
-            previewImageRequestHandler: { _ in previa },
-            videoAssetFileURLRequestHandler: { _ in await video(id: id) { (cuadrosVerso(v), v.duracion) } })
-        guardar(id, o)
-        return o
-    }
-
-    /// Prepara de antemano el video del verso que viene.
-    static func prepararVerso(_ v: VersoAnimado) {
-        let id = idVerso(v)
-        Task.detached(priority: .utility) {
-            _ = previaVerso(v)
-            _ = await video(id: id) { (cuadrosVerso(v), v.duracion) }
-        }
     }
 
     // MARK: Utilidades

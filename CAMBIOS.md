@@ -1,3 +1,9 @@
+## iPhone 3.28: letra de bloqueo estable
+- Se elimina el video por verso que reiniciaba la superficie animada de iOS. Con letra se usa artwork estático de alta resolución, ampliable al tocar la portada; el fondo animado de pantalla completa queda para Original. La transición final sigue controlada por iOS.
+- Las palabras limitadas por frecuencia se vuelven a intentar hasta dibujarse; reloj monotónico, precarga de la línea siguiente y deduplicación de dibujos pendientes. Versos repetidos conservan su índice y las imágenes de estilos antiguos se descartan.
+- Ajustes aclaran el modo compatible y retiran el selector de entrada de video. Los estilos guardados siguen siendo legibles.
+- Validación: pruebas Swift de política y compilación iOS en Actions; sin prueba física de pantalla bloqueada.
+
 ## iPhone 3.27: letra en la pantalla bloqueada sin parpadeos y más personalización
 - Portada a pantalla completa con letra: un video por verso. El verso entra con su animación (aparecer, deslizar, crecer, escribir o ninguna) y cada palabra se enciende suave dentro del video, justo al cantarla. Ya no se cambia la imagen varias veces por verso (eso hacía parpadear la pantalla y se veía lento). El video del verso siguiente se prepara mientras suena el actual.
 - Palabras largas: el tamaño baja hasta que la palabra más larga cabe entera (antes se partía y se veía cortada).
