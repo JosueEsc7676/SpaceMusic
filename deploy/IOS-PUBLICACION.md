@@ -1,3 +1,14 @@
+## 24/11/2026 · iPhone 3.31, compilación 67: recuperar diseño original, ensayo continuo
+
+- El usuario rechazó la tarjeta de 65: se elimina su extensión, la capacidad NSSupportsLiveActivities y cualquier creación de tarjetas. Se conservan el tipo legado y un cierre único para terminar tarjetas anteriores. Vuelven la letra sobre la portada, posiciones Libre/Flotante, estilos y vista previa con texto.
+- IPA experimental: https://spacemusic.tail8ccfdf.ts.net/app/SpaceMusic-67.ipa. Código cce5846; 4662964 bytes; SHA256 e39b9540d3f3efbd4d0b8615751c81b60806818ef3c07d1687aa0823cb06b4fb.
+- Actions https://github.com/JosueEsc7676/SpaceMusic/actions/runs/45522195633 correcto: tests Swift (incluidos orden de versos, huecos y recorte), publicador, Xcode Release e IPA. Cuatro pruebas locales del publicador correctas. ZIP/plist correctos, CFBundleVersion67, mismo ID de app y ausencia de LetraBloqueoWidget.appex comprobados.
+- Nuevo ensayo: un vídeo continuo contiene todos los versos hasta el fin de la canción; los cambios de línea y palabra son cuadros del archivo, no nuevos artworkID. Muestrea el reloj al solicitar el archivo y recorta el tiempo empleado en codificar. Reancla ante búsqueda, pausa/reanudación o entrada en segundo plano. Sin modificar audio ni API.
+- Render progresivo, resolución de trabajo1024 aislada con TaskLocal, MP4 de1080x1440, límite de25s de preparación y15min de secuencia. Fallos conservan imagen con letra y se informan en ajustes. El límite incluye CPU por cuadro; no se detiene audio para generar arte.
+- LIMITACIÓN ABIERTA: MediaPlayer no publica un reloj/seek de la animación que permita garantizar sincronización con el audio. iOS puede iniciar/repetir/fijar el vídeo. La exportación compensadora tampoco elimina su latencia de arranque. No hay prueba de teléfono físico. No afirmar que el parpadeo, pausa, bloqueo o sincronía estén solucionados visualmente: son pendientes del prototipo.
+- Referencia primaria revisada: https://developer.apple.com/documentation/mediaplayer/providing-animated-artwork-for-media-items.md (sin límite técnico de tamaño, recomienda bucles cortos; solo URL local, timeout30s y posible previa fija en ahorro/temperatura/accesibilidad).
+- Publicado como experimental con manifest67/cce5846: descarga200 completa con SHA idéntico, Range206 válido, API200 y spacemusic activo. Sin reinicio de Java ni cambio de claves/firma: proceso ad hoc existente. Backups .anterior65, IPA58 y65 conservados. Para activar diseño: Con letra + Portada en toda la pantalla; se conservan las preferencias de posición.
+
 ## 24/11/2026 · iPhone 3.30, compilación 65: texto independiente del fondo
 
 - Publicado https://spacemusic.tail8ccfdf.ts.net/app/SpaceMusic-65.ipa. Código a3acc40; 4689278 bytes; SHA256 66a0431dbba3ac5570f7c2830545d90ed352aa821372b53d1a9d2a3980715cd7.
