@@ -500,6 +500,11 @@ final class Reproductor {
     /// (la animación se veía a saltos): ahora se cambia la imagen una sola vez, en el momento justo, porque la del
     /// verso siguiente ya está dibujada de antemano; el sistema hace el fundido.
     private func mostrarBloqueo(animar: Bool, palabra: Bool = false) {
+        if portadaCompletaActiva {
+            // Un verso solo modifica ActivityKit; ni siquiera vuelve a publicar Now Playing.
+            actualizarTarjetaLetra()
+            return
+        }
         // «Original»: solo la portada, sin letra ni sombra
         if estiloBloqueo.modo == .original {
             if arteBloqueo != nil { arteBloqueo = nil; imagenBloqueo = nil }
@@ -507,11 +512,6 @@ final class Reproductor {
             return
         }
         guard let c = actual, let b = baseBloqueo, b.id == c.id else { actualizarNowPlaying(); return }
-        if portadaCompletaActiva {
-            // Un verso solo modifica ActivityKit; ni siquiera vuelve a publicar Now Playing.
-            actualizarTarjetaLetra()
-            return
-        }
         let a = letraDeseada
         let estilo = estiloBloqueo
         let vivo = estilo.iluminar || (estilo.posicion == .flotante && estilo.mecer)
