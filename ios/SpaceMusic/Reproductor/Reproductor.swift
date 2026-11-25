@@ -461,7 +461,7 @@ final class Reproductor {
               let b = baseBloqueo, b.id == c.id, let baseVideoContinuo else { return }
         let letras = Letras.compartido
         let lineas = letras.cancionId == c.id && letraEnBloqueo && letras.sincronizada ? letras.lineas : []
-        let config = "\(c.id)|\(c.portadaUrl ?? "")|\(firmaBaseCompleta)|\(epocaArte)|\(sonando)|\(letras.desfase)|\(letraEnBloqueo)|\(Int(duracion.rounded()))"
+        let config = "\(c.id)|\(c.portadaUrl ?? "")|\(firmaBaseCompleta)|\(epocaArte)|\(sonando)|\(letras.desfase)|\(letraEnBloqueo)|\((duracion.isFinite ? Int(max(0, min(duracion, 86400)).rounded()) : 0))"
         guard config != claveConfigArte || lineas != lineasArte else { return }
         claveConfigArte = config
         lineasArte = lineas

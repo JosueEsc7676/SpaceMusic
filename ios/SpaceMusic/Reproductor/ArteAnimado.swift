@@ -53,7 +53,7 @@ enum ArteAnimado {
         let o = MPMediaItemAnimatedArtwork(artworkID: id,
             previewImageRequestHandler: { _ in previa },
             videoAssetFileURLRequestHandler: { _ in
-                guard let (inicio, sonando, hasta) = await reloj() else { return nil }
+                guard let (inicio, sonando, hasta) = await reloj(), inicio.isFinite, hasta.isFinite, abs(inicio) <= 86400, abs(hasta) <= 86400 else { return nil }
                 await estado("Preparando la letra sobre la portada…")
                 let fin = sonando ? max(max(hasta, lineas.last?.fin ?? inicio + 4), inicio + 4) : inicio + 4
                 guard fin - inicio <= 900 else {
