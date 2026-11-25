@@ -6,7 +6,7 @@ import UIKit
 @MainActor @Observable
 final class LetraActividadService {
     static let compartida = LetraActividadService()
-    private(set) var estado = "La letra aparecerÃ¡ en una tarjeta independiente de la portada."
+    private(set) var estado = "La letra aparecerÃƒÂ¡ en una tarjeta independiente de la portada."
     @ObservationIgnored private var actividad: Activity<LetraActividad>?
     @ObservationIgnored private var enviada: LetraActividad.ContentState?
     @ObservationIgnored private var pendiente: LetraActividad.ContentState?
@@ -18,8 +18,8 @@ final class LetraActividadService {
 
     func actualizar(cancion: String, artista: String, verso: String?, siguiente: String?, pausada: Bool) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            estado = "Activa Actividades en vivo para SpaceMusic en Ajustes del iPhone para ver la letra."
             finalizar()
+            estado = "Activa Actividades en vivo para SpaceMusic en Ajustes del iPhone para ver la letra."
             return
         }
         let contenido = LetraActividad.ContentState(
@@ -42,7 +42,7 @@ final class LetraActividadService {
                 actividad = try Activity.request(attributes: LetraActividad(sesion: UUID().uuidString),
                     content: ActivityContent(state: contenido, staleDate: Date().addingTimeInterval(30)), pushType: nil)
                 enviada = contenido
-                estado = "Tarjeta de letra activada. iOS controla su frecuencia de actualizaciÃ³n."
+                estado = "Tarjeta de letra activada. iOS controla su frecuencia de actualizaciÃƒÂ³n."
             } catch {
                 proximoIntento = ProcessInfo.processInfo.systemUptime + 10
                 estado = "No se pudo activar la tarjeta. Revisa Actividades en vivo en Ajustes del iPhone."
@@ -57,6 +57,7 @@ final class LetraActividadService {
             guard let self else { return }
             while !Task.isCancelled, self.actividad?.id == actual.id, let nuevo = self.pendiente {
                 self.pendiente = nil
+                if nuevo == self.enviada { continue }
                 await actual.update(ActivityContent(state: nuevo, staleDate: Date().addingTimeInterval(30)))
                 guard !Task.isCancelled, self.actividad?.id == actual.id else { break }
                 self.enviada = nuevo
@@ -66,6 +67,7 @@ final class LetraActividadService {
     }
 
     func finalizar() {
+        estado = "Tarjeta de letra inactiva. Comienza una canción con la app abierta para activarla."
         guard actividad != nil || trabajo != nil || pendiente != nil || enviada != nil else { return }
         trabajo?.cancel(); trabajo = nil
         identificadorTrabajo = UUID()
