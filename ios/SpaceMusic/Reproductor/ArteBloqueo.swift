@@ -54,12 +54,7 @@ enum ArteBloqueo {
 
     /// Lado de la imagen cuadrada.
     /// 1500 normal; 2048 con «pantalla completa» (se ve nítida al tocar la portada en la pantalla bloqueada).
-    @TaskLocal static var ladoRenderizado: CGFloat? = nil
-    nonisolated(unsafe) private static var ladoGuardado: CGFloat = 1500
-    static var lado: CGFloat {
-        get { ladoRenderizado ?? ladoGuardado }
-        set { ladoGuardado = newValue }
-    }
+    nonisolated(unsafe) static var lado: CGFloat = 1500
     static var tamano: CGSize { CGSize(width: lado, height: lado) }
     /// Parte del ancho que se ve a pantalla completa (ancho ÷ alto de la pantalla). Lo fija `ajustarPantalla()`.
     nonisolated(unsafe) static var visible: CGFloat = 0.462

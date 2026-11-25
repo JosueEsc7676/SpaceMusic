@@ -39,19 +39,13 @@ struct EstiloBloqueoVista: View {
                     }
                     .pickerStyle(.segmented)
                 } footer: {
-                    Text(e.modo == .original ? "Solo la portada, como antes: sin letra, sin sombra y sin desenfoque." : "La letra sobre la portada, con su posición, movimiento y estilo configurables.")
+                    Text(e.modo == .original ? "Solo la portada, como antes: sin letra, sin sombra y sin desenfoque." : "La letra sincronizada sobre la portada, con el estilo que elijas.")
                 }
 
                 Section {
                     Toggle("Portada en toda la pantalla", isOn: $e.pantallaCompleta)
                 } footer: {
-                    Text("En iOS 26 agranda la portada, con la letra dibujada encima. Los versos van dentro de un único vídeo continuo. La preparación puede tardar unos segundos. iOS puede mostrar una imagen fija con bajo consumo, calor o Reducir movimiento; su animación no tiene un reloj sincronizable con el audio.")
-                }
-
-                if e.modo == .letra && e.pantallaCompleta {
-                    Section("Letra sobre la portada") {
-                        Text(Reproductor.compartido.estadoArteContinuo).font(.footnote).foregroundStyle(.secondary)
-                    }
+                    Text("Como Apple Music: con iOS 26 la portada ocupa toda la pantalla bloqueada. Cada verso es un video: entra con su animación y, si eliges «Iluminar», cada palabra se enciende suave al cantarla, sin parpadeos. iOS la muestra fija con el modo de bajo consumo o «Reducir movimiento».")
                 }
 
                 if e.modo == .letra {
@@ -133,6 +127,11 @@ struct EstiloBloqueoVista: View {
                             Picker("Color de la palabra que suena", selection: $e.resaltado) {
                                 Text("El mismo de la letra").tag(EstiloBloqueo.ColorLetra?.none)
                                 ForEach(EstiloBloqueo.ColorLetra.allCases, id: \.self) { Text(EstiloBloqueo.nombre($0)).tag(Optional($0)) }
+                            }
+                        }
+                        if e.pantallaCompleta {
+                            Picker("Cómo entra cada verso", selection: $e.entrada) {
+                                ForEach(EstiloBloqueo.Entrada.allCases, id: \.self) { Text(EstiloBloqueo.nombre($0)).tag($0) }
                             }
                         }
                         if e.posicion == .flotante {

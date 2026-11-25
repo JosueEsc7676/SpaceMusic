@@ -2,7 +2,25 @@ import AVFoundation
 import MediaPlayer
 import UIKit
 
-/// Una portada de pantalla completa por canción/estilo. Nunca depende de los versos.
+/// Un verso listo para hacerse video: la portada preparada, el texto, cuándo empieza cada palabra y cuánto dura.
+struct VersoAnimado: @unchecked Sendable {
+    let clave: String
+    let base: ArteBloqueo.Base
+    let actual: String
+    let siguiente: String?
+    /// Segundos (desde que se muestra el video) en que empieza cada palabra.
+    let palabras: [Double]
+    let duracion: Double
+    let indice: Int
+}
+
+/// Portada a pantalla completa en la pantalla bloqueada (iOS 26, como Apple Music).
+/// iOS solo la pone en grande si la app le da un video vertical 3:4 (`MPNowPlayingInfoProperty3x4AnimatedArtwork`).
+/// - Con letra: UN video por verso. Dentro del video el verso entra con su animación y cada palabra se enciende de a
+///   poco justo cuando se canta (15 cambios suaves por palabra en vez de cambiar la imagen de la pantalla bloqueada,
+///   que era lo que la hacía parpadear y se veía lento). El video del verso siguiente se prepara mientras suena este.
+/// - Entre versos: la portada con su estilo, quieta. «Original»: la portada se acerca y se aleja muy despacio.
+/// Con modo de bajo consumo o «Reducir movimiento», iOS muestra la imagen previa en vez del video.
 @available(iOS 26, *)
 enum ArteAnimado {
     static let ancho = 1080, alto = 1440
@@ -10,6 +28,7 @@ enum ArteAnimado {
     nonisolated(unsafe) private static var obras: [String: MPMediaItemAnimatedArtwork] = [:]
     nonisolated(unsafe) private static var orden: [String] = []
     nonisolated(unsafe) private static var enCurso: [String: Task<URL?, Never>] = [:]
+    nonisolated(unsafe) private static var previas: [String: UIImage] = [:]
     private static let candado = NSLock()
 
     /// ¿Este iPhone muestra portadas animadas verticales?
@@ -35,98 +54,92 @@ enum ArteAnimado {
                 await video(id: id) {
                     guard let cg = previa.cgImage else { return nil }
                     if movimiento { return (cuadrosMovimiento(cg), 10) }
-                    return (AnySequence([(0.0, cg)]), 4)
+                    return ([(0, cg)], 4)
                 }
             })
         guardar(id, o)
         return o
     }
 
-    /// Una sola línea de tiempo para toda la canción, sin cambiar artwork entre versos.
-    /// Se consulta la posición al pedir el archivo, no al crear la portada.
-    @MainActor static func obraContinua(clave: String, imagen: UIImage, base: ArteBloqueo.Base,
-            lineas: [LineaLetra], reloj: @escaping @MainActor @Sendable () -> (Double, Bool, Double)?,
-            estado: @escaping @MainActor @Sendable (String) -> Void) -> MPMediaItemAnimatedArtwork {
-        let id = "sm-continuo1-" + huella(clave)
+    private static func cuadrosMovimiento(_ cg: CGImage) -> [(Double, CGImage)] {
+        // Se acerca hasta un 7 % y vuelve, con un vaivén suave de lado: el final empalma con el principio
+        let caja = CGSize(width: ancho, height: alto)
+        var r: [(Double, CGImage)] = []
+        for i in 0..<120 {
+            let t = Double(i) / 120
+            let zoom = 1 + 0.07 * (1 - cos(2 * .pi * t)) / 2
+            let dx = CGFloat(sin(2 * .pi * t)) * 18
+            let img = UIGraphicsImageRenderer(size: caja, format: formatoVideo).image { _ in
+                UIImage(cgImage: cg).draw(in: rectCubrir(CGSize(width: cg.width, height: cg.height), en: caja, zoom: zoom, dx: dx))
+            }
+            if let c = img.cgImage { r.append((t * 10, c)) }
+        }
+        return r
+    }
+
+    // MARK: Video de un verso
+
+    private static func idVerso(_ v: VersoAnimado) -> String { "sm-v-\(huella(v.clave))" }
+
+    /// Palabras encendidas a los t segundos (con decimales: la que suena se enciende en 0,18 s).
+    private static func encendidas(_ v: VersoAnimado, _ t: Double) -> Double {
+        v.palabras.reduce(0) { $0 + min(max((t - $1) / 0.18, 0), 1) }
+    }
+
+    private static func previaVerso(_ v: VersoAnimado) -> UIImage {
+        let id = idVerso(v)
+        candado.lock()
+        if let p = previas[id] { candado.unlock(); return p }
+        candado.unlock()
+        let primera = ArteBloqueo.cuadroVerso(v.base, letra: (v.actual, v.siguiente), entrada: v.base.estilo.entrada == .ninguna ? 1 : 0,
+                                              encendidas: v.base.estilo.iluminar ? encendidas(v, 0) : nil, indice: v.indice)
+        let p = recorte(primera)
+        candado.lock()
+        previas[id] = p
+        if previas.count > 16 { previas.removeAll() }
+        candado.unlock()
+        return p
+    }
+
+    /// Los cuadros del verso: la entrada (0,4 s) y, con «iluminar», 4 cuadros por palabra para encenderla suave.
+    private static func cuadrosVerso(_ v: VersoAnimado) -> [(Double, CGImage)] {
+        let e = v.base.estilo
+        var tiempos: Set<Double> = [0]
+        if e.entrada != .ninguna { for i in 1...8 { tiempos.insert(Double(i) * 0.05) } }
+        if e.iluminar {
+            for p in v.palabras where p < v.duracion {
+                for d in [0.0, 0.06, 0.12, 0.18] { tiempos.insert(max(0, ((p + d) * 100).rounded() / 100)) }
+            }
+        }
+        var r: [(Double, CGImage)] = []
+        for t in tiempos.sorted() {
+            let entrada = e.entrada == .ninguna ? 1 : CGFloat(min(1, t / 0.4))
+            let img = ArteBloqueo.cuadroVerso(v.base, letra: (v.actual, v.siguiente), entrada: entrada,
+                                              encendidas: e.iluminar ? encendidas(v, t) : nil, indice: v.indice)
+            if let cg = recorte(img).cgImage { r.append((t, cg)) }
+        }
+        return r
+    }
+
+    /// La obra del verso que suena (se reutiliza si ya se preparó).
+    @MainActor static func obraVerso(_ v: VersoAnimado) -> MPMediaItemAnimatedArtwork {
+        let id = idVerso(v)
         if let o = obras[id] { return o }
-        let previa = recorte(imagen)
+        let previa = previaVerso(v)
         let o = MPMediaItemAnimatedArtwork(artworkID: id,
             previewImageRequestHandler: { _ in previa },
-            videoAssetFileURLRequestHandler: { _ in
-                guard let (inicio, sonando, hasta) = await reloj(), inicio.isFinite, hasta.isFinite, abs(inicio) <= 86400, abs(hasta) <= 86400 else { return nil }
-                await estado("Preparando la letra sobre la portada…")
-                let fin = sonando ? max(max(hasta, lineas.last?.fin ?? inicio + 4), inicio + 4) : inicio + 4
-                guard fin - inicio <= 900 else {
-                    await estado("Esta pista supera el límite de preparación de la portada animada.")
-                    return nil
-                }
-                let duracion = fin - inicio
-                let claveVideo = id + "-" + String(Int((inicio * 100).rounded())) + (sonando ? "s" : "p")
-                let url = await video(id: claveVideo) {
-                    let tiempos = sonando ? SecuenciaPortada.tiempos(lineas, desde: inicio, hasta: fin,
-                        palabras: base.estilo.iluminar) : [0, 4]
-                    let secuencia = tiempos.lazy.compactMap { t -> (Double, CGImage)? in
-                        autoreleasepool {
-                            ArteBloqueo.$ladoRenderizado.withValue(1024) {
-                                let segundo = sonando ? inicio + t : inicio
-                                guard let i = LectorLRC.indice(lineas, en: segundo),
-                                      let linea = SecuenciaPortada.linea(lineas, en: segundo) else {
-                                    return recorte(base.fondo).cgImage.map { (t, $0) }
-                                }
-                                let sig = base.estilo.siguiente ? lineas.dropFirst(i + 1).first { !$0.texto.isEmpty }?.texto : nil
-                                let luces = LectorLRC.tiemposPalabras(linea).reduce(0.0) {
-                                    $0 + min(max((segundo - $1.inicio) / 0.18, 0), 1)
-                                }
-                                let img = ArteBloqueo.cuadroVerso(base, letra: (linea.texto, sig), entrada: 1,
-                                    encendidas: base.estilo.iluminar ? luces : nil, indice: i)
-                                return recorte(img).cgImage.map { (t, $0) }
-                            }
-                        }
-                    }
-                    return (AnySequence(secuencia), duracion)
-                }
-                guard let url, let (actual, _, _) = await reloj() else {
-                    await estado("iOS no pudo preparar la animación. Se conserva la imagen con letra.")
-                    return nil
-                }
-                // Descontar el tiempo que costó codificar; no detener el audio para preparar la portada.
-                let avance = sonando ? max(0, actual - inicio) : 0
-                guard avance < duracion - 0.2 else { return nil }
-                var resultado = url
-                if avance > 0.15 {
-                    let destino = carpeta().appendingPathComponent(claveVideo + "-recorte-" + UUID().uuidString + ".mp4")
-                    guard let exportador = AVAssetExportSession(asset: AVURLAsset(url: url), presetName: AVAssetExportPresetPassthrough) else { return nil }
-                    exportador.outputURL = destino
-                    exportador.outputFileType = .mp4
-                    exportador.timeRange = CMTimeRange(start: CMTime(seconds: avance, preferredTimescale: 600),
-                        duration: CMTime(seconds: duracion - avance, preferredTimescale: 600))
-                    let listo: Bool = await withCheckedContinuation { c in
-                        exportador.exportAsynchronously { c.resume(returning: exportador.status == .completed) }
-                    }
-                    guard listo, await reloj() != nil else { try? FileManager.default.removeItem(at: destino); return nil }
-                    resultado = destino
-                }
-                await estado("Letra preparada sobre la portada. iOS controla el inicio de la animación.")
-                return resultado
-            })
+            videoAssetFileURLRequestHandler: { _ in await video(id: id) { (cuadrosVerso(v), v.duracion) } })
         guardar(id, o)
         return o
     }
 
-    private static func cuadrosMovimiento(_ cg: CGImage) -> AnySequence<(Double, CGImage)> {
-        let caja = CGSize(width: ancho, height: alto)
-        return AnySequence((0..<120).lazy.compactMap { i -> (Double, CGImage)? in
-            autoreleasepool {
-                let t = Double(i) / 120
-                let zoom = 1 + 0.07 * (1 - cos(2 * .pi * t)) / 2
-                let dx = CGFloat(sin(2 * .pi * t)) * 18
-                let img = UIGraphicsImageRenderer(size: caja, format: formatoVideo).image { _ in
-                    UIImage(cgImage: cg).draw(in: rectCubrir(CGSize(width: cg.width, height: cg.height), en: caja, zoom: zoom, dx: dx))
-                }
-                guard let c = img.cgImage else { return nil }
-                return (t * 10, c)
-            }
-        })
+    /// Prepara de antemano el video del verso que viene.
+    static func prepararVerso(_ v: VersoAnimado) {
+        let id = idVerso(v)
+        Task.detached(priority: .utility) {
+            _ = previaVerso(v)
+            _ = await video(id: id) { (cuadrosVerso(v), v.duracion) }
+        }
     }
 
     // MARK: Utilidades
@@ -166,13 +179,13 @@ enum ArteAnimado {
     }
 
     /// Video local (iOS lo pide solo cuando lo va a mostrar). Si ya se está creando, se espera ese mismo.
-    private static func video(id: String, cuadros: @escaping @Sendable () -> (AnySequence<(Double, CGImage)>, Double)?) async -> URL? {
+    private static func video(id: String, cuadros: @escaping @Sendable () -> ([(Double, CGImage)], Double)?) async -> URL? {
         let url = carpeta().appendingPathComponent("\(id).mp4")
         if FileManager.default.fileExists(atPath: url.path) { return url }
         candado.lock()
         if let t = enCurso[id] { candado.unlock(); return await t.value }
         let tarea = Task.detached(priority: .userInitiated) { () -> URL? in
-            guard let hecho = cuadros() else { return nil }
+            guard let hecho = cuadros(), !hecho.0.isEmpty else { return nil }
             let temporal = carpeta().appendingPathComponent("\(id)-\(UUID().uuidString).mp4")
             guard await escribir(hecho.0, duracion: hecho.1, en: temporal) else { try? FileManager.default.removeItem(at: temporal); return nil }
             try? FileManager.default.removeItem(at: url)
@@ -199,7 +212,7 @@ enum ArteAnimado {
     }
 
     /// Cuadros con su tiempo (s): cada uno se queda hasta el siguiente; el último hasta `duracion`.
-    private static func escribir(_ cuadros: AnySequence<(Double, CGImage)>, duracion: Double, en url: URL) async -> Bool {
+    private static func escribir(_ cuadros: [(Double, CGImage)], duracion: Double, en url: URL) async -> Bool {
         guard let escritor = try? AVAssetWriter(outputURL: url, fileType: .mp4) else { return false }
         let entrada = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,
@@ -218,25 +231,14 @@ enum ArteAnimado {
         guard escritor.startWriting() else { return false }
         escritor.startSession(atSourceTime: .zero)
         let caja = CGRect(x: 0, y: 0, width: ancho, height: alto)
-        // Secuencia perezosa: no acumular todos los cuadros de alta resolución de un verso.
-        var iterador = cuadros.makeIterator()
-        var ultimo: (Double, CGImage)?
+        // El último cuadro se repite al final: así el video dura lo que el verso (y un poco más)
+        var lista = cuadros
+        if let ultimo = cuadros.last, duracion > ultimo.0 + 0.05 { lista.append((duracion, ultimo.1)) }
         var anterior = -1.0
-        let limite = ProcessInfo.processInfo.systemUptime + 25
-        defer { if escritor.status == .writing { escritor.cancelWriting() } }
-        while true {
-            let proximo = iterador.next() ?? ultimo.flatMap { duracion > $0.0 + 0.05 ? (duracion, $0.1) : nil }
-            guard let (t, cg) = proximo else { break }
-            if ultimo == nil && t != 0 { return false }
-            ultimo = (t, cg)
+        for (t, cg) in lista {
             guard t > anterior else { continue }
             anterior = t
-            while !entrada.isReadyForMoreMediaData {
-                guard escritor.status == .writing, !Task.isCancelled,
-                      ProcessInfo.processInfo.systemUptime < limite else { return false }
-                try? await Task.sleep(for: .milliseconds(4))
-            }
-            guard !Task.isCancelled, escritor.status == .writing, ProcessInfo.processInfo.systemUptime < limite else { return false }
+            while !entrada.isReadyForMoreMediaData { try? await Task.sleep(for: .milliseconds(4)) }
             guard let pool = adaptador.pixelBufferPool else { return false }
             var pb: CVPixelBuffer?
             CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pb)
@@ -251,7 +253,6 @@ enum ArteAnimado {
             CVPixelBufferUnlockBaseAddress(buffer, [])
             if !adaptador.append(buffer, withPresentationTime: CMTime(seconds: t, preferredTimescale: 600)) { return false }
         }
-        guard ultimo != nil else { return false }
         entrada.markAsFinished()
         await escritor.finishWriting()
         return escritor.status == .completed
