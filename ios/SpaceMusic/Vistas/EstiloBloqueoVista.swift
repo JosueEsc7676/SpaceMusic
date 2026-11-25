@@ -45,7 +45,7 @@ struct EstiloBloqueoVista: View {
                 Section {
                     Toggle("Portada en toda la pantalla", isOn: $e.pantallaCompleta)
                 } footer: {
-                    Text("Como Apple Music: con iOS 26 la portada ocupa toda la pantalla bloqueada. Cada verso es un video: entra con su animación y, si eliges «Iluminar», cada palabra se enciende suave al cantarla, sin parpadeos. iOS la muestra fija con el modo de bajo consumo o «Reducir movimiento».")
+                    Text("Como Apple Music: con iOS 26 la portada ocupa toda la pantalla bloqueada y se mueve muy despacio. iOS la muestra fija con el modo de bajo consumo o «Reducir movimiento».")
                 }
 
                 if e.modo == .letra {
@@ -54,24 +54,6 @@ struct EstiloBloqueoVista: View {
                             ForEach(EstiloBloqueo.Posicion.allCases, id: \.self) { Text(EstiloBloqueo.nombre($0)).tag($0) }
                         }
                         .pickerStyle(.segmented)
-                        if e.posicion == .libre {
-                            VStack(alignment: .leading) {
-                                Text("Altura · \(Int((e.altoLibre * 100).rounded())) % desde arriba")
-                                Slider(value: $e.altoLibre, in: 0.08...0.92, step: 0.01)
-                            }
-                            VStack(alignment: .leading) {
-                                Text("A los lados · \(e.ladoLibre < -0.05 ? "izquierda" : e.ladoLibre > 0.05 ? "derecha" : "centro")")
-                                Slider(value: $e.ladoLibre, in: -1...1, step: 0.05)
-                            }
-                        }
-                        VStack(alignment: .leading) {
-                            Text("Ancho de la letra · \(Int((e.anchoLetra * 100).rounded())) %")
-                            Slider(value: $e.anchoLetra, in: 0.55...0.96, step: 0.01)
-                        }
-                        VStack(alignment: .leading) {
-                            Text("Inclinación · \(Int(e.giro.rounded()))°")
-                            Slider(value: $e.giro, in: -15...15, step: 1)
-                        }
                         Picker("Tipografía", selection: $e.fuente) {
                             ForEach(EstiloBloqueo.Fuente.allCases, id: \.self) { f in
                                 Text(EstiloBloqueo.nombre(f)).font(Font(EstiloBloqueo.fuente(f, 30) as CTFont)).tag(f)
@@ -82,10 +64,9 @@ struct EstiloBloqueoVista: View {
                             Text("Tamaño · \(Int((e.tamano * 100).rounded())) %")
                             Slider(value: $e.tamano, in: 0.7...1.5, step: 0.05)
                         }
-                        VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 12) {
                             Text("Color")
-                            ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
+                            Spacer()
                             ForEach(EstiloBloqueo.ColorLetra.allCases, id: \.self) { c in
                                 Button { e.color = c } label: {
                                     Circle().fill(Color(uiColor: EstiloBloqueo.uiColor(c))).frame(width: 28, height: 28)
@@ -95,13 +76,6 @@ struct EstiloBloqueoVista: View {
                                 .accessibilityLabel(EstiloBloqueo.nombre(c))
                                 .accessibilityAddTraits(e.color == c ? .isSelected : [])
                             }
-                            }
-                            .padding(.vertical, 4)
-                            }
-                        }
-                        VStack(alignment: .leading) {
-                            Text("Transparencia · \(Int((e.opacidad * 100).rounded())) %")
-                            Slider(value: $e.opacidad, in: 0.4...1, step: 0.05)
                         }
                         Picker("Alineación", selection: $e.alineacion) {
                             ForEach(EstiloBloqueo.Alineacion.allCases, id: \.self) { Text(EstiloBloqueo.nombre($0)).tag($0) }
@@ -123,28 +97,11 @@ struct EstiloBloqueoVista: View {
                             Slider(value: $e.espaciado, in: 0...0.2, step: 0.01)
                         }
                         Toggle("Iluminar cada palabra al cantarla", isOn: $e.iluminar)
-                        if e.iluminar {
-                            Picker("Color de la palabra que suena", selection: $e.resaltado) {
-                                Text("El mismo de la letra").tag(EstiloBloqueo.ColorLetra?.none)
-                                ForEach(EstiloBloqueo.ColorLetra.allCases, id: \.self) { Text(EstiloBloqueo.nombre($0)).tag(Optional($0)) }
-                            }
-                        }
-                        if e.pantallaCompleta {
-                            Picker("Cómo entra cada verso", selection: $e.entrada) {
-                                ForEach(EstiloBloqueo.Entrada.allCases, id: \.self) { Text(EstiloBloqueo.nombre($0)).tag($0) }
-                            }
-                        }
                         if e.posicion == .flotante {
                             Toggle("Mecer la letra mientras suena", isOn: $e.mecer)
                         }
                         Toggle("Desordenada (siempre sincronizada)", isOn: $e.desordenada)
                         Toggle("Mostrar el verso siguiente", isOn: $e.siguiente)
-                        if e.siguiente {
-                            VStack(alignment: .leading) {
-                                Text("Tamaño del verso siguiente · \(Int((e.tamanoSiguiente * 100).rounded())) %")
-                                Slider(value: $e.tamanoSiguiente, in: 0.35...0.8, step: 0.05)
-                            }
-                        }
                         Toggle("En mayúsculas", isOn: $e.mayusculas)
                     }
                     Section {
@@ -159,7 +116,6 @@ struct EstiloBloqueoVista: View {
                             Text("Sombra · \(Int((e.sombra * 100).rounded())) %")
                             Slider(value: $e.sombra, in: 0...1, step: 0.05)
                         }
-                        Toggle("Bordes oscuros (viñeta)", isOn: $e.vineta)
                     } header: { Text("Portada") } footer: {
                         Text("Desenfocar y oscurecer la portada ayuda a leer la letra.")
                     }

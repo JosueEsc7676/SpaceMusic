@@ -3,19 +3,17 @@ import UIKit
 /// Cómo se ve la pantalla bloqueada (se guarda en el iPhone). «Original» deja solo la portada, sin letra ni sombra.
 struct EstiloBloqueo: Codable, Equatable, Sendable {
     enum Modo: String, Codable, CaseIterable, Sendable { case letra, original }
-    enum Posicion: String, Codable, CaseIterable, Sendable { case abajo, centro, arriba, flotante, libre }
+    enum Posicion: String, Codable, CaseIterable, Sendable { case abajo, centro, arriba, flotante }
     enum Fuente: String, Codable, CaseIterable, Sendable {
         case manuscrita, moderna, elegante, maquina, gruesa
         // 3.23: modernas y extravagantes, y una hecha a mano con estilo
         case futura, clarendon, rockwell, copperplate, aMano
     }
-    enum ColorLetra: String, Codable, CaseIterable, Sendable { case blanco, crema, amarillo, rosa, celeste, lila, menta, naranja, rojo }
+    enum ColorLetra: String, Codable, CaseIterable, Sendable { case blanco, crema, amarillo, rosa, celeste }
     enum Alineacion: String, Codable, CaseIterable, Sendable { case centro, izquierda, derecha }
     enum Efecto: String, Codable, CaseIterable, Sendable { case sombra, resplandor, ninguno }
     enum FondoLetra: String, Codable, CaseIterable, Sendable { case ninguno, caja, banda }
     enum Filtro: String, Codable, CaseIterable, Sendable { case normal, blancoNegro, sepia, vivo }
-    /// Cómo entra cada verso (en la portada a pantalla completa, que es un video).
-    enum Entrada: String, Codable, CaseIterable, Sendable { case aparecer, deslizar, crecer, escribir, ninguna }
 
     var modo: Modo = .letra
     /// Dónde va la letra, siempre dentro de la portada y centrada.
@@ -54,25 +52,6 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
     /// Imagen de más resolución para verla nítida a pantalla completa (al tocar la portada en la pantalla bloqueada).
     var pantallaCompleta = false
 
-    // 3.27: más libertad para quienes aman personalizar
-    /// Posición «Libre»: alto (0,08 arriba … 0,92 abajo) y corrimiento a los lados (−1 izquierda … 1 derecha).
-    var altoLibre: Double = 0.72
-    var ladoLibre: Double = 0
-    /// Inclinación del verso en grados (−15 … 15).
-    var giro: Double = 0
-    /// Transparencia de la letra (0,4 … 1).
-    var opacidad: Double = 1
-    /// Color de la palabra que se está cantando (nil = el mismo color de la letra).
-    var resaltado: ColorLetra? = nil
-    /// Tamaño del verso siguiente respecto al actual (0,35 … 0,8).
-    var tamanoSiguiente: Double = 0.5
-    /// Animación con la que aparece cada verso.
-    var entrada: Entrada = .aparecer
-    /// Bordes de la portada más oscuros (viñeta).
-    var vineta = false
-    /// Ancho máximo de la letra dentro de la parte visible (0,6 … 1).
-    var anchoLetra: Double = 0.86
-
     init() {}
 
     /// Lee lo guardado aunque falten opciones nuevas (cada una toma su valor normal).
@@ -99,15 +78,6 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
         iluminar = (try? c.decodeIfPresent(Bool.self, forKey: .iluminar)) ?? d.iluminar
         mecer = (try? c.decodeIfPresent(Bool.self, forKey: .mecer)) ?? d.mecer
         pantallaCompleta = (try? c.decodeIfPresent(Bool.self, forKey: .pantallaCompleta)) ?? d.pantallaCompleta
-        altoLibre = (try? c.decodeIfPresent(Double.self, forKey: .altoLibre)) ?? d.altoLibre
-        ladoLibre = (try? c.decodeIfPresent(Double.self, forKey: .ladoLibre)) ?? d.ladoLibre
-        giro = (try? c.decodeIfPresent(Double.self, forKey: .giro)) ?? d.giro
-        opacidad = (try? c.decodeIfPresent(Double.self, forKey: .opacidad)) ?? d.opacidad
-        resaltado = (try? c.decodeIfPresent(ColorLetra.self, forKey: .resaltado)) ?? d.resaltado
-        tamanoSiguiente = (try? c.decodeIfPresent(Double.self, forKey: .tamanoSiguiente)) ?? d.tamanoSiguiente
-        entrada = (try? c.decodeIfPresent(Entrada.self, forKey: .entrada)) ?? d.entrada
-        vineta = (try? c.decodeIfPresent(Bool.self, forKey: .vineta)) ?? d.vineta
-        anchoLetra = (try? c.decodeIfPresent(Double.self, forKey: .anchoLetra)) ?? d.anchoLetra
     }
 
     private static let base = EstiloBloqueo()
@@ -141,7 +111,7 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
     }
 
     static func nombre(_ p: Posicion) -> String {
-        switch p { case .abajo: "Abajo"; case .centro: "Centro"; case .arriba: "Arriba"; case .flotante: "Flotante"; case .libre: "Libre" }
+        switch p { case .abajo: "Abajo"; case .centro: "Centro"; case .arriba: "Arriba"; case .flotante: "Flotante" }
     }
 
     static func nombre(_ a: Alineacion) -> String {
@@ -161,10 +131,7 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
     }
 
     static func nombre(_ c: ColorLetra) -> String {
-        switch c {
-        case .blanco: "Blanco"; case .crema: "Crema"; case .amarillo: "Amarillo"; case .rosa: "Rosa"; case .celeste: "Celeste"
-        case .lila: "Lila"; case .menta: "Menta"; case .naranja: "Naranja"; case .rojo: "Rojo"
-        }
+        switch c { case .blanco: "Blanco"; case .crema: "Crema"; case .amarillo: "Amarillo"; case .rosa: "Rosa"; case .celeste: "Celeste" }
     }
 
     static func uiColor(_ c: ColorLetra) -> UIColor {
@@ -174,10 +141,6 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
         case .amarillo: UIColor(red: 1, green: 0.86, blue: 0.3, alpha: 1)
         case .rosa: UIColor(red: 1, green: 0.55, blue: 0.75, alpha: 1)
         case .celeste: UIColor(red: 0.55, green: 0.85, blue: 1, alpha: 1)
-        case .lila: UIColor(red: 0.78, green: 0.68, blue: 1, alpha: 1)
-        case .menta: UIColor(red: 0.6, green: 1, blue: 0.82, alpha: 1)
-        case .naranja: UIColor(red: 1, green: 0.68, blue: 0.35, alpha: 1)
-        case .rojo: UIColor(red: 1, green: 0.38, blue: 0.4, alpha: 1)
         }
     }
 
@@ -215,11 +178,5 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
         case .manuscrita: 0.95; case .moderna: 0.78; case .elegante: 0.9; case .maquina: 0.72; case .gruesa: 0.86
         case .futura: 0.86; case .clarendon: 0.7; case .rockwell: 0.74; case .copperplate: 0.66; case .aMano: 0.86
         }
-    }
-}
-
-extension EstiloBloqueo {
-    static func nombre(_ e: Entrada) -> String {
-        switch e { case .aparecer: "Aparecer"; case .deslizar: "Deslizar"; case .crecer: "Crecer"; case .escribir: "Escribir"; case .ninguna: "Sin animación" }
     }
 }

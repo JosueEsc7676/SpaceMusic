@@ -23,11 +23,8 @@ enum ArteBloqueo {
     }
 
     /// Centro vertical de la letra según la posición elegida (siempre dentro de la portada).
-    static func centroY(_ p: EstiloBloqueo.Posicion, alto: Double = 0.72) -> CGFloat {
-        switch p {
-        case .abajo: lado * 0.79; case .centro: lado * 0.53; case .arriba: lado * 0.26; case .flotante: lado * 0.53
-        case .libre: lado * CGFloat(min(max(alto, 0.08), 0.92))
-        }
+    static func centroY(_ p: EstiloBloqueo.Posicion) -> CGFloat {
+        switch p { case .abajo: lado * 0.79; case .centro: lado * 0.53; case .arriba: lado * 0.26; case .flotante: lado * 0.53 }
     }
 
     /// Luz promedio de una zona de la imagen (0 a 1), leyendo una versión de 8 × 8 píxeles.
@@ -119,7 +116,7 @@ enum ArteBloqueo {
     static func base(_ portada: UIImage?, estilo: EstiloBloqueo = .guardado) -> Base {
         let marco = CGRect(origin: .zero, size: tamano)
         let columna = lado * visible
-        let cy = centroY(estilo.posicion, alto: estilo.altoLibre)
+        let cy = centroY(estilo.posicion)
         var claridad: CGFloat = 0
         var cuadrada: UIImage?
         if let portada {
@@ -144,21 +141,10 @@ enum ArteBloqueo {
                 case .arriba: return ([c1, c1, c0, c0], [0, 0.12, 0.5, 1])
                 case .centro: return ([c0, c1, c0], [0.25, 0.53, 0.8])
                 case .flotante: return ([c1, c1], [0, 1])
-                case .libre:
-                    let a = CGFloat(min(max(estilo.altoLibre, 0.1), 0.9))
-                    return ([c0, c1, c0], [max(0, a - 0.28), a, min(1, a + 0.28)])
                 }
             }()
             if let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colores as CFArray, locations: lugares) {
                 ctx.cgContext.drawLinearGradient(g, start: .zero, end: CGPoint(x: 0, y: lado), options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
-            }
-            // Viñeta: los bordes de la parte visible más oscuros
-            if estilo.vineta, let v = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                                 colors: [UIColor(white: 0, alpha: 0).cgColor, UIColor(white: 0, alpha: 0.75).cgColor] as CFArray,
-                                                 locations: [0.45, 1]) {
-                let centro = CGPoint(x: lado / 2, y: lado / 2)
-                ctx.cgContext.drawRadialGradient(v, startCenter: centro, startRadius: 0, endCenter: centro, endRadius: lado * 0.62,
-                                                 options: [.drawsAfterEndLocation])
             }
         }
         return Base(fondo: fondo, luz: claridad, estilo: estilo)
@@ -175,16 +161,13 @@ enum ArteBloqueo {
     /// Lugares del verso flotante dentro de la columna visible: (desplazamiento horizontal, alto), siempre legibles.
     private static let lugares: [(CGFloat, CGFloat)] = [(-0.1, 0.24), (0.1, 0.4), (-0.06, 0.58), (0.08, 0.74), (0, 0.32), (-0.1, 0.68), (0.1, 0.5), (0, 0.8)]
 
-    private static func dibujar(_ letra: Letra, alfa alfaPedida: CGFloat, desplazamiento dy: CGFloat, base: Base,
-                                encendidas: Double? = nil, indice: Int = 0, deriva: CGFloat = 0,
-                                escala: CGFloat = 1, caracteres: Int? = nil) {
+    private static func dibujar(_ letra: Letra, alfa: CGFloat, desplazamiento dy: CGFloat, base: Base,
+                                encendidas: Int? = nil, indice: Int = 0, deriva: CGFloat = 0) {
         let e = base.estilo
-        let alfa = alfaPedida * CGFloat(min(max(e.opacidad, 0.3), 1))
-        let completo = e.mayusculas ? letra.actual.uppercased() : letra.actual
-        guard alfa > 0.01, !completo.isEmpty else { return }
+        let texto = e.mayusculas ? letra.actual.uppercased() : letra.actual
+        guard alfa > 0.01, !texto.isEmpty else { return }
         let columna = lado * visible
-        // Flotante: más angosta, así nunca se sale al moverse
-        let ancho = columna * CGFloat(e.posicion == .flotante ? min(e.anchoLetra, 0.72) : min(max(e.anchoLetra, 0.55), 0.96))
+        let ancho = columna * (e.posicion == .flotante ? 0.72 : 0.86) // flotante: más angosta, así nunca se sale al moverse
         let estiloP = NSMutableParagraphStyle()
         estiloP.alignment = e.alineacion == .izquierda ? .left : e.alineacion == .derecha ? .right : .center
         estiloP.lineBreakMode = .byWordWrapping
@@ -217,43 +200,32 @@ enum ArteBloqueo {
             ceil((t as NSString).boundingRect(with: CGSize(width: ancho, height: .greatestFiniteMagnitude),
                                                options: .usesLineFragmentOrigin, attributes: a, context: nil).height)
         }
-        // Lo más grande posible (según el tamaño elegido) sin pasar de 3 renglones y sin cortar ninguna palabra:
-        // la palabra más larga tiene que caber entera en el ancho (antes se partía y se veía cortada)
+        // Lo más grande posible (según el tamaño elegido) sin pasar de 3 renglones
         let renglon = EstiloBloqueo.renglon(e.fuente)
-        let palabrasTexto = completo.split(separator: " ").map(String.init)
-        func anchoPalabraMayor(_ a: [NSAttributedString.Key: Any]) -> CGFloat {
-            palabrasTexto.map { ceil(($0 as NSString).size(withAttributes: a).width) }.max() ?? 0
-        }
         var tam: CGFloat = 132 * CGFloat(e.tamano)
         var a = atributos(tam, alfa)
-        var h = alto(completo, a)
-        while ((h > tam * renglon * 3 + 20 || h > lado * 0.3) && tam > 50) || (anchoPalabraMayor(a) > ancho * 0.98 && tam > 24) {
-            tam -= 4
+        var h = alto(texto, a)
+        while (h > tam * renglon * 3 + 20 || h > lado * 0.3) && tam > 50 {
+            tam -= 6
             a = atributos(tam, alfa)
-            h = alto(completo, a)
+            h = alto(texto, a)
         }
-        // Escribir: solo las letras que ya aparecieron (el alto se calcula con el verso entero, así no salta)
-        let texto = caracteres.map { String(completo.prefix(max(0, $0))) } ?? completo
         // Verso siguiente, chico y atenuado, debajo
         var sigTexto: String?
         var sigA: [NSAttributedString.Key: Any] = [:]
         var sigH: CGFloat = 0
         if e.siguiente, let s = letra.siguiente?.trimmingCharacters(in: .whitespaces), !s.isEmpty {
             sigTexto = e.mayusculas ? s.uppercased() : s
-            sigA = atributos(max(28, tam * CGFloat(min(max(e.tamanoSiguiente, 0.3), 0.85))), alfa * 0.5)
+            sigA = atributos(max(40, tam * 0.5), alfa * 0.5)
             sigH = min(alto(sigTexto!, sigA), lado * 0.12)
         }
         let separacion: CGFloat = sigTexto == nil ? 0 : 18
         let total = h + separacion + sigH
-        let anchoTexto = min(ancho, ceil((completo as NSString).boundingRect(with: CGSize(width: ancho, height: .greatestFiniteMagnitude),
+        let anchoTexto = min(ancho, ceil((texto as NSString).boundingRect(with: CGSize(width: ancho, height: .greatestFiniteMagnitude),
                                                                             options: .usesLineFragmentOrigin, attributes: a, context: nil).width))
         // Centrado en la posición elegida y siempre dentro de la portada; «flotante» cambia de lugar en cada verso
-        var centro = centroY(e.posicion, alto: e.altoLibre)
+        var centro = centroY(e.posicion)
         var cx = lado / 2
-        if e.posicion == .libre {
-            // A los lados sin salirse nunca de la parte visible
-            cx += CGFloat(min(max(e.ladoLibre, -1), 1)) * max(0, columna - ancho) / 2
-        }
         if e.posicion == .flotante {
             let l = lugares[abs(indice) % lugares.count]
             cx += l.0 * columna
@@ -286,14 +258,6 @@ enum ArteBloqueo {
             c.restoreGState()
         }
         c?.saveGState()
-        // Giro elegido y escala de la animación de entrada, alrededor del centro del verso
-        if e.giro != 0 || escala != 1 {
-            let centroV = CGPoint(x: cx, y: y + h / 2)
-            c?.translateBy(x: centroV.x, y: centroV.y)
-            if e.giro != 0 { c?.rotate(by: CGFloat(min(max(e.giro, -15), 15)) * .pi / 180) }
-            if escala != 1 { c?.scaleBy(x: escala, y: escala) }
-            c?.translateBy(x: -centroV.x, y: -centroV.y)
-        }
         if e.desordenada {
             // Movido e inclinado un poco (−4° a 4°), nunca al revés
             let r = semilla(letra.actual)
@@ -305,23 +269,13 @@ enum ArteBloqueo {
         }
         let rect = CGRect(x: cx - ancho / 2, y: y, width: ancho, height: h + 10)
         if let n = encendidas, e.iluminar {
-            // Las cantadas brillan, la que suena se enciende de a poco (n con decimales) y las que faltan quedan atenuadas
             let s = NSMutableAttributedString(string: texto, attributes: a)
             let palabras = texto.split(separator: " ", omittingEmptySubsequences: false)
-            let brillo = e.resaltado.map { EstiloBloqueo.uiColor($0) }
             var pos = 0
             for (k, p) in palabras.enumerated() {
                 let largo = (String(p) as NSString).length
-                if largo > 0 {
-                    let encendida = CGFloat(min(max(n - Double(k), 0), 1))
-                    let rango = NSRange(location: pos, length: largo)
-                    if encendida < 1 {
-                        s.addAttribute(.foregroundColor, value: color.withAlphaComponent(alfa * (0.38 + 0.62 * encendida)), range: rango)
-                    }
-                    // La palabra que suena ahora, con el color de resaltado
-                    if let brillo, encendida > 0, n - Double(k) < 1.6 {
-                        s.addAttribute(.foregroundColor, value: brillo.withAlphaComponent(alfa * max(0.38, encendida)), range: rango)
-                    }
+                if k >= n, largo > 0 {
+                    s.addAttribute(.foregroundColor, value: color.withAlphaComponent(alfa * 0.38), range: NSRange(location: pos, length: largo))
                 }
                 pos += largo + 1
             }
@@ -344,27 +298,7 @@ enum ArteBloqueo {
             base.fondo.draw(in: marco)
             let salto = lado * 0.03
             if let de { dibujar(de, alfa: 1 - e, desplazamiento: -salto * e, base: base) }
-            if let a { dibujar(a, alfa: e, desplazamiento: salto * (1 - e), base: base, encendidas: encendidas.map(Double.init), indice: indice, deriva: deriva) }
-        }
-    }
-
-    /// Un cuadro del video de un verso: entrada de 0 a 1 (animación con la que aparece) y palabras encendidas con decimales.
-    static func cuadroVerso(_ base: Base, letra: Letra, entrada p: CGFloat, encendidas: Double?, indice: Int, deriva: CGFloat = 0) -> UIImage {
-        let marco = CGRect(origin: .zero, size: tamano)
-        let e = p * p * (3 - 2 * p)
-        var alfa: CGFloat = 1, dy: CGFloat = 0, escala: CGFloat = 1
-        var caracteres: Int?
-        switch base.estilo.entrada {
-        case .aparecer: alfa = e
-        case .deslizar: alfa = e; dy = lado * 0.05 * (1 - e)
-        case .crecer: alfa = e; escala = 0.82 + 0.18 * e
-        case .escribir: caracteres = Int((CGFloat(letra.actual.count) * min(1, p * 1.05)).rounded(.up))
-        case .ninguna: break
-        }
-        return UIGraphicsImageRenderer(size: tamano, format: formato).image { _ in
-            base.fondo.draw(in: marco)
-            dibujar(letra, alfa: alfa, desplazamiento: dy, base: base, encendidas: encendidas, indice: indice, deriva: deriva,
-                    escala: escala, caracteres: caracteres)
+            if let a { dibujar(a, alfa: e, desplazamiento: salto * (1 - e), base: base, encendidas: encendidas, indice: indice, deriva: deriva) }
         }
     }
 }
