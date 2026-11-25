@@ -7,23 +7,25 @@ import WidgetKit
 struct LetraBloqueoWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: LetraActividad.self) { contexto in
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Image(systemName: contexto.state.pausada ? "pause.fill" : "music.note")
                     Text(contexto.state.cancion).font(.caption.weight(.semibold)).lineLimit(1)
                     Spacer()
                     Text("SpaceMusic").font(.caption2).foregroundStyle(.secondary)
                 }
-                Text(contexto.state.verso.isEmpty ? "Esperando el prÃ³ximo versoâ€¦" : contexto.state.verso)
+                Text(contexto.state.verso.isEmpty ? "Esperando el prÃƒÂ³ximo versoÃ¢â‚¬Â¦" : contexto.state.verso)
                     .font(.system(size: 19, weight: .semibold, design: .rounded))
-                    .lineLimit(4).contentTransition(.opacity)
+                    .lineLimit(3).minimumScaleFactor(0.8).contentTransition(.opacity)
+                    .frame(maxWidth: .infinity, minHeight: 62, maxHeight: 62, alignment: .topLeading)
                 if !contexto.state.siguiente.isEmpty {
                     Text(contexto.state.siguiente).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                 }
-                if contexto.isStale { Text("Actualización pendiente de iOS").font(.caption2).foregroundStyle(.secondary) }
+                if contexto.isStale { Text("ActualizaciÃ³n pendiente de iOS").font(.caption2).foregroundStyle(.secondary) }
                 Text(contexto.state.artista).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
-            .padding(16)
+            .padding(12)
+            .frame(height: 156)
             .activityBackgroundTint(.black.opacity(0.82))
             .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { contexto in
