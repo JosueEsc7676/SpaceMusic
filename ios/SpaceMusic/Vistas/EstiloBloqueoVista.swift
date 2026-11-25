@@ -43,9 +43,9 @@ struct EstiloBloqueoVista: View {
                 }
 
                 Section {
-                    Toggle("Portada ampliada (alta resolución)", isOn: $e.pantallaCompleta)
+                    Toggle("Portada en toda la pantalla", isOn: $e.pantallaCompleta)
                 } footer: {
-                    Text("Con letra se usa una imagen de alta resolución: toca la portada de la pantalla bloqueada para ampliarla. No se reemplazan videos entre versos. iOS controla las transiciones. En «Original», iOS 26 permite la portada animada a toda la pantalla.")
+                    Text("En iOS 26 agranda la portada de la canción en la pantalla bloqueada, tanto con letra como en Original. Los versos se preparan antes de mostrarlos y la portada se mantiene mientras carga el siguiente. iOS controla las transiciones.")
                 }
 
                 if e.modo == .letra {

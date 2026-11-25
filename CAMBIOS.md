@@ -1,3 +1,9 @@
+## iPhone 3.29: pantalla completa con letra, sin cambiar la función del botón
+- El botón Portada en toda la pantalla vuelve a agrandar la portada en Con letra y Original. Se conserva 3.28 como base; no se revierte a versiones anteriores.
+- Publicación de clips ya codificados y previsualización coincidente con el primer cuadro, sin cuadro de entrada vacío. La portada de respaldo se mantiene estable; el clip anterior sigue disponible mientras se prepara el siguiente.
+- Precarga del próximo verso, rechazo de respuestas antiguas, invalidación al buscar/pausar/reanudar/cambiar sincronía y generación de cuadros por secuencia para no acumular cientos de imágenes en memoria.
+- Se mantienen las correcciones de palabras pendientes y los ajustes de estilo. La eliminación visual del parpadeo requiere comprobarse en un iPhone físico; las transiciones son del sistema.
+
 ## iPhone 3.28: letra de bloqueo estable
 - Se elimina el video por verso que reiniciaba la superficie animada de iOS. Con letra se usa artwork estático de alta resolución, ampliable al tocar la portada; el fondo animado de pantalla completa queda para Original. La transición final sigue controlada por iOS.
 - Las palabras limitadas por frecuencia se vuelven a intentar hasta dibujarse; reloj monotónico, precarga de la línea siguiente y deduplicación de dibujos pendientes. Versos repetidos conservan su índice y las imágenes de estilos antiguos se descartan.

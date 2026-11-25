@@ -2,8 +2,7 @@ import AVFoundation
 import MediaPlayer
 import UIKit
 
-/// Portada animada únicamente para el modo Original. La letra usa imágenes estáticas:
-/// cambiar el artworkID en cada verso reinicia la superficie animada de iOS.
+/// Portada de pantalla completa. Los clips de letra se entregan ya codificados, nunca como tarea pendiente.
 @available(iOS 26, *)
 enum ArteAnimado {
     static let ancho = 1080, alto = 1440
@@ -36,27 +35,66 @@ enum ArteAnimado {
                 await video(id: id) {
                     guard let cg = previa.cgImage else { return nil }
                     if movimiento { return (cuadrosMovimiento(cg), 10) }
-                    return ([(0, cg)], 4)
+                    return (AnySequence([(0.0, cg)]), 4)
                 }
             })
         guardar(id, o)
         return o
     }
 
-    private static func cuadrosMovimiento(_ cg: CGImage) -> [(Double, CGImage)] {
-        // Se acerca hasta un 7 % y vuelve, con un vaivén suave de lado: el final empalma con el principio
-        let caja = CGSize(width: ancho, height: alto)
-        var r: [(Double, CGImage)] = []
-        for i in 0..<120 {
-            let t = Double(i) / 120
-            let zoom = 1 + 0.07 * (1 - cos(2 * .pi * t)) / 2
-            let dx = CGFloat(sin(2 * .pi * t)) * 18
-            let img = UIGraphicsImageRenderer(size: caja, format: formatoVideo).image { _ in
-                UIImage(cgImage: cg).draw(in: rectCubrir(CGSize(width: cg.width, height: cg.height), en: caja, zoom: zoom, dx: dx))
+    /// No se publica hasta tener previa y MP4 local completos. El primer cuadro muestra el verso,
+    /// sin entrada desde negro ni texto invisible. Solo se conservan uno o dos cuadros en memoria.
+    @MainActor static func letraLista(clave: String, base: ArteBloqueo.Base, texto: String,
+            siguiente: String?, palabras: [Double], duracion: Double, indice: Int,
+            pausada: Bool) async -> MPMediaItemAnimatedArtwork? {
+        let id = "sm-lista2-" + huella(clave)
+        if let o = obras[id] { return o }
+        let pintar: @Sendable (Double) -> CGImage? = { t in
+            autoreleasepool {
+                let luces = palabras.reduce(0.0) { $0 + min(max((t - $1) / 0.18, 0), 1) }
+                let imagen = ArteBloqueo.cuadroVerso(base, letra: (texto, siguiente), entrada: 1,
+                    encendidas: base.estilo.iluminar ? luces : nil, indice: indice)
+                return recorte(imagen).cgImage
             }
-            if let c = img.cgImage { r.append((t * 10, c)) }
         }
-        return r
+        guard let previaCG = await Task.detached(priority: .userInitiated, operation: { pintar(0) }).value else { return nil }
+        let previa = UIImage(cgImage: previaCG)
+        let fin = min(max(duracion, 2), 30)
+        var tiempos: Set<Double> = [0, fin]
+        if base.estilo.iluminar && !pausada {
+            for p in palabras where p >= 0 && p < fin {
+                for paso in [0.0, 0.06, 0.12, 0.18] where p + paso < fin { tiempos.insert(p + paso) }
+            }
+        }
+        let ordenados = tiempos.sorted()
+        guard let url = await video(id: id, cuadros: {
+            let secuencia = ordenados.lazy.compactMap { t -> (Double, CGImage)? in
+                guard let cg = pintar(pausada ? 0 : t) else { return nil }
+                return (t, cg)
+            }
+            return (AnySequence(secuencia), fin)
+        }) else { return nil }
+        let o = MPMediaItemAnimatedArtwork(artworkID: id,
+            previewImageRequestHandler: { _ in previa },
+            videoAssetFileURLRequestHandler: { _ in url })
+        guardar(id, o)
+        return o
+    }
+
+    private static func cuadrosMovimiento(_ cg: CGImage) -> AnySequence<(Double, CGImage)> {
+        let caja = CGSize(width: ancho, height: alto)
+        return AnySequence((0..<120).lazy.compactMap { i -> (Double, CGImage)? in
+            autoreleasepool {
+                let t = Double(i) / 120
+                let zoom = 1 + 0.07 * (1 - cos(2 * .pi * t)) / 2
+                let dx = CGFloat(sin(2 * .pi * t)) * 18
+                let img = UIGraphicsImageRenderer(size: caja, format: formatoVideo).image { _ in
+                    UIImage(cgImage: cg).draw(in: rectCubrir(CGSize(width: cg.width, height: cg.height), en: caja, zoom: zoom, dx: dx))
+                }
+                guard let c = img.cgImage else { return nil }
+                return (t * 10, c)
+            }
+        })
     }
 
     // MARK: Utilidades
@@ -96,13 +134,13 @@ enum ArteAnimado {
     }
 
     /// Video local (iOS lo pide solo cuando lo va a mostrar). Si ya se está creando, se espera ese mismo.
-    private static func video(id: String, cuadros: @escaping @Sendable () -> ([(Double, CGImage)], Double)?) async -> URL? {
+    private static func video(id: String, cuadros: @escaping @Sendable () -> (AnySequence<(Double, CGImage)>, Double)?) async -> URL? {
         let url = carpeta().appendingPathComponent("\(id).mp4")
         if FileManager.default.fileExists(atPath: url.path) { return url }
         candado.lock()
         if let t = enCurso[id] { candado.unlock(); return await t.value }
         let tarea = Task.detached(priority: .userInitiated) { () -> URL? in
-            guard let hecho = cuadros(), !hecho.0.isEmpty else { return nil }
+            guard let hecho = cuadros() else { return nil }
             let temporal = carpeta().appendingPathComponent("\(id)-\(UUID().uuidString).mp4")
             guard await escribir(hecho.0, duracion: hecho.1, en: temporal) else { try? FileManager.default.removeItem(at: temporal); return nil }
             try? FileManager.default.removeItem(at: url)
@@ -129,7 +167,7 @@ enum ArteAnimado {
     }
 
     /// Cuadros con su tiempo (s): cada uno se queda hasta el siguiente; el último hasta `duracion`.
-    private static func escribir(_ cuadros: [(Double, CGImage)], duracion: Double, en url: URL) async -> Bool {
+    private static func escribir(_ cuadros: AnySequence<(Double, CGImage)>, duracion: Double, en url: URL) async -> Bool {
         guard let escritor = try? AVAssetWriter(outputURL: url, fileType: .mp4) else { return false }
         let entrada = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,
@@ -148,14 +186,24 @@ enum ArteAnimado {
         guard escritor.startWriting() else { return false }
         escritor.startSession(atSourceTime: .zero)
         let caja = CGRect(x: 0, y: 0, width: ancho, height: alto)
-        // El último cuadro se repite al final: así el video dura lo que el verso (y un poco más)
-        var lista = cuadros
-        if let ultimo = cuadros.last, duracion > ultimo.0 + 0.05 { lista.append((duracion, ultimo.1)) }
+        // Secuencia perezosa: no acumular todos los cuadros de alta resolución de un verso.
+        var iterador = cuadros.makeIterator()
+        var ultimo: (Double, CGImage)?
         var anterior = -1.0
-        for (t, cg) in lista {
+        let limite = ProcessInfo.processInfo.systemUptime + 45
+        defer { if escritor.status == .writing { escritor.cancelWriting() } }
+        while true {
+            let proximo = iterador.next() ?? ultimo.flatMap { duracion > $0.0 + 0.05 ? (duracion, $0.1) : nil }
+            guard let (t, cg) = proximo else { break }
+            ultimo = (t, cg)
             guard t > anterior else { continue }
             anterior = t
-            while !entrada.isReadyForMoreMediaData { try? await Task.sleep(for: .milliseconds(4)) }
+            while !entrada.isReadyForMoreMediaData {
+                guard escritor.status == .writing, !Task.isCancelled,
+                      ProcessInfo.processInfo.systemUptime < limite else { return false }
+                try? await Task.sleep(for: .milliseconds(4))
+            }
+            guard !Task.isCancelled, escritor.status == .writing else { return false }
             guard let pool = adaptador.pixelBufferPool else { return false }
             var pb: CVPixelBuffer?
             CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pb)
@@ -170,6 +218,7 @@ enum ArteAnimado {
             CVPixelBufferUnlockBaseAddress(buffer, [])
             if !adaptador.append(buffer, withPresentationTime: CMTime(seconds: t, preferredTimescale: 600)) { return false }
         }
+        guard ultimo != nil else { return false }
         entrada.markAsFinished()
         await escritor.finishWriting()
         return escritor.status == .completed

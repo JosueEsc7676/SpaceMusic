@@ -151,3 +151,6 @@ Actualizaciones: toca Descargar actualización y espera el progreso; al terminar
 
 ### Letra de bloqueo (3.28)
 Con letra se usa una imagen estable de alta resolución; toca la portada del sistema para ampliarla. Se evita sustituir videos en cada verso. Original conserva el fondo animado en iOS 26. La letra sigue los tiempos LRC y el ajuste de sincronía, con palabras pendientes que se reintentan. iOS controla las transiciones y no garantiza animación continua ni sincronización del video de artwork con el audio.
+
+### Pantalla completa con letra (3.29)
+El botón Portada en toda la pantalla agranda la portada tanto en Con letra como en Original (iOS 26). Con letra se entrega el clip de cada verso solo cuando su MP4 y su previa ya están listos, manteniendo la portada anterior mientras se prepara. Los cuadros se codifican uno a uno; la imagen de respaldo no se sustituye entre versos. Continúa pendiente la validación visual en un iPhone físico.
