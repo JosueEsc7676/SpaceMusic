@@ -1,3 +1,14 @@
+## 24/11/2026 · iPhone 3.30, compilación 65: texto independiente del fondo
+
+- Publicado https://spacemusic.tail8ccfdf.ts.net/app/SpaceMusic-65.ipa. Código a3acc40; 4689278 bytes; SHA256 66a0431dbba3ac5570f7c2830545d90ed352aa821372b53d1a9d2a3980715cd7.
+- Actions https://github.com/JosueEsc7676/SpaceMusic/actions/runs/45519785280 correcto: pruebas Swift, pruebas del publicador, compilación Release, firma ad hoc de extensión y creación del IPA. Cuatro pruebas locales del publicador correctas.
+- La prueba del usuario confirmó que 58 aún parpadeaba. Se abandona el reemplazo de video por verso: en pantalla completa un verso ya no vuelve a publicar Now Playing ni cambia imagen, video o artworkID. La identidad depende únicamente de canción, fuente de portada y estilo. Se conserva el botón para Con letra y Original.
+- Cambio de presentación explícito: los versos de pantalla completa pasan a una tarjeta de ActivityKit/WidgetKit; ya no se incrustan sobre el fondo. En modo compacto se conserva el diseño anterior sobre la portada. La tarjeta actualiza solo texto y pausa, con altura fija156, sin alertas, APNs ni servidores adicionales. Título/artista de Now Playing siguen siendo reales.
+- Se verificaron en el IPA los dos bundles: com.bpm.spacemusic.ios (65, NSSupportsLiveActivities=true) y PlugIns/LetraBloqueoWidget.appex (65, com.bpm.spacemusic.ios.letra, punto de extensión WidgetKit y ejecutable presente). La firma sigue el procedimiento ad hoc existente; al instalar deben conservarse y volver a firmarse las extensiones con la herramienta habitual. No se crearon certificados ni claves.
+- Uso: permitir Actividades en vivo para SpaceMusic y comenzar la escucha con la app abierta antes de bloquear el teléfono. ActivityKit puede limitar la frecuencia y solo permite iniciar localmente en primer plano; el estado se muestra en Personalizar pantalla bloqueada. Sin permiso/extensión, la portada se conserva pero la tarjeta no puede mostrarse. El sistema decide la disposición de las tarjetas.
+- Descarga completa pública200 con SHA idéntico, Range206 ZIP correcto, manifiesto65/a3acc40, API200 y servicio activo. Publicado con publicar-ios.py sin reiniciar ni cambiar Java. Backups .anterior (58) y IPA58 numerado conservados.
+- Pendiente imprescindible: validación visual de pantalla bloqueada en iPhone físico. La compilación y los tests no demuestran la ausencia de todo parpadeo del compositor ni garantizan sincronía continua de ActivityKit.
+
 ## 24/11/2026 · iPhone 3.29, compilación 58: botón de pantalla completa conservado
 
 - IPA publicado: https://spacemusic.tail8ccfdf.ts.net/app/SpaceMusic-58.ipa. Commit 0307f38; 4650202 bytes; SHA256 c891802ec00a60d8d1fe9ec33705000e3d8c2105b6401cbd9e4bf8e171f697b9.

@@ -1,0 +1,43 @@
+{
+  "version_funcional": "3.30",
+  "compilacion": 65,
+  "commit": "a3acc40",
+  "workflow": 45519785280,
+  "swift_tests": "success",
+  "xcode_app_y_extension": "success",
+  "pruebas_publicador_locales": 4,
+  "ipa_bytes": 4689278,
+  "sha256": "66a0431dbba3ac5570f7c2830545d90ed352aa821372b53d1a9d2a3980715cd7",
+  "bundles_verificados": [
+    "com.bpm.spacemusic.ios",
+    "com.bpm.spacemusic.ios.letra"
+  ],
+  "NSSupportsLiveActivities": true,
+  "publico": {
+    "ipa": 200,
+    "rango": 206,
+    "manifiesto": {
+      "code": 65,
+      "commit": "a3acc40"
+    },
+    "api": 200
+  },
+  "backend_reiniciado": false,
+  "cambia_artwork_por_verso": false,
+  "republica_nowplaying_por_verso_en_fullscreen": false,
+  "presentacion_letra_fullscreen": "Tarjeta separada ActivityKit",
+  "boton_pantalla_completa": {
+    "con_letra": true,
+    "original": true
+  },
+  "APNs": false,
+  "telefonos_fisicos_probados": 0,
+  "limitaciones": [
+    "Sin prueba visual en iPhone",
+    "ActivityKit puede limitar actualizaciones",
+    "Requiere permiso y abrir app para iniciar tarjeta",
+    "Conservar la extensión al volver a firmar el IPA",
+    "La letra ya no está incrustada en el fondo de pantalla completa"
+  ],
+  "reversion": "Archivos app/*.anterior (58), IPA58 conservado"
+}
