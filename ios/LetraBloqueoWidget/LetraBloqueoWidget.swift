@@ -14,15 +14,14 @@ struct LetraBloqueoWidget: Widget {
                     Spacer()
                     Text("SpaceMusic").font(.caption2).foregroundStyle(.secondary)
                 }
-                Text(contexto.state.verso.isEmpty ? "Esperando el prÃƒÆ’Ã‚Â³ximo versoÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦" : contexto.state.verso)
+                Text(contexto.state.verso.isEmpty ? "Esperando el próximo verso…" : contexto.state.verso)
                     .font(.system(size: 19, weight: .semibold, design: .rounded))
                     .lineLimit(3).minimumScaleFactor(0.8).contentTransition(.opacity)
                     .frame(maxWidth: .infinity, minHeight: 62, maxHeight: 62, alignment: .topLeading)
-                if !contexto.state.siguiente.isEmpty {
-                    Text(contexto.state.siguiente).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
-                }
-                if contexto.isStale { Text("ActualizaciÃƒÂ³n pendiente de iOS").font(.caption2).foregroundStyle(.secondary) }
-                Text(contexto.state.artista).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text(contexto.state.siguiente).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    .frame(maxWidth: .infinity, minHeight: 26, maxHeight: 26, alignment: .topLeading)
+                Text(contexto.isStale ? "Actualización pendiente de iOS" : contexto.state.artista)
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
             .padding(12)
             .frame(height: 156)

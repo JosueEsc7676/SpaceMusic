@@ -6,7 +6,7 @@ import UIKit
 @MainActor @Observable
 final class LetraActividadService {
     static let compartida = LetraActividadService()
-    private(set) var estado = "La letra aparecerÃƒÆ’Ã‚Â¡ en una tarjeta independiente de la portada."
+    private(set) var estado = "La letra aparecerá en una tarjeta independiente de la portada."
     @ObservationIgnored private var actividad: Activity<LetraActividad>?
     @ObservationIgnored private var enviada: LetraActividad.ContentState?
     @ObservationIgnored private var pendiente: LetraActividad.ContentState?
@@ -42,7 +42,7 @@ final class LetraActividadService {
                 actividad = try Activity.request(attributes: LetraActividad(sesion: UUID().uuidString),
                     content: ActivityContent(state: contenido, staleDate: Date().addingTimeInterval(30)), pushType: nil)
                 enviada = contenido
-                estado = "Tarjeta de letra activada. iOS controla su frecuencia de actualizaciÃƒÆ’Ã‚Â³n."
+                estado = "Tarjeta de letra activada. iOS controla su frecuencia de actualización."
             } catch {
                 proximoIntento = ProcessInfo.processInfo.systemUptime + 10
                 estado = "No se pudo activar la tarjeta. Revisa Actividades en vivo en Ajustes del iPhone."
@@ -67,7 +67,7 @@ final class LetraActividadService {
     }
 
     func finalizar() {
-        estado = "Tarjeta de letra inactiva. Comienza una canciÃ³n con la app abierta para activarla."
+        estado = "Tarjeta de letra inactiva. Comienza una canción con la app abierta para activarla."
         guard actividad != nil || trabajo != nil || pendiente != nil || enviada != nil else { return }
         trabajo?.cancel(); trabajo = nil
         identificadorTrabajo = UUID()
