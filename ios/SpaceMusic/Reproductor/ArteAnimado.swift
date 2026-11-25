@@ -69,7 +69,7 @@ enum ArteAnimado {
         let ordenados = tiempos.sorted()
         guard let url = await video(id: id, cuadros: {
             let secuencia = ordenados.lazy.compactMap { t -> (Double, CGImage)? in
-                guard let cg = pintar(pausada ? 0 : t) else { return nil }
+                guard let cg = pausada || t == 0 ? previaCG : pintar(t) else { return nil }
                 return (t, cg)
             }
             return (AnySequence(secuencia), fin)
@@ -195,6 +195,7 @@ enum ArteAnimado {
         while true {
             let proximo = iterador.next() ?? ultimo.flatMap { duracion > $0.0 + 0.05 ? (duracion, $0.1) : nil }
             guard let (t, cg) = proximo else { break }
+            if ultimo == nil && t != 0 { return false }
             ultimo = (t, cg)
             guard t > anterior else { continue }
             anterior = t
