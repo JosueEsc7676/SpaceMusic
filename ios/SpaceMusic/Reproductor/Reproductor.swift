@@ -487,6 +487,7 @@ final class Reproductor {
             self.baseBloqueo = (c.id, base)
             self.letraMostrada = nil
             self.mostrarBloqueo(animar: false)
+            if self.portadaCompletaActiva { self.actualizarNowPlaying() }
         }
     }
 
@@ -507,8 +508,8 @@ final class Reproductor {
         }
         guard let c = actual, let b = baseBloqueo, b.id == c.id else { actualizarNowPlaying(); return }
         if portadaCompletaActiva {
-            prepararArteCompleto()
-            actualizarNowPlaying()
+            // Un verso solo modifica ActivityKit; ni siquiera vuelve a publicar Now Playing.
+            actualizarTarjetaLetra()
             return
         }
         let a = letraDeseada
