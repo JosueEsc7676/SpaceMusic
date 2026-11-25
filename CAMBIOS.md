@@ -1,3 +1,9 @@
+## iPhone 3.30: portada estable y letra independiente en pantalla bloqueada
+- Elimina por completo el cambio de video/imagen por verso en pantalla completa. La misma portada y la misma identidad de artwork permanecen durante la canción, tanto en Con letra como en Original.
+- La letra de pantalla completa pasa a una tarjeta de Actividad en vivo (ActivityKit/WidgetKit), separada de la portada. Actualiza solo texto por verso y pausa, sin modificar los campos de artista/título ni el audio. El modo compacto conserva letra sobre portada y los estilos existentes.
+- Requiere permitir Actividades en vivo y abrir la app una vez antes de bloquear. Estados reales para permiso desactivado, inicio pendiente y fallo. iOS puede limitar las actualizaciones; no se promete animación continua ni sincronía perfecta.
+- Extensión nativa incluida en el IPA y firmada ad hoc con el mismo procedimiento existente, sin claves nuevas, APNs ni cambios de servidor. Pruebas y compilación no sustituyen comprobar el resultado visual en un teléfono.
+
 ## iPhone 3.29: pantalla completa con letra, sin cambiar la función del botón
 - El botón Portada en toda la pantalla vuelve a agrandar la portada en Con letra y Original. Se conserva 3.28 como base; no se revierte a versiones anteriores.
 - Publicación de clips ya codificados y previsualización coincidente con el primer cuadro, sin cuadro de entrada vacío. La portada de respaldo se mantiene estable; el clip anterior sigue disponible mientras se prepara el siguiente.

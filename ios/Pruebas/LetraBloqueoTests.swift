@@ -18,17 +18,20 @@ final class LetraBloqueoTests: XCTestCase {
         XCTAssertTrue(PoliticaLetraBloqueo.actualizar(palabras: 2, mostradas: 2, iluminar: false, vaiven: true, ahora: 1.6, ultimo: 1))
         XCTAssertTrue(PoliticaLetraBloqueo.actualizar(palabras: 1, mostradas: 8, iluminar: true, vaiven: false, ahora: 3, ultimo: 1))
     }
-    func testNoPublicarVersoAnteriorNiDescartarUnaSolicitudNueva() {
-        var c = ControlArteCompleto()
-        XCTAssertTrue(c.pedir("cancion1-verso1"))
-        XCTAssertFalse(c.pedir("cancion1-verso1"))
-        XCTAssertTrue(c.pedir("cancion2-verso3"))
-        XCTAssertFalse(c.vigente("cancion1-verso1"))
-        c.reintentar("cancion1-verso1")
-        XCTAssertTrue(c.vigente("cancion2-verso3"))
-        c.reintentar("cancion2-verso3")
-        XCTAssertTrue(c.pedir("cancion2-verso3"))
-        c.reiniciar()
-        XCTAssertFalse(c.vigente("cancion2-verso3"))
+    func testPortadaNoTieneVersoTiempoNiPausaEnSuIdentidad() {
+        let clave = PoliticaLetraBloqueo.clavePortada(cancion: 7, fuente: "cover.jpg?v=2", estilo: "oscuro")
+        for _ in 0..<100 {
+            XCTAssertEqual(clave, PoliticaLetraBloqueo.clavePortada(cancion: 7, fuente: "cover.jpg?v=2", estilo: "oscuro"))
+        }
+        XCTAssertNotEqual(clave, PoliticaLetraBloqueo.clavePortada(cancion: 8, fuente: "cover.jpg?v=2", estilo: "oscuro"))
+        XCTAssertNotEqual(clave, PoliticaLetraBloqueo.clavePortada(cancion: 7, fuente: "cover.jpg?v=3", estilo: "oscuro"))
+    }
+    func testTarjetaAcotaPayloadSinRomperUnicode() {
+        let texto = String(repeating: "🎵á", count: 1000)
+        let reducido = PoliticaLetraBloqueo.textoActividad(texto, bytes: 900)
+        XCTAssertLessThanOrEqual(reducido.utf8.count, 900)
+        XCTAssertFalse(reducido.contains("�"))
+        XCTAssertEqual(PoliticaLetraBloqueo.textoActividad(texto, bytes: 0), "")
+        XCTAssertEqual(PoliticaLetraBloqueo.textoActividad("Verso", bytes: 900), "Verso")
     }
 }

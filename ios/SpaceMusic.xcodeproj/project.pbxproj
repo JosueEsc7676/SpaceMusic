@@ -6,8 +6,28 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+    6B0000000000000000000001 = {isa = PBXBuildFile; fileRef = 6B000000000000000000000A; };
+    6B0000000000000000000002 = {isa = PBXBuildFile; fileRef = 6B000000000000000000000A; };
+    6B0000000000000000000003 = {isa = PBXBuildFile; fileRef = 6B000000000000000000000B; };
+    6B0000000000000000000004 = {isa = PBXBuildFile; fileRef = 6B000000000000000000000C; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+/* Begin PBXCopyFilesBuildPhase section */
+    6B0000000000000000000014 = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (6B0000000000000000000004, ); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
+/* Begin PBXContainerItemProxy section */
+    6B0000000000000000000015 = {isa = PBXContainerItemProxy; containerPortal = 5A0000000000000000000009; proxyType = 1; remoteGlobalIDString = 6B000000000000000000001E; remoteInfo = LetraBloqueoWidget; };
+/* End PBXContainerItemProxy section */
+/* Begin PBXTargetDependency section */
+    6B0000000000000000000016 = {isa = PBXTargetDependency; target = 6B000000000000000000001E; targetProxy = 6B0000000000000000000015; };
+/* End PBXTargetDependency section */
+
 /* Begin PBXFileReference section */
 		5A0000000000000000000001 /* SpaceMusic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpaceMusic.app; sourceTree = BUILT_PRODUCTS_DIR; };
+    6B000000000000000000000A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LetraActividad.swift; sourceTree = "<group>"; };
+    6B000000000000000000000B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LetraBloqueoWidget.swift; sourceTree = "<group>"; };
+    6B000000000000000000000C = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LetraBloqueoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+    6B000000000000000000000D = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -39,6 +59,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+    6B0000000000000000000020 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -46,6 +67,8 @@
 			isa = PBXGroup;
 			children = (
 				5A0000000000000000000002 /* SpaceMusic */,
+                6B0000000000000000000028,
+                6B0000000000000000000029,
 				5A0000000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,10 +77,13 @@
 			isa = PBXGroup;
 			children = (
 				5A0000000000000000000001 /* SpaceMusic.app */,
+                6B000000000000000000000C,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
+    6B0000000000000000000028 = {isa = PBXGroup; children = (6B000000000000000000000A, ); path = Compartido; sourceTree = "<group>"; };
+    6B0000000000000000000029 = {isa = PBXGroup; children = (6B000000000000000000000B, 6B000000000000000000000D, ); path = LetraBloqueoWidget; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -68,10 +94,12 @@
 				5A0000000000000000000007 /* Sources */,
 				5A0000000000000000000003 /* Frameworks */,
 				5A0000000000000000000008 /* Resources */,
+                6B0000000000000000000014,
 			);
 			buildRules = (
 			);
 			dependencies = (
+                6B0000000000000000000016,
 			);
 			fileSystemSynchronizedGroups = (
 				5A0000000000000000000002 /* SpaceMusic */,
@@ -83,6 +111,13 @@
 			productReference = 5A0000000000000000000001 /* SpaceMusic.app */;
 			productType = "com.apple.product-type.application";
 		};
+    6B000000000000000000001E = {
+        isa = PBXNativeTarget; buildConfigurationList = 6B0000000000000000000032;
+        buildPhases = (6B000000000000000000001F, 6B0000000000000000000020, 6B0000000000000000000021, );
+        buildRules = (); dependencies = (); name = LetraBloqueoWidget;
+        productName = LetraBloqueoWidget; productReference = 6B000000000000000000000C;
+        productType = "com.apple.product-type.app-extension";
+    };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -113,6 +148,7 @@
 			projectRoot = "";
 			targets = (
 				5A0000000000000000000006 /* SpaceMusic */,
+                6B000000000000000000001E,
 			);
 		};
 /* End PBXProject section */
@@ -125,6 +161,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+    6B0000000000000000000021 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -132,9 +169,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                6B0000000000000000000001,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+    6B000000000000000000001F = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (6B0000000000000000000002, 6B0000000000000000000003, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -245,6 +284,28 @@
 			};
 			name = Release;
 		};
+    6B0000000000000000000033 = {isa = XCBuildConfiguration; buildSettings = {
+        APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic;
+        CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = FPCH8CJYZR;
+        GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = LetraBloqueoWidget/Info.plist;
+        INFOPLIST_KEY_CFBundleDisplayName = "Letra SpaceMusic";
+        IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.0;
+        PRODUCT_BUNDLE_IDENTIFIER = com.bpm.spacemusic.ios.letra;
+        PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; SWIFT_VERSION = 5.0;
+        TARGETED_DEVICE_FAMILY = "1,2";
+        LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+    }; name = Debug; };
+    6B0000000000000000000034 = {isa = XCBuildConfiguration; buildSettings = {
+        APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic;
+        CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = FPCH8CJYZR;
+        GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = LetraBloqueoWidget/Info.plist;
+        INFOPLIST_KEY_CFBundleDisplayName = "Letra SpaceMusic";
+        IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.0;
+        PRODUCT_BUNDLE_IDENTIFIER = com.bpm.spacemusic.ios.letra;
+        PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; SWIFT_VERSION = 5.0;
+        TARGETED_DEVICE_FAMILY = "1,2";
+        LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", );
+    }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -266,6 +327,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+    6B0000000000000000000032 = {isa = XCConfigurationList; buildConfigurations = (6B0000000000000000000033, 6B0000000000000000000034, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = 5A0000000000000000000009 /* Project object */;

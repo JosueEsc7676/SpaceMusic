@@ -154,3 +154,6 @@ Con letra se usa una imagen estable de alta resolución; toca la portada del sis
 
 ### Pantalla completa con letra (3.29)
 El botón Portada en toda la pantalla agranda la portada tanto en Con letra como en Original (iOS 26). Con letra se entrega el clip de cada verso solo cuando su MP4 y su previa ya están listos, manteniendo la portada anterior mientras se prepara. Los cuadros se codifican uno a uno; la imagen de respaldo no se sustituye entre versos. Continúa pendiente la validación visual en un iPhone físico.
+
+### Letra independiente de la portada (3.30)
+En pantalla completa, la portada se conserva sin cambios entre versos y la letra se muestra en una tarjeta de Actividad en vivo (ya no se incrusta en el fondo). Permite Actividades en vivo para SpaceMusic en Ajustes y abre la app al comenzar antes de bloquearla. Si iOS impide crear o actualizar la tarjeta, el estado se muestra en Personalizar pantalla bloqueada. El modo compacto conserva la letra sobre la portada. Las actualizaciones locales no requieren APNs ni servicios de pago; iOS controla su frecuencia. Al instalar, conserva la extensión LetraBloqueoWidget incluida en el IPA.

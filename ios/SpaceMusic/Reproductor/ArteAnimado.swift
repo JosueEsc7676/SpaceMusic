@@ -2,7 +2,7 @@ import AVFoundation
 import MediaPlayer
 import UIKit
 
-/// Portada de pantalla completa. Los clips de letra se entregan ya codificados, nunca como tarea pendiente.
+/// Una portada de pantalla completa por canción/estilo. Nunca depende de los versos.
 @available(iOS 26, *)
 enum ArteAnimado {
     static let ancho = 1080, alto = 1440
@@ -38,45 +38,6 @@ enum ArteAnimado {
                     return (AnySequence([(0.0, cg)]), 4)
                 }
             })
-        guardar(id, o)
-        return o
-    }
-
-    /// No se publica hasta tener previa y MP4 local completos. El primer cuadro muestra el verso,
-    /// sin entrada desde negro ni texto invisible. Solo se conservan uno o dos cuadros en memoria.
-    @MainActor static func letraLista(clave: String, base: ArteBloqueo.Base, texto: String,
-            siguiente: String?, palabras: [Double], duracion: Double, indice: Int,
-            pausada: Bool) async -> MPMediaItemAnimatedArtwork? {
-        let id = "sm-lista2-" + huella(clave)
-        if let o = obras[id] { return o }
-        let pintar: @Sendable (Double) -> CGImage? = { t in
-            autoreleasepool {
-                let luces = palabras.reduce(0.0) { $0 + min(max((t - $1) / 0.18, 0), 1) }
-                let imagen = ArteBloqueo.cuadroVerso(base, letra: (texto, siguiente), entrada: 1,
-                    encendidas: base.estilo.iluminar ? luces : nil, indice: indice)
-                return recorte(imagen).cgImage
-            }
-        }
-        guard let previaCG = await Task.detached(priority: .userInitiated, operation: { pintar(0) }).value else { return nil }
-        let previa = UIImage(cgImage: previaCG)
-        let fin = min(max(duracion, 2), 30)
-        var tiempos: Set<Double> = [0, fin]
-        if base.estilo.iluminar && !pausada {
-            for p in palabras where p >= 0 && p < fin {
-                for paso in [0.0, 0.06, 0.12, 0.18] where p + paso < fin { tiempos.insert(p + paso) }
-            }
-        }
-        let ordenados = tiempos.sorted()
-        guard let url = await video(id: id, cuadros: {
-            let secuencia = ordenados.lazy.compactMap { t -> (Double, CGImage)? in
-                guard let cg = pausada || t == 0 ? previaCG : pintar(t) else { return nil }
-                return (t, cg)
-            }
-            return (AnySequence(secuencia), fin)
-        }) else { return nil }
-        let o = MPMediaItemAnimatedArtwork(artworkID: id,
-            previewImageRequestHandler: { _ in previa },
-            videoAssetFileURLRequestHandler: { _ in url })
         guardar(id, o)
         return o
     }

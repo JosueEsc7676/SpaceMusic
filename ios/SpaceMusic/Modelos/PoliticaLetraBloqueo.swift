@@ -6,22 +6,23 @@ enum PoliticaLetraBloqueo {
         pantallaCompleta
     }
 
+    static func clavePortada(cancion: Int, fuente: String, estilo: String) -> String {
+        "portada-estable|\(cancion)|\(fuente)|\(estilo)"
+    }
+
+    static func textoActividad(_ texto: String, bytes: Int) -> String {
+        let limpio = texto.components(separatedBy: .controlCharacters).joined(separator: " ")
+        var datos = Data(limpio.utf8.prefix(max(0, bytes)))
+        while !datos.isEmpty {
+            if let resultado = String(data: datos, encoding: .utf8) { return resultado }
+            datos.removeLast()
+        }
+        return ""
+    }
+
     static func actualizar(palabras: Int, mostradas: Int, iluminar: Bool, vaiven: Bool,
                            ahora: Double, ultimo: Double) -> Bool {
         let pendiente = iluminar && palabras != mostradas
         return (pendiente || vaiven) && ahora - ultimo >= (iluminar ? 0.3 : 0.5)
     }
-}
-
-/// Una tarea antigua no puede sustituir un verso, canción o estilo más reciente.
-struct ControlArteCompleto {
-    private(set) var solicitud: String?
-    mutating func pedir(_ clave: String) -> Bool {
-        guard solicitud != clave else { return false }
-        solicitud = clave
-        return true
-    }
-    func vigente(_ clave: String) -> Bool { solicitud == clave }
-    mutating func reiniciar() { solicitud = nil }
-    mutating func reintentar(_ clave: String) { if vigente(clave) { reiniciar() } }
 }

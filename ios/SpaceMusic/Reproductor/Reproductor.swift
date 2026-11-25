@@ -18,9 +18,7 @@ final class Reproductor {
 
     private(set) var cola: [Cancion] = []
     private(set) var indice = 0
-    private(set) var sonando = false {
-        didSet { if sonando != oldValue { epocaCompleta += 1 } }
-    }
+    private(set) var sonando = false
     private(set) var cargando = false {
         didSet { if cargando != oldValue { programarEspera() } }
     }
@@ -213,7 +211,7 @@ final class Reproductor {
         indiceSiguiente = nil
         jugador.removeAllItems()
         error = nil
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        LetraActividadService.compartida.finalizar(); MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         relojRemoto?.cancel()
         relojRemoto = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -369,10 +367,6 @@ final class Reproductor {
     private func rehacerBloqueo() {
         ArteBloqueo.lado = estiloBloqueo.pantallaCompleta ? 2048 : 1500
         animacionBloqueo?.cancel()
-        tareaCompleta?.cancel()
-        puertaCompleta.reiniciar()
-        proximoIntentoCompleto = 0
-        arteCompleto = nil
         respaldoCompleto = nil
         claveEnDibujo = nil
         precargadas = [:]
@@ -391,6 +385,7 @@ final class Reproductor {
         let img = p.img
         if e.modo == .original { return img }
         let linea: ArteBloqueo.Letra = (lineaBloqueo ?? "Así se verá tu letra en la pantalla bloqueada", siguienteBloqueo ?? "y aquí el verso que sigue")
+        if e.pantallaCompleta { return await Task.detached { ArteBloqueo.base(img, estilo: e).fondo }.value }
         return await Task.detached(priority: .userInitiated) {
             ArteBloqueo.cuadro(ArteBloqueo.base(img, estilo: e), de: nil, a: linea, p: 1, encendidas: e.iluminar ? 3 : nil, indice: 1)
         }.value
@@ -440,76 +435,31 @@ final class Reproductor {
     @ObservationIgnored private var imagenBloqueo: (id: Int, clave: String, img: UIImage)?
     /// Cambia con cada estilo nuevo: así la pantalla completa no reutiliza videos de otro estilo.
     @ObservationIgnored private var versionEstilo = 0
-    @ObservationIgnored private var arteCompleto: (id: Int, estilo: Int, obra: AnyObject)?
     @ObservationIgnored private var respaldoCompleto: (id: Int, estilo: Int, arte: MPMediaItemArtwork)?
-    @ObservationIgnored private var puertaCompleta = ControlArteCompleto()
-    @ObservationIgnored private var tareaCompleta: Task<Void, Never>?
     @ObservationIgnored private var firmaBaseCompleta = ""
-    @ObservationIgnored private var epocaCompleta = 0
-    @ObservationIgnored private var proximoIntentoCompleto = 0.0
 
-    private var letraEnVideo: Bool {
+    private var portadaCompletaActiva: Bool {
         if #available(iOS 26, *) { return PoliticaLetraBloqueo.usarVideo(pantallaCompleta: estiloBloqueo.pantallaCompleta, conLetra: estiloBloqueo.modo == .letra) && ArteAnimado.disponible }
         return false
     }
 
-    /// Se cambia solo de clip listo a clip listo. No se borra la obra anterior al pedir otro verso.
-    @available(iOS 26, *)
+    private func actualizarTarjetaLetra() {
+        guard portadaCompletaActiva, estiloBloqueo.modo == .letra, letraEnBloqueo, let c = actual else {
+            LetraActividadService.compartida.finalizar()
+            return
+        }
+        let linea = lineaActualLetra(tiempo)
+        LetraActividadService.compartida.actualizar(cancion: c.nombre, artista: c.artista,
+            verso: linea?.actual, siguiente: estiloBloqueo.siguiente ? linea?.siguiente : nil, pausada: !sonando)
+    }
+
+    /// El respaldo depende de canción y estilo, nunca del verso, tiempo o estado de pausa.
     private func prepararArteCompleto() {
-        guard letraEnVideo, estiloBloqueo.modo == .letra, let c = actual,
+        guard portadaCompletaActiva, estiloBloqueo.modo == .letra, let c = actual,
               let b = baseBloqueo, b.id == c.id else { return }
-        guard ProcessInfo.processInfo.systemUptime >= proximoIntentoCompleto else { return }
-        let letras = Letras.compartido
-        let inicio = letras.tiempoLetra(tiempo) + 0.25
-        let indice = letras.cancionId == c.id && letraEnBloqueo ? letras.indice(en: inicio) : nil
-        let claveBase = "\(c.id)|\(c.portadaUrl ?? "")|\(firmaBaseCompleta)|v\(versionEstilo)|e\(epocaCompleta)|\(sonando)|\(letras.desfase)"
-        func claveClip(_ i: Int?) -> String {
-            guard let i, letras.lineas.indices.contains(i) else { return claveBase + "|sin-letra" }
-            let l = letras.lineas[i]
-            return claveBase + "|\(i)|\(l.tiempo)|\(l.fin)|\(l.texto)|\(l.palabras)"
-        }
-        let clave = claveClip(indice)
-        guard puertaCompleta.pedir(clave) else { return }
-        tareaCompleta?.cancel()
-        let estilo = versionEstilo
-        let pausada = !sonando
-        let base = b.base
-        if respaldoCompleto?.id != c.id || respaldoCompleto?.estilo != estilo {
-            let fondo = base.fondo
-            respaldoCompleto = (c.id, estilo, MPMediaItemArtwork(boundsSize: fondo.size) { _ in fondo })
-        }
-        let l = indice.flatMap { letras.lineas.indices.contains($0) ? letras.lineas[$0] : nil }
-        let texto = l?.texto ?? ""
-        let siguiente = estiloBloqueo.siguiente ? indice.flatMap { i in letras.lineas.dropFirst(i + 1).first { !$0.texto.isEmpty }?.texto } : nil
-        let palabras = l.map { linea in LectorLRC.tiemposPalabras(linea).map { $0.inicio - inicio } } ?? []
-        let duracion = (l?.fin ?? (inicio + 4)) - inicio + 2
-        let lugar = estiloBloqueo.posicion == .flotante ? (indice ?? 0) : 0
-        // Precarga del siguiente: se captura antes del await para no mezclar canciones o estilos.
-        let indiceSig = indice.flatMap { i in letras.lineas.indices.dropFirst(i + 1).first { !letras.lineas[$0].texto.isEmpty } }
-        let claveSig = claveClip(indiceSig)
-        let sig = indiceSig.map { letras.lineas[$0] }
-        let despues = indiceSig.flatMap { i in letras.lineas.dropFirst(i + 1).first { !$0.texto.isEmpty }?.texto }
-        tareaCompleta = Task { @MainActor [weak self] in
-            let obra = await ArteAnimado.letraLista(clave: clave, base: base, texto: texto, siguiente: siguiente,
-                palabras: palabras, duracion: duracion, indice: lugar, pausada: pausada)
-            guard let self, !Task.isCancelled, self.puertaCompleta.vigente(clave),
-                  self.actual?.id == c.id, self.versionEstilo == estilo else { return }
-            if let obra {
-                self.proximoIntentoCompleto = 0
-                self.arteCompleto = (c.id, estilo, obra)
-                self.actualizarNowPlaying()
-            } else {
-                self.proximoIntentoCompleto = ProcessInfo.processInfo.systemUptime + 10
-                self.puertaCompleta.reintentar(clave)
-                return // se conserva la portada anterior; el siguiente tick podrá volver a intentarlo
-            }
-            if let sig, let indiceSig, !pausada {
-                _ = await ArteAnimado.letraLista(clave: claveSig, base: base,
-                    texto: sig.texto, siguiente: base.estilo.siguiente ? despues : nil,
-                    palabras: LectorLRC.tiemposPalabras(sig).map { $0.inicio - sig.tiempo },
-                    duracion: sig.fin - sig.tiempo + 2,
-                    indice: base.estilo.posicion == .flotante ? indiceSig : 0, pausada: false)
-            }
+        if respaldoCompleto?.id != c.id || respaldoCompleto?.estilo != versionEstilo {
+            let fondo = b.base.fondo
+            respaldoCompleto = (c.id, versionEstilo, MPMediaItemArtwork(boundsSize: fondo.size) { _ in fondo })
         }
     }
 
@@ -534,7 +484,6 @@ final class Reproductor {
             let codificador = JSONEncoder()
             codificador.outputFormatting = .sortedKeys
             self.firmaBaseCompleta = (try? codificador.encode(estilo).base64EncodedString()) ?? ""
-            self.proximoIntentoCompleto = 0
             self.baseBloqueo = (c.id, base)
             self.letraMostrada = nil
             self.mostrarBloqueo(animar: false)
@@ -557,6 +506,11 @@ final class Reproductor {
             return
         }
         guard let c = actual, let b = baseBloqueo, b.id == c.id else { actualizarNowPlaying(); return }
+        if portadaCompletaActiva {
+            prepararArteCompleto()
+            actualizarNowPlaying()
+            return
+        }
         let a = letraDeseada
         let estilo = estiloBloqueo
         let vivo = estilo.iluminar || (estilo.posicion == .flotante && estilo.mecer)
@@ -806,7 +760,6 @@ final class Reproductor {
     func buscar(_ segundos: Double) {
         guard segundos.isFinite else { return }
         if externo(.buscar(segundos)) { return }
-        epocaCompleta += 1
         let destino = max(0, duracion > 0 ? min(segundos, duracion) : segundos)
         let t = CMTime(seconds: destino, preferredTimescale: 600)
         jugador.seek(to: t, toleranceBefore: .zero, toleranceAfter: .zero)
@@ -838,7 +791,7 @@ final class Reproductor {
         sonando = false
         tiempo = 0
         duracion = 0
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        LetraActividadService.compartida.finalizar(); MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 
     // MARK: - Cola
@@ -1292,7 +1245,7 @@ final class Reproductor {
                 indiceSiguienteBloqueo = linea?.indiceSiguiente ?? (indiceBloqueo + 1)
                 encendidasBloqueo = linea?.encendidas ?? 0
                 mostrarBloqueo(animar: true)
-            } else if let linea, !letraEnVideo, estiloBloqueo.iluminar || (estiloBloqueo.posicion == .flotante && estiloBloqueo.mecer) {
+            } else if let linea, !portadaCompletaActiva, estiloBloqueo.iluminar || (estiloBloqueo.posicion == .flotante && estiloBloqueo.mecer) {
                 // Solo se confirma una palabra cuando su imagen llegó al sistema. Si se limita una
                 // actualización, el próximo tick vuelve a intentarla aunque ya no cambie la palabra.
                 encendidasBloqueo = linea.encendidas
@@ -1303,7 +1256,8 @@ final class Reproductor {
                 }
             }
         }
-        if #available(iOS 26, *) { prepararArteCompleto() }
+        prepararArteCompleto()
+        actualizarTarjetaLetra()
         if Date().timeIntervalSince(ultimoGuardado) >= 5 { guardarEstado(); ultimoGuardado = Date() }
     }
 
@@ -1378,7 +1332,7 @@ final class Reproductor {
 
     private func actualizarNowPlaying() {
         guard let c = actual else {
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            LetraActividadService.compartida.finalizar(); MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             return
         }
         MPRemoteCommandCenter.shared().likeCommand.isActive = Biblioteca.compartida.esFavorita(c.id)
@@ -1391,21 +1345,23 @@ final class Reproductor {
             MPNowPlayingInfoPropertyPlaybackRate: sonando ? 1.0 : 0.0,
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
-        if #available(iOS 26, *) { prepararArteCompleto() }
+        prepararArteCompleto()
+        actualizarTarjetaLetra()
         // En pantalla completa el respaldo no cambia en cada verso: iOS conserva la misma superficie.
-        if letraEnVideo, estiloBloqueo.modo == .letra, let r = respaldoCompleto,
+        if portadaCompletaActiva, estiloBloqueo.modo == .letra, let r = respaldoCompleto,
            r.id == c.id, r.estilo == versionEstilo {
             info[MPMediaItemPropertyArtwork] = r.arte
-        } else if let a = arteBloqueo, a.id == c.id {
+        } else if !portadaCompletaActiva, let a = arteBloqueo, a.id == c.id {
             info[MPMediaItemPropertyArtwork] = a.arte
         } else if let p = portadaNowPlaying, p.id == c.id {
             info[MPMediaItemPropertyArtwork] = p.arte
         }
-        if #available(iOS 26, *), letraEnVideo {
-            if estiloBloqueo.modo == .letra, let lista = arteCompleto,
-               lista.id == c.id, lista.estilo == versionEstilo {
-                // Su URL ya es local y su primer cuadro coincide con la previa; nunca se pide codificar aquí.
-                info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = lista.obra
+        if #available(iOS 26, *), portadaCompletaActiva {
+            if estiloBloqueo.modo == .letra, let base = baseBloqueo, base.id == c.id {
+                let clave = PoliticaLetraBloqueo.clavePortada(cancion: c.id,
+                    fuente: c.portadaUrl ?? "", estilo: firmaBaseCompleta)
+                info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = ArteAnimado.obra(
+                    clave: clave, imagen: base.base.fondo, movimiento: false)
             } else if estiloBloqueo.modo == .original, let p = portadaImagen, p.id == c.id {
                 info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = ArteAnimado.obra(
                     clave: "\(c.id)|portada|\(c.portadaUrl ?? "")", imagen: p.img, movimiento: true)
