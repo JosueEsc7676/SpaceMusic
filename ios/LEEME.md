@@ -157,3 +157,6 @@ El botón Portada en toda la pantalla agranda la portada tanto en Con letra como
 
 ### Letra independiente de la portada (3.30)
 En pantalla completa, la portada se conserva sin cambios entre versos y la letra se muestra en una tarjeta de Actividad en vivo (ya no se incrusta en el fondo). Permite Actividades en vivo para SpaceMusic en Ajustes y abre la app al comenzar antes de bloquearla. Si iOS impide crear o actualizar la tarjeta, el estado se muestra en Personalizar pantalla bloqueada. El modo compacto conserva la letra sobre la portada. Las actualizaciones locales no requieren APNs ni servicios de pago; iOS controla su frecuencia. Al instalar, conserva la extensión LetraBloqueoWidget incluida en el IPA.
+
+### Letra sobre la portada (3.31, experimental)
+Se retira la tarjeta añadida en 65 y se restaura el diseño de letra sobre el álbum con los estilos y posiciones existentes. El modo completo usa un vídeo continuo de versos, no un archivo por verso. El sistema controla cuándo empieza y repite esa animación: no existe un control público de su reloj, así que la sincronía y el comportamiento al bloquear requieren prueba real. El estado de preparación aparece en ajustes. Bajo consumo, Reducir movimiento o calor pueden dejar una imagen fija.

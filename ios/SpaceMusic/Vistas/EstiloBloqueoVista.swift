@@ -39,18 +39,18 @@ struct EstiloBloqueoVista: View {
                     }
                     .pickerStyle(.segmented)
                 } footer: {
-                    Text(e.modo == .original ? "Solo la portada, como antes: sin letra, sin sombra y sin desenfoque." : (e.pantallaCompleta ? "La portada completa permanece estable y los versos aparecen en una tarjeta independiente." : "La letra sincronizada sobre la portada, con el estilo que elijas."))
+                    Text(e.modo == .original ? "Solo la portada, como antes: sin letra, sin sombra y sin desenfoque." : "La letra sobre la portada, con su posición, movimiento y estilo configurables.")
                 }
 
                 Section {
                     Toggle("Portada en toda la pantalla", isOn: $e.pantallaCompleta)
                 } footer: {
-                    Text("En iOS 26 agranda la portada tanto con letra como en Original. Con letra, los versos cambian en una Actividad en vivo separada; el fondo no se reemplaza. Abre la app antes de bloquear el teléfono y permite Actividades en vivo en Ajustes. Los estilos de letra sobre portada se aplican al modo compacto.")
+                    Text("En iOS 26 agranda la portada, con la letra dibujada encima. Los versos van dentro de un único vídeo continuo. La preparación puede tardar unos segundos. iOS puede mostrar una imagen fija con bajo consumo, calor o Reducir movimiento; su animación no tiene un reloj sincronizable con el audio.")
                 }
 
                 if e.modo == .letra && e.pantallaCompleta {
-                    Section("Tarjeta de letra") {
-                        Text(LetraActividadService.compartida.estado).font(.footnote).foregroundStyle(.secondary)
+                    Section("Letra sobre la portada") {
+                        Text(Reproductor.compartido.estadoArteContinuo).font(.footnote).foregroundStyle(.secondary)
                     }
                 }
 

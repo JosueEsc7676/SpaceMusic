@@ -26,12 +26,4 @@ final class LetraBloqueoTests: XCTestCase {
         XCTAssertNotEqual(clave, PoliticaLetraBloqueo.clavePortada(cancion: 8, fuente: "cover.jpg?v=2", estilo: "oscuro"))
         XCTAssertNotEqual(clave, PoliticaLetraBloqueo.clavePortada(cancion: 7, fuente: "cover.jpg?v=3", estilo: "oscuro"))
     }
-    func testTarjetaAcotaPayloadSinRomperUnicode() {
-        let texto = String(repeating: "🎵á", count: 1000)
-        let reducido = PoliticaLetraBloqueo.textoActividad(texto, bytes: 900)
-        XCTAssertLessThanOrEqual(reducido.utf8.count, 900)
-        XCTAssertFalse(reducido.contains("�"))
-        XCTAssertEqual(PoliticaLetraBloqueo.textoActividad(texto, bytes: 0), "")
-        XCTAssertEqual(PoliticaLetraBloqueo.textoActividad("Verso", bytes: 900), "Verso")
-    }
 }

@@ -42,6 +42,77 @@ enum ArteAnimado {
         return o
     }
 
+    /// Una sola línea de tiempo para toda la canción, sin cambiar artwork entre versos.
+    /// Se consulta la posición al pedir el archivo, no al crear la portada.
+    @MainActor static func obraContinua(clave: String, imagen: UIImage, base: ArteBloqueo.Base,
+            lineas: [LineaLetra], reloj: @escaping @MainActor @Sendable () -> (Double, Bool, Double)?,
+            estado: @escaping @MainActor @Sendable (String) -> Void) -> MPMediaItemAnimatedArtwork {
+        let id = "sm-continuo1-" + huella(clave)
+        if let o = obras[id] { return o }
+        let previa = recorte(imagen)
+        let o = MPMediaItemAnimatedArtwork(artworkID: id,
+            previewImageRequestHandler: { _ in previa },
+            videoAssetFileURLRequestHandler: { _ in
+                guard let (inicio, sonando, hasta) = await reloj() else { return nil }
+                await estado("Preparando la letra sobre la portada…")
+                let fin = sonando ? max(max(hasta, lineas.last?.fin ?? inicio + 4), inicio + 4) : inicio + 4
+                guard fin - inicio <= 900 else {
+                    await estado("Esta pista supera el límite de preparación de la portada animada.")
+                    return nil
+                }
+                let duracion = fin - inicio
+                let claveVideo = id + "-" + String(Int((inicio * 100).rounded())) + (sonando ? "s" : "p")
+                let url = await video(id: claveVideo) {
+                    let tiempos = sonando ? SecuenciaPortada.tiempos(lineas, desde: inicio, hasta: fin,
+                        palabras: base.estilo.iluminar) : [0, 4]
+                    let secuencia = tiempos.lazy.compactMap { t -> (Double, CGImage)? in
+                        autoreleasepool {
+                            ArteBloqueo.$ladoRenderizado.withValue(1024) {
+                                let segundo = sonando ? inicio + t : inicio
+                                guard let i = LectorLRC.indice(lineas, en: segundo),
+                                      let linea = SecuenciaPortada.linea(lineas, en: segundo) else {
+                                    return recorte(base.fondo).cgImage.map { (t, $0) }
+                                }
+                                let sig = base.estilo.siguiente ? lineas.dropFirst(i + 1).first { !$0.texto.isEmpty }?.texto : nil
+                                let luces = LectorLRC.tiemposPalabras(linea).reduce(0.0) {
+                                    $0 + min(max((segundo - $1.inicio) / 0.18, 0), 1)
+                                }
+                                let img = ArteBloqueo.cuadroVerso(base, letra: (linea.texto, sig), entrada: 1,
+                                    encendidas: base.estilo.iluminar ? luces : nil, indice: i)
+                                return recorte(img).cgImage.map { (t, $0) }
+                            }
+                        }
+                    }
+                    return (AnySequence(secuencia), duracion)
+                }
+                guard let url, let (actual, _, _) = await reloj() else {
+                    await estado("iOS no pudo preparar la animación. Se conserva la imagen con letra.")
+                    return nil
+                }
+                // Descontar el tiempo que costó codificar; no detener el audio para preparar la portada.
+                let avance = sonando ? max(0, actual - inicio) : 0
+                guard avance < duracion - 0.2 else { return nil }
+                var resultado = url
+                if avance > 0.15 {
+                    let destino = carpeta().appendingPathComponent(claveVideo + "-recorte-" + UUID().uuidString + ".mp4")
+                    guard let exportador = AVAssetExportSession(asset: AVURLAsset(url: url), presetName: AVAssetExportPresetPassthrough) else { return nil }
+                    exportador.outputURL = destino
+                    exportador.outputFileType = .mp4
+                    exportador.timeRange = CMTimeRange(start: CMTime(seconds: avance, preferredTimescale: 600),
+                        duration: CMTime(seconds: duracion - avance, preferredTimescale: 600))
+                    let listo: Bool = await withCheckedContinuation { c in
+                        exportador.exportAsynchronously { c.resume(returning: exportador.status == .completed) }
+                    }
+                    guard listo, await reloj() != nil else { try? FileManager.default.removeItem(at: destino); return nil }
+                    resultado = destino
+                }
+                await estado("Letra preparada sobre la portada. iOS controla el inicio de la animación.")
+                return resultado
+            })
+        guardar(id, o)
+        return o
+    }
+
     private static func cuadrosMovimiento(_ cg: CGImage) -> AnySequence<(Double, CGImage)> {
         let caja = CGSize(width: ancho, height: alto)
         return AnySequence((0..<120).lazy.compactMap { i -> (Double, CGImage)? in
@@ -151,7 +222,7 @@ enum ArteAnimado {
         var iterador = cuadros.makeIterator()
         var ultimo: (Double, CGImage)?
         var anterior = -1.0
-        let limite = ProcessInfo.processInfo.systemUptime + 45
+        let limite = ProcessInfo.processInfo.systemUptime + 25
         defer { if escritor.status == .writing { escritor.cancelWriting() } }
         while true {
             let proximo = iterador.next() ?? ultimo.flatMap { duracion > $0.0 + 0.05 ? (duracion, $0.1) : nil }
@@ -165,7 +236,7 @@ enum ArteAnimado {
                       ProcessInfo.processInfo.systemUptime < limite else { return false }
                 try? await Task.sleep(for: .milliseconds(4))
             }
-            guard !Task.isCancelled, escritor.status == .writing else { return false }
+            guard !Task.isCancelled, escritor.status == .writing, ProcessInfo.processInfo.systemUptime < limite else { return false }
             guard let pool = adaptador.pixelBufferPool else { return false }
             var pb: CVPixelBuffer?
             CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pb)

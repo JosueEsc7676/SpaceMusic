@@ -2,8 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSSupportsLiveActivities</key>
-	<true/>
 	<!-- Sigue sonando con la pantalla apagada o en otra app -->
 	<!-- Notificaciones de mensajes como conversación (foto de quien escribe a la izquierda) -->
 	<key>NSUserActivityTypes</key>

@@ -74,7 +74,6 @@ jobs:
           APP="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/SpaceMusic.app"
           test -d "$APP"
           # Firma ad hoc solo para incrustar los permisos (notificaciones de comunicación); al instalar se vuelve a firmar.
-          codesign -f -s - "$APP/PlugIns/LetraBloqueoWidget.appex"
           codesign -f -s - --entitlements SpaceMusic/SpaceMusic.entitlements "$APP" || echo "::warning::No se pudieron incrustar los permisos"
           mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"

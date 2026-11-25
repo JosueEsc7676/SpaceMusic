@@ -1,3 +1,9 @@
+## iPhone 3.31: recuperar letra sobre portada; vídeo continuo experimental
+- Retira la tarjeta y su extensión. Cierra las Actividades en vivo de 65 al abrir la app. Regresan letra dibujada sobre portada, posiciones Libre/Flotante, estilos y vista previa, manteniendo el botón de pantalla completa.
+- Un único archivo de vídeo contiene la secuencia de versos, pausas y palabras; no se cambia el artwork al pasar cada verso. Se vuelve a anclar al buscar, pausar/reanudar o entrar en segundo plano.
+- Codificación progresiva fuera del hilo principal, resolución de trabajo aislada por tarea, límite de25s y recorte del tiempo de preparación. No se interrumpe el audio. Estado de preparación/error real en ajustes.
+- Experimental: la API de iOS no permite controlar el reloj de la animación. Puede reiniciarla o mostrar la previa por ahorro de energía/temperatura/accesibilidad. No se garantiza sincronía exacta ni ausencia de fallos en teléfono sin validación física. Máximo15min por vídeo; los límites conservan la imagen, no simulan una sincronización exitosa.
+
 ## iPhone 3.30: portada estable y letra independiente en pantalla bloqueada
 - Elimina por completo el cambio de video/imagen por verso en pantalla completa. La misma portada y la misma identidad de artwork permanecen durante la canción, tanto en Con letra como en Original.
 - La letra de pantalla completa pasa a una tarjeta de Actividad en vivo (ActivityKit/WidgetKit), separada de la portada. Actualiza solo texto por verso y pausa, sin modificar los campos de artista/título ni el audio. El modo compacto conserva letra sobre portada y los estilos existentes.

@@ -10,16 +10,6 @@ enum PoliticaLetraBloqueo {
         "portada-estable|\(cancion)|\(fuente)|\(estilo)"
     }
 
-    static func textoActividad(_ texto: String, bytes: Int) -> String {
-        let limpio = texto.components(separatedBy: .controlCharacters).joined(separator: " ")
-        var datos = Data(limpio.utf8.prefix(max(0, bytes)))
-        while !datos.isEmpty {
-            if let resultado = String(data: datos, encoding: .utf8) { return resultado }
-            datos.removeLast()
-        }
-        return ""
-    }
-
     static func actualizar(palabras: Int, mostradas: Int, iluminar: Bool, vaiven: Bool,
                            ahora: Double, ultimo: Double) -> Bool {
         let pendiente = iluminar && palabras != mostradas
