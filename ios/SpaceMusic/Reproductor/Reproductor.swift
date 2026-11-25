@@ -444,11 +444,12 @@ final class Reproductor {
     @ObservationIgnored private var respaldoCompleto: (id: Int, estilo: Int, arte: MPMediaItemArtwork)?
     @ObservationIgnored private var puertaCompleta = ControlArteCompleto()
     @ObservationIgnored private var tareaCompleta: Task<Void, Never>?
+    @ObservationIgnored private var firmaBaseCompleta = ""
     @ObservationIgnored private var epocaCompleta = 0
     @ObservationIgnored private var proximoIntentoCompleto = 0.0
 
     private var letraEnVideo: Bool {
-        if #available(iOS 26, *) { return estiloBloqueo.pantallaCompleta && ArteAnimado.disponible }
+        if #available(iOS 26, *) { return PoliticaLetraBloqueo.usarVideo(pantallaCompleta: estiloBloqueo.pantallaCompleta, conLetra: estiloBloqueo.modo == .letra) && ArteAnimado.disponible }
         return false
     }
 
@@ -461,7 +462,7 @@ final class Reproductor {
         let letras = Letras.compartido
         let inicio = letras.tiempoLetra(tiempo) + 0.25
         let indice = letras.cancionId == c.id && letraEnBloqueo ? letras.indice(en: inicio) : nil
-        let claveBase = "\(c.id)|v\(versionEstilo)|e\(epocaCompleta)|\(sonando)|\(letras.desfase)"
+        let claveBase = "\(c.id)|\(c.portadaUrl ?? "")|\(firmaBaseCompleta)|v\(versionEstilo)|e\(epocaCompleta)|\(sonando)|\(letras.desfase)"
         func claveClip(_ i: Int?) -> String {
             guard let i, letras.lineas.indices.contains(i) else { return claveBase + "|sin-letra" }
             let l = letras.lineas[i]
@@ -530,6 +531,10 @@ final class Reproductor {
             let base = await Task.detached(priority: .utility) { ArteBloqueo.base(img, estilo: estilo) }.value
             guard self?.estiloBloqueo == estilo else { return }
             guard let self, self.actual?.id == c.id else { return }
+            let codificador = JSONEncoder()
+            codificador.outputFormatting = .sortedKeys
+            self.firmaBaseCompleta = (try? codificador.encode(estilo).base64EncodedString()) ?? ""
+            self.proximoIntentoCompleto = 0
             self.baseBloqueo = (c.id, base)
             self.letraMostrada = nil
             self.mostrarBloqueo(animar: false)
@@ -1403,7 +1408,7 @@ final class Reproductor {
                 info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = lista.obra
             } else if estiloBloqueo.modo == .original, let p = portadaImagen, p.id == c.id {
                 info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = ArteAnimado.obra(
-                    clave: "\(c.id)|portada", imagen: p.img, movimiento: true)
+                    clave: "\(c.id)|portada|\(c.portadaUrl ?? "")", imagen: p.img, movimiento: true)
             }
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
