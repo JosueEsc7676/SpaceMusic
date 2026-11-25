@@ -1,3 +1,12 @@
+## 24/11/2026 · iPhone 3.29, compilación 58: botón de pantalla completa conservado
+
+- IPA publicado: https://spacemusic.tail8ccfdf.ts.net/app/SpaceMusic-58.ipa. Commit 0307f38; 4650202 bytes; SHA256 c891802ec00a60d8d1fe9ec33705000e3d8c2105b6401cbd9e4bf8e171f697b9.
+- Actions https://github.com/JosueEsc7676/SpaceMusic/actions/runs/45516213673 correcto: pruebas Swift, publicador, Xcode Release e IPA. Cuatro pruebas locales del publicador correctas.
+- Corrige la desviación funcional de 55: Portada en toda la pantalla vuelve a funcionar con letra y Original, con la misma preferencia guardada. Continúa sobre 3.28, conservando palabras pendientes, precarga y controles de tareas antiguas.
+- La imagen de respaldo no cambia entre versos en pantalla completa. El clip se entrega después de finalizar su MP4, con previa idéntica al primer cuadro visible. El anterior se conserva hasta tener el siguiente. Palabras dentro del clip, secuencia de cuadros perezosa (sin acumular cientos de CGImage), invalidación al buscar/pausar/reanudar/cambiar sincronía y caché por estilo/contenido/portada.
+- Publicado sin reiniciar ni sustituir Java, con el publicador verificado. API200, manifiesto58/0307f38, IPA200 con SHA íntegro y Range206 correcto. Archivos anteriores conservados como .anterior (55); IPA55 sigue disponible.
+- Limitación: no hay prueba visual en iPhone físico. Las pruebas y Xcode no demuestran por sí solas la ausencia de parpadeo del compositor de iOS ni sincronía perfecta. No se cambian claves ni identidad de app; el IPA usa el procedimiento ad hoc existente para instalación con las herramientas de firma habituales.
+
 ## 24/11/2026 · iPhone 3.28, compilación 55
 
 - Código e75075f; Actions https://github.com/JosueEsc7676/SpaceMusic/actions/runs/45513662255 correcto: pruebas Swift, publicador, Xcode Release, IPA y publicación GitHub.

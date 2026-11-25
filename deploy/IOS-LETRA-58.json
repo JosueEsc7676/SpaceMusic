@@ -1,0 +1,28 @@
+{
+  "feature_version": "3.29",
+  "build": 58,
+  "commit": "0307f38",
+  "workflow": 45516213673,
+  "swift_tests": "success",
+  "xcode_release": "success",
+  "publisher_tests": 4,
+  "ipa_bytes": 4650202,
+  "sha256": "c891802ec00a60d8d1fe9ec33705000e3d8c2105b6401cbd9e4bf8e171f697b9",
+  "manifest": {
+    "code": 58,
+    "commit": "0307f38"
+  },
+  "http_ipa": 200,
+  "http_range": 206,
+  "http_api": 200,
+  "backend_restarted": false,
+  "fullscreen_button": {
+    "letra": true,
+    "original": true,
+    "stored_preference_preserved": true
+  },
+  "handoff": "Solo clips completos, respaldo estable y previa igual al primer cuadro",
+  "physical_iphone_test": false,
+  "limitation": "El comportamiento visual y la sincronía del compositor de iOS requieren prueba física",
+  "backup": "app/*.anterior (55); IPA numerados conservados"
+}
