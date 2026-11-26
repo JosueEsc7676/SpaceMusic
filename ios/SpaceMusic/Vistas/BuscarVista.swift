@@ -8,6 +8,9 @@ struct BuscarVista: View {
     @State private var buscando = false
     @State private var error: String?
     @State private var pestana: PestanaBusqueda = .todo
+    /// Música de internet (Internet Archive, Audius, Jamendo, radios) para administradores y colaboradores.
+    @State private var externas: BusquedaExterna?
+    @State private var guardadas: Set<Int> = []
     @AppStorage("busquedasRecientes") private var recientesGuardadas = ""
 
     private var recientes: [String] { recientesGuardadas.split(separator: "\n").map(String.init) }
@@ -35,6 +38,7 @@ struct BuscarVista: View {
         .task(id: texto + "\n" + String(intento)) {
             let q = texto.trimmingCharacters(in: .whitespaces)
             resultado = nil
+            externas = nil
             error = nil
             buscando = !q.isEmpty
             guard !q.isEmpty else { return }
@@ -44,6 +48,12 @@ struct BuscarVista: View {
             do {
                 let r: Busqueda = try await API.get("/api/buscar?q=\(API.codificar(q))")
                 if !Task.isCancelled { resultado = r; error = nil }
+                // Después de los resultados del servidor, lo que hay gratis en internet (si está activado)
+                if Sesion.compartida.puedeEditar, !Task.isCancelled {
+                    buscando = false
+                    let x: BusquedaExterna? = try? await API.get("/api/externo/buscar?q=\(API.codificar(q))", tiempo: 15)
+                    if !Task.isCancelled { externas = x }
+                }
             } catch is CancellationError {
             } catch {
                 guard !Task.isCancelled else { return }
@@ -132,8 +142,74 @@ struct BuscarVista: View {
                     else { VStack(spacing: 12) { ForEach(r.usuarios) { FilaPersona(persona: $0) } }.padding(.horizontal) }
                 }
             }
+            if pestana == .todo || pestana == .canciones, let x = externas, x.disponible, !(x.canciones.isEmpty && x.radios.isEmpty) {
+                seccionExterna(x)
+            }
         }
         .padding(.vertical)
+    }
+
+    /// «En internet»: canciones gratis (con «＋» para guardar las de licencia libre en el servidor) y radios en vivo.
+    @ViewBuilder
+    private func seccionExterna(_ x: BusquedaExterna) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Label("En internet", systemImage: "globe").font(.title3.weight(.bold))
+                Spacer()
+                Text("Gratis").font(.caption.weight(.semibold)).foregroundStyle(Tema.secundario)
+            }
+            .padding(.horizontal)
+            ForEach(Array(x.canciones.enumerated()), id: \.offset) { i, c in
+                let meta = x.meta.indices.contains(i) ? x.meta[i] : nil
+                HStack(spacing: 4) {
+                    FilaCancion(cancion: c, detalle: meta?.fuenteNombre) {
+                        Reproductor.compartido.reproducir(x.canciones, desde: i, contexto: "externo")
+                    }
+                    if meta?.guardable == true {
+                        Button { Task { await guardar(c.id) } } label: {
+                            Image(systemName: guardadas.contains(c.id) ? "checkmark.circle.fill" : "plus.circle")
+                                .font(.title3).frame(width: 40, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(guardadas.contains(c.id))
+                        .accessibilityLabel("Guardar en el servidor")
+                    }
+                }
+                .padding(.horizontal)
+            }
+            if !x.radios.isEmpty {
+                Label("Radios en vivo", systemImage: "dot.radiowaves.left.and.right").font(.headline).padding(.horizontal).padding(.top, 6)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(Array(x.radios.enumerated()), id: \.offset) { _, c in
+                            Button { Reproductor.compartido.reproducir([c], contexto: "externo") } label: {
+                                HStack(spacing: 10) {
+                                    Portada(ruta: c.portadaUrl, tamano: 44, radio: 8, icono: "dot.radiowaves.left.and.right")
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(c.nombre).font(.subheadline.weight(.semibold)).lineLimit(1)
+                                        Text(c.artista).font(.caption).foregroundStyle(Tema.secundario).lineLimit(1)
+                                    }
+                                    .frame(width: 140, alignment: .leading)
+                                }
+                                .padding(8)
+                                .fondoCristal(RoundedRectangle(cornerRadius: 14, style: .continuous), interactivo: true)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    private func guardar(_ id: Int) async {
+        do {
+            try await API.hacer("POST", "/api/externo/\(id)/guardar")
+            guardadas.insert(id)
+            Avisos.compartido.mostrar("Guardada en el servidor")
+        } catch { Avisos.compartido.error(error) }
     }
 
     private func cuadricula<C: View>(minimo: CGFloat, @ViewBuilder _ contenido: () -> C) -> some View {
@@ -367,5 +443,24 @@ struct TarjetaResultado: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Tema.tarjeta))
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+/// Respuesta de /api/externo/buscar: canciones y radios con el mismo formato que las del servidor (id negativo).
+struct BusquedaExterna: Decodable {
+    struct Meta: Decodable { var fuenteNombre: String?; var guardable: Bool? }
+    var disponible: Bool
+    var canciones: [Cancion]
+    var radios: [Cancion]
+    var meta: [Meta]
+
+    private enum Claves: String, CodingKey { case disponible, canciones, radios }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Claves.self)
+        disponible = (try? c.decode(Bool.self, forKey: .disponible)) ?? false
+        canciones = (try? c.decode([Cancion].self, forKey: .canciones)) ?? []
+        radios = (try? c.decode([Cancion].self, forKey: .radios)) ?? []
+        meta = (try? c.decode([Meta].self, forKey: .canciones)) ?? []
     }
 }

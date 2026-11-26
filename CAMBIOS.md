@@ -1,3 +1,7 @@
+## iPhone 3.28: música gratis de internet
+- Buscar: sección «En internet» (Internet Archive, Audius, Jamendo y radios en vivo) debajo de los resultados del servidor, para administradores y colaboradores cuando está activada. Suenan como las demás (id negativo por /api/canciones/{id}/audio) y las de licencia libre se guardan en el servidor con «＋».
+- Administración → Música → «Música de internet»: activar, elegir fuentes y pegar el client_id de Jamendo.
+
 ## iPhone 3.26: chat sin trabarse, letra en pantalla completa y todo más ordenado
 - Mensajes: con Liquid Glass el chat se trababa (al abrirlo se quitaba el mini reproductor, iOS rehacía todas las pestañas y el chat se volvía a abrir sin fin). El accesorio ya no cambia la estructura de la vista.
 - Pantalla bloqueada a pantalla completa: ahora lleva la letra con su estilo, el desenfoque y la sombra; cada verso es un video corto y el siguiente se prepara antes de que suene.
