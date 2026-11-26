@@ -1,4 +1,5 @@
 import SwiftUI
+/// (Compilación 3.28: música gratis de internet.)
 
 /// Administración → Música de internet: activar Internet Archive, Audius, Jamendo y radios en vivo.
 /// Solo la usan administradores y colaboradores, en el buscador, debajo de los resultados del servidor.
