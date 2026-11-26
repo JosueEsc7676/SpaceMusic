@@ -135,6 +135,24 @@ final class Descargas {
     }
 
     func descargar(_ lista: [Cancion]) {
+        // Canciones de internet (id negativo): primero se guardan en el servidor y se descarga la canción real
+        let externas = lista.filter { $0.id < 0 }
+        if !externas.isEmpty {
+            Task { @MainActor in
+                var reales: [Cancion] = []
+                for c in externas {
+                    struct Guardada: Decodable { let id: Int }
+                    if let g: Guardada = try? await API.enviar("POST", "/api/externo/\(c.id)/guardar"),
+                       let real: Cancion = try? await API.get("/api/canciones/\(g.id)") {
+                        reales.append(real)
+                    }
+                }
+                if reales.count < externas.count { Avisos.compartido.mostrar("Algunas canciones de internet solo se pueden escuchar") }
+                NotificationCenter.default.post(name: .bibliotecaCambio, object: nil)
+                descargar(lista.filter { $0.id >= 0 } + reales)
+            }
+            return
+        }
         for c in lista where !ids.contains(c.id) && enCurso[c.id] == nil {
             enCurso[c.id] = 0
             fallidas[c.id] = nil; errores[c.id] = nil
