@@ -1,3 +1,6 @@
+## iPhone 3.31: conexión elegida por el administrador
+- Administración → Servidor → «Conexión»: Tailscale o Cloudflare. La app obedece lo elegido (lo lee del servidor o de ntfy) y, si la dirección en uso no responde, prueba la otra.
+
 ## iPhone 3.30: dirección de respaldo
 - Si la dirección principal (Tailscale Funnel) no responde y hay internet, la app pasa sola a la de respaldo (Cloudflare Tunnel): primero la que guardó del servidor y, si no, la última publicada en ntfy. Cada 2 minutos revisa si volvió la principal y regresa a ella.
 

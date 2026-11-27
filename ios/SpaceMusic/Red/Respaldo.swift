@@ -8,6 +8,10 @@ enum Respaldo {
     /// Tema privado de ntfy donde el servidor publica la dirección de respaldo.
     static let tema = "spacemusic-lbBZngG2Udw6qCsGIYu32w"
     private static let clave = "respaldoServidor"
+    private static let claveModo = "modoConexion"
+
+    /// «tailscale» o «cloudflare»: la dirección que eligió un administrador para todas las apps.
+    static var modoCloudflare: Bool { UserDefaults.standard.string(forKey: claveModo) == "cloudflare" }
     nonisolated(unsafe) private static var buscando: Task<String?, Never>?
     nonisolated(unsafe) private static var vigilando = false
 
@@ -26,15 +30,21 @@ enum Respaldo {
         return (resp as? HTTPURLResponse)?.statusCode == 200
     }
 
-    /// Con la principal funcionando: guarda la dirección de respaldo actual.
+    /// Guarda la dirección de respaldo y el modo que entrega el servidor (por la dirección en uso) y obedece el modo.
     static func recordar() async {
-        guard !usando, let u = URL(string: Sesion.servidorPorDefecto + "/api/servidor/respaldo") else { return }
+        guard let u = URL(string: Sesion.compartida.servidor + "/api/servidor/respaldo") else { return }
         var r = URLRequest(url: u)
         r.timeoutInterval = 8
-        struct R: Decodable { let url: String? }
+        struct R: Decodable { let url: String?; let modo: String? }
         guard let (datos, _) = try? await URLSession.shared.data(for: r),
-              let x = try? JSONDecoder().decode(R.self, from: datos), let url = x.url, valida(url) else { return }
-        UserDefaults.standard.set(url, forKey: clave)
+              let x = try? JSONDecoder().decode(R.self, from: datos) else { return }
+        if let url = x.url, valida(url) { UserDefaults.standard.set(url, forKey: clave) }
+        UserDefaults.standard.set(x.modo == "cloudflare" ? "cloudflare" : "tailscale", forKey: claveModo)
+        if modoCloudflare, !usando {
+            _ = await activar()
+        } else if !modoCloudflare, usando, await responde(Sesion.servidorPorDefecto) {
+            await MainActor.run { Sesion.compartida.servidor = Sesion.servidorPorDefecto }
+        }
     }
 
     /// Busca una dirección de respaldo que responda y la pone en uso. Devuelve la nueva base (o nil).
@@ -47,8 +57,16 @@ enum Respaldo {
                let (datos, _) = try? await URLSession.shared.data(from: u),
                let texto = String(data: datos, encoding: .utf8) {
                 struct M: Decodable { let message: String? }
-                let ultimas = texto.split(separator: "\n").compactMap { try? JSONDecoder().decode(M.self, from: Data($0.utf8)).message }
-                if let ultima = ultimas.last(where: valida), !candidatas.contains(ultima) { candidatas.insert(ultima, at: 0) }
+                struct J: Decodable { let url: String?; let modo: String? }
+                // Antes se publicaba solo la dirección; ahora {"url": …, "modo": …}
+                var ultima: String?
+                for m in texto.split(separator: "\n").compactMap({ try? JSONDecoder().decode(M.self, from: Data($0.utf8)).message }) {
+                    if m.hasPrefix("{"), let j = try? JSONDecoder().decode(J.self, from: Data(m.utf8)) {
+                        if let u = j.url, valida(u) { ultima = u }
+                        UserDefaults.standard.set(j.modo == "cloudflare" ? "cloudflare" : "tailscale", forKey: claveModo)
+                    } else if valida(m) { ultima = m }
+                }
+                if let ultima, !candidatas.contains(ultima) { candidatas.insert(ultima, at: 0) }
             }
             for c in candidatas where await responde(c) {
                 UserDefaults.standard.set(c, forKey: clave)
@@ -74,7 +92,7 @@ enum Respaldo {
         Task.detached {
             while usando {
                 try? await Task.sleep(for: .seconds(120))
-                if await responde(Sesion.servidorPorDefecto) {
+                if !modoCloudflare, await responde(Sesion.servidorPorDefecto) {
                     await MainActor.run { Sesion.compartida.servidor = Sesion.servidorPorDefecto }
                     break
                 }

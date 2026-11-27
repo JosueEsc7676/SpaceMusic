@@ -157,7 +157,14 @@ enum API {
             return try await traer { try await sesionURL.data(for: Respaldo.redirigir(r)) }
         } catch let error as ErrorAPI where error.estado == 0 {
             let hayRed = await MainActor.run { Conexion.compartida.disponible }
-            guard hayRed, !Respaldo.usando, await Respaldo.activar() != nil else { throw error }
+            guard hayRed else { throw error }
+            if Respaldo.usando {
+                // Cloudflare no contesta: se vuelve a la principal (Tailscale)
+                guard await Respaldo.responde(Sesion.servidorPorDefecto) else { throw error }
+                await MainActor.run { Sesion.compartida.servidor = Sesion.servidorPorDefecto }
+            } else {
+                guard await Respaldo.activar() != nil else { throw error }
+            }
             return try await traer { try await sesionURL.data(for: Respaldo.redirigir(r)) }
         }
     }

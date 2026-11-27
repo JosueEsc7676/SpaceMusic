@@ -40,6 +40,7 @@ struct AdminVista: View {
             }
             Section("Servidor") {
                 NavigationLink { SoporteTecnicoVista() } label: { Label("Soporte técnico", systemImage: "stethoscope") }
+                NavigationLink { ConexionVista() } label: { Label("Conexión: Tailscale o Cloudflare", systemImage: "network") }
                 NavigationLink(value: Destino.resumenAdmin) { Label("Estadísticas del servidor", systemImage: "chart.xyaxis.line") }
                 NavigationLink(value: Destino.soporte) { Label("Errores recientes (vista anterior)", systemImage: "clock.arrow.circlepath") }
             }
