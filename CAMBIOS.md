@@ -1,3 +1,6 @@
+## iPhone 3.30: dirección de respaldo
+- Si la dirección principal (Tailscale Funnel) no responde y hay internet, la app pasa sola a la de respaldo (Cloudflare Tunnel): primero la que guardó del servidor y, si no, la última publicada en ntfy. Cada 2 minutos revisa si volvió la principal y regresa a ella.
+
 ## iPhone 3.28: música gratis de internet
 - Buscar: sección «En internet» (Internet Archive, Audius, Jamendo y radios en vivo) debajo de los resultados del servidor, para administradores y colaboradores cuando está activada. Suenan como las demás (id negativo por /api/canciones/{id}/audio) y las de licencia libre se guardan en el servidor con «＋».
 - Administración → Música → «Música de internet»: activar, elegir fuentes y pegar el client_id de Jamendo.

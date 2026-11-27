@@ -62,6 +62,8 @@ struct Principal: View {
             if !conexion.disponible { nav.pestana = .biblioteca; nav.ir(.descargas) }
             await Biblioteca.compartida.renovarSesionSiHaceFalta()
             guard !Task.isCancelled, Sesion.compartida.conectado else { return }
+            // Se guarda la dirección de respaldo por si un día la principal no responde
+            Task { await Respaldo.recordar() }
             Eventos.compartido.conectar()
             await EscuchaJuntos.compartida.retomar()
             Eventos.pedirPermiso()

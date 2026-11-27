@@ -139,7 +139,7 @@ enum API {
             return valor
         }
         do {
-            let (datos, resp) = try await traer { try await sesionURL.data(for: r) }
+            let (datos, resp) = try await traerConRespaldo(r)
             let valor: T = try interpretar(datos, resp, ruta: ruta, tokenPeticion: r.value(forHTTPHeaderField: "Authorization"))
             CopiaLocal.guardar(datos, en: copia)
             return valor
@@ -148,6 +148,17 @@ enum API {
                   let valor = try? JSONDecoder().decode(T.self, from: datos) else { throw error }
             Task { @MainActor in Conexion.compartida.mostrandoCopia = true }
             return valor
+        }
+    }
+
+    /// Si la dirección principal no responde (con internet), se pasa a la de respaldo y se repite la petición.
+    private static func traerConRespaldo(_ r: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            return try await traer { try await sesionURL.data(for: Respaldo.redirigir(r)) }
+        } catch let error as ErrorAPI where error.estado == 0 {
+            let hayRed = await MainActor.run { Conexion.compartida.disponible }
+            guard hayRed, !Respaldo.usando, await Respaldo.activar() != nil else { throw error }
+            return try await traer { try await sesionURL.data(for: Respaldo.redirigir(r)) }
         }
     }
 
