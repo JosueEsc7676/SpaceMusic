@@ -22,6 +22,24 @@ actor CacheImagenes {
     }
 
     nonisolated private func clave(_ ruta: String) -> String { Sesion.compartida.servidor + "|" + ruta }
+
+    /// Portada guardada en el iPhone para las canciones descargadas (se ve sin internet). La clave es la ruta sin el tamaño.
+    nonisolated static func archivoOffline(_ ruta: String) -> URL? {
+        var base = ruta
+        if var p = URLComponents(string: ruta) { p.queryItems = (p.queryItems ?? []).filter { $0.name != "s" }; if p.queryItems?.isEmpty == true { p.queryItems = nil }; base = p.string ?? ruta }
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("PortadasDescargadas", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent(CopiaLocal.huella(base) + ".jpg")
+    }
+
+    /// Guarda la portada (640 px) de una canción descargada.
+    func guardarOffline(_ ruta: String) async {
+        guard let destino = CacheImagenes.archivoOffline(ruta), !FileManager.default.fileExists(atPath: destino.path),
+              var r = try? API.peticion(CacheImagenes.rutaReducida(ruta, pixeles: 640)) else { return }
+        r.setValue("image/*", forHTTPHeaderField: "Accept")
+        guard let (d, resp) = try? await API.sesionURL.data(for: r), (resp as? HTTPURLResponse)?.statusCode == 200, d.count > 500 else { return }
+        try? d.write(to: destino, options: .atomic)
+    }
     nonisolated func enMemoria(_ ruta: String) -> UIImage? { memoria.object(forKey: clave(ruta) as NSString) }
 
     func imagen(_ ruta: String) async -> UIImage? {
@@ -32,8 +50,11 @@ actor CacheImagenes {
             guard var r = try? API.peticion(ruta) else { return nil }
             r.setValue("image/*", forHTTPHeaderField: "Accept")
             r.cachePolicy = .returnCacheDataElseLoad
-            guard let (d, resp) = try? await API.sesionURL.data(for: r),
-                  (resp as? HTTPURLResponse)?.statusCode == 200,
+            // Sin internet (o si falla): la portada guardada con la descarga
+            var datos: Data?
+            if let (d, resp) = try? await API.sesionURL.data(for: r), (resp as? HTTPURLResponse)?.statusCode == 200 { datos = d }
+            else if let f = CacheImagenes.archivoOffline(ruta) { datos = try? Data(contentsOf: f) }
+            guard let d = datos,
                   let fuente = CGImageSourceCreateWithData(d as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
                   let miniatura = CGImageSourceCreateThumbnailAtIndex(fuente, 0, [
                     kCGImageSourceCreateThumbnailFromImageAlways: true,

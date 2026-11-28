@@ -197,6 +197,9 @@ final class Descargas {
             canciones.insert(c, at: 0)
             ids.insert(c.id)
             guardarIndice()
+            // También la letra (queda en la copia local) y la portada, para verlas sin internet
+            let _: Letra? = try? await API.get("/api/letras/\(c.id)")
+            if let p = c.portadaUrl, !p.isEmpty { await CacheImagenes.compartida.guardarOffline(p) }
         } catch {
             guard version == generacion, !Task.isCancelled else { return }
             fallidas[c.id] = c
