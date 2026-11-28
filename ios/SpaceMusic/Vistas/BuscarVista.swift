@@ -154,7 +154,7 @@ struct BuscarVista: View {
     private func seccionExterna(_ x: BusquedaExterna) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Label("En YouTube Music", systemImage: "globe").font(.title3.weight(.bold))
+                Label("En internet", systemImage: "globe").font(.title3.weight(.bold))
                 Spacer()
                 Text("Gratis").font(.caption.weight(.semibold)).foregroundStyle(Tema.secundario)
             }

@@ -520,9 +520,12 @@ enum Fotos {
         let m = max(img.size.width, img.size.height)
         let f = m > maximo ? maximo / m : 1
         let tam = CGSize(width: img.size.width * f, height: img.size.height * f)
-        let r = UIGraphicsImageRenderer(size: tam)
+        // Escala 1: sin esto se dibujaba a la escala de la pantalla (×3) y la foto pesaba 9 veces más
+        let formato = UIGraphicsImageRendererFormat()
+        formato.scale = 1
+        let r = UIGraphicsImageRenderer(size: tam, format: formato)
         let nueva = r.image { _ in img.draw(in: CGRect(origin: .zero, size: tam)) }
-        return nueva.jpegData(compressionQuality: 0.85)
+        return nueva.jpegData(compressionQuality: 0.82)
     }
 }
 

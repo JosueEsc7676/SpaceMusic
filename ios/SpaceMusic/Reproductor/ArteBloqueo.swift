@@ -172,7 +172,7 @@ enum ArteBloqueo {
         estiloP.alignment = e.alineacion == .izquierda ? .left : e.alineacion == .derecha ? .right : .center
         estiloP.lineBreakMode = .byWordWrapping
         estiloP.lineHeightMultiple = (e.fuente == .manuscrita ? 0.82 : 0.95) * CGFloat(e.interlineado)
-        let color = EstiloBloqueo.uiColor(e.color)
+        let color = e.colorLetra
         let sombra = NSShadow()
         switch e.efecto {
         case .sombra:

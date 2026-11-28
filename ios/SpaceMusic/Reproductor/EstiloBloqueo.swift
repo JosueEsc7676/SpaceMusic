@@ -51,8 +51,18 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
     var mecer = true
     /// Imagen de más resolución para verla nítida a pantalla completa (al tocar la portada en la pantalla bloqueada).
     var pantallaCompleta = false
+    /// Color elegido libremente (#RRGGBB); si está, reemplaza al de la lista.
+    var colorLibre: String? = nil
 
     init() {}
+
+    /// El color con el que se dibuja la letra.
+    var colorLetra: UIColor {
+        if let h = colorLibre, h.count == 7, h.hasPrefix("#"), let v = UInt32(h.dropFirst(), radix: 16) {
+            return UIColor(red: CGFloat((v >> 16) & 0xff) / 255, green: CGFloat((v >> 8) & 0xff) / 255, blue: CGFloat(v & 0xff) / 255, alpha: 1)
+        }
+        return EstiloBloqueo.uiColor(color)
+    }
 
     /// Lee lo guardado aunque falten opciones nuevas (cada una toma su valor normal).
     init(from decoder: Decoder) throws {
@@ -78,6 +88,7 @@ struct EstiloBloqueo: Codable, Equatable, Sendable {
         iluminar = (try? c.decodeIfPresent(Bool.self, forKey: .iluminar)) ?? d.iluminar
         mecer = (try? c.decodeIfPresent(Bool.self, forKey: .mecer)) ?? d.mecer
         pantallaCompleta = (try? c.decodeIfPresent(Bool.self, forKey: .pantallaCompleta)) ?? d.pantallaCompleta
+        colorLibre = try? c.decodeIfPresent(String.self, forKey: .colorLibre)
     }
 
     private static let base = EstiloBloqueo()

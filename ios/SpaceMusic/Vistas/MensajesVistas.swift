@@ -382,7 +382,7 @@ struct ChatVista: View {
     }
 
     private func enviarFoto(_ item: PhotosPickerItem) async {
-        guard let datos = try? await item.loadTransferable(type: Data.self), let jpg = Fotos.jpeg(datos, maximo: 2048) else {
+        guard let datos = try? await item.loadTransferable(type: Data.self), let jpg = Fotos.jpeg(datos, maximo: 1600) else {
             Avisos.compartido.mostrar("No se pudo leer la foto"); return
         }
         await subir(jpg, nombre: "foto.jpg", tipo: "image/jpeg", duracion: nil)

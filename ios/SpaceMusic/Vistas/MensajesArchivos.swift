@@ -35,7 +35,8 @@ extension Mensaje {
             try s.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
             try s.setActive(true)
             let ajustes: [String: Any] = [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 44_100,
-                                          AVNumberOfChannelsKey: 1, AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue]
+                                          AVNumberOfChannelsKey: 1, AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue,
+                                          AVEncoderBitRateKey: 48_000]
             let g = try AVAudioRecorder(url: archivo, settings: ajustes)
             guard g.record() else { restaurar(); return false }
             grabador = g

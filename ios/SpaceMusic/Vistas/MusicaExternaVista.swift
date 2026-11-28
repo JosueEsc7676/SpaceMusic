@@ -6,6 +6,7 @@ import SwiftUI
 struct MusicaExternaVista: View {
     @State private var datos: ValorAdmin?
     @State private var activo = false
+    @State private var soundcloud = false
     @State private var error: String?
     @State private var cargado = false
 
@@ -18,11 +19,17 @@ struct MusicaExternaVista: View {
             } footer: {
                 Text("Aparece en el buscador debajo de tus resultados, solo para administradores. Tus canciones no cambian; con «＋», favoritos, una playlist o descargar, la canción se guarda en el servidor (carpeta «Internet»).")
             }
+            Section {
+                Toggle("SoundCloud", isOn: $soundcloud).tint(Tema.celeste)
+                    .onChange(of: soundcloud) { _, v in if cargado { Task { await guardar(["fuentes": ["soundcloud": v]]) } } }
+            } footer: {
+                Text("Remixes, artistas independientes y sesiones completas (no oficial). Las de disquera que solo dan 30 s se ocultan. La primera vez tarda unos segundos en empezar.")
+            }
             if datos?["youtubeInstalado"].verdadero == false {
                 Section { Text("ytmusicapi no está instalado en el servidor.").foregroundStyle(Tema.peligro) }
             }
         }
-        .navigationTitle("YouTube Music")
+        .navigationTitle("Música de internet")
         .navigationBarTitleDisplayMode(.inline)
         .task { await cargar() }
     }
@@ -38,6 +45,7 @@ struct MusicaExternaVista: View {
         datos = d
         cargado = false
         activo = d["activo"].verdadero && d["fuentes"]["youtube"].verdadero
+        soundcloud = d["fuentes"]["soundcloud"].verdadero
         DispatchQueue.main.async { cargado = true }
     }
 

@@ -68,15 +68,23 @@ struct EstiloBloqueoVista: View {
                             Text("Color")
                             Spacer()
                             ForEach(EstiloBloqueo.ColorLetra.allCases, id: \.self) { c in
-                                Button { e.color = c } label: {
+                                Button { e.color = c; e.colorLibre = nil } label: {
                                     Circle().fill(Color(uiColor: EstiloBloqueo.uiColor(c))).frame(width: 28, height: 28)
-                                        .overlay(Circle().strokeBorder(e.color == c ? Tema.celeste : Color.white.opacity(0.2), lineWidth: e.color == c ? 3 : 1))
+                                        .overlay(Circle().strokeBorder(e.color == c && e.colorLibre == nil ? Tema.celeste : Color.white.opacity(0.2), lineWidth: e.color == c && e.colorLibre == nil ? 3 : 1))
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel(EstiloBloqueo.nombre(c))
                                 .accessibilityAddTraits(e.color == c ? .isSelected : [])
                             }
                         }
+                        ColorPicker("Otro color", selection: Binding(
+                            get: { Color(uiColor: e.colorLetra) },
+                            set: { nuevo in
+                                var r: CGFloat = 1, g: CGFloat = 1, b: CGFloat = 1, a: CGFloat = 1
+                                UIColor(nuevo).getRed(&r, green: &g, blue: &b, alpha: &a)
+                                let x = { (v: CGFloat) in Int(max(0, min(1, v)) * 255) }
+                                e.colorLibre = String(format: "#%02X%02X%02X", x(r), x(g), x(b))
+                            }), supportsOpacity: false)
                         Picker("Alineación", selection: $e.alineacion) {
                             ForEach(EstiloBloqueo.Alineacion.allCases, id: \.self) { Text(EstiloBloqueo.nombre($0)).tag($0) }
                         }
