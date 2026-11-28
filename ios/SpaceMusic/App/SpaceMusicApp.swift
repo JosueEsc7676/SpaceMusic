@@ -33,6 +33,8 @@ struct SpaceMusicApp: App {
                 Eventos.compartido.conectar()
                 Task { await Eventos.compartido.actualizarResumen() }
                 Task { await Biblioteca.compartida.renovarSesionSiHaceFalta() }
+                // En casa (solo administradores): conexión directa al servidor por la Wi-Fi
+                Task { await Casa.revisar() }
             } else if nueva == .background, !Reproductor.compartido.sonando {
                 // Sin música, iOS suspende la app: se cierra la conexión en vivo
                 Eventos.compartido.desconectar()

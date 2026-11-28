@@ -26,7 +26,7 @@ struct AdminVista: View {
                 NavigationLink { OrganizacionAdminVista() } label: { Label("Organización y catálogo", systemImage: "square.stack.3d.up") }
                 NavigationLink(value: Destino.generosAdmin) { Label("Géneros y artistas", systemImage: "guitars") }
                 NavigationLink(value: Destino.bibliotecaAdmin) { Label("Mantenimiento de biblioteca", systemImage: "externaldrive.badge.checkmark") }
-                NavigationLink { MusicaExternaVista() } label: { Label("Música de internet", systemImage: "globe") }
+                NavigationLink { MusicaExternaVista() } label: { Label("YouTube Music", systemImage: "globe") }
             }
             Section("Personas") {
                 NavigationLink { ReportesAdminVista() } label: {

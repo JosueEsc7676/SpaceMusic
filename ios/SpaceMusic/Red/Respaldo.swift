@@ -42,7 +42,7 @@ enum Respaldo {
         UserDefaults.standard.set(x.modo == "cloudflare" ? "cloudflare" : "tailscale", forKey: claveModo)
         if modoCloudflare, !usando {
             _ = await activar()
-        } else if !modoCloudflare, usando, await responde(Sesion.servidorPorDefecto) {
+        } else if !modoCloudflare, usando, !Casa.activa, await responde(Sesion.servidorPorDefecto) {
             await MainActor.run { Sesion.compartida.servidor = Sesion.servidorPorDefecto }
         }
     }
@@ -90,7 +90,7 @@ enum Respaldo {
         guard !vigilando else { return }
         vigilando = true
         Task.detached {
-            while usando {
+            while usando && !Casa.activa {
                 try? await Task.sleep(for: .seconds(120))
                 if !modoCloudflare, await responde(Sesion.servidorPorDefecto) {
                     await MainActor.run { Sesion.compartida.servidor = Sesion.servidorPorDefecto }

@@ -1,56 +1,28 @@
 import SwiftUI
-/// (Compilación 3.29: descargar canciones de internet también las guarda en el servidor.)
 
-/// Administración → Música de internet: activar Internet Archive, Audius, Jamendo y radios en vivo.
-/// Solo la usan administradores y colaboradores, en el buscador, debajo de los resultados del servidor.
+/// Administración → YouTube Music: escuchar en streaming cualquier canción de YouTube Music desde el buscador.
+/// Usa bibliotecas no oficiales (ytmusicapi y yt-dlp) en el servidor. Solo para administradores.
+/// (Antes: Internet Archive, Audius, Jamendo y radios; se quitaron en la 3.33.)
 struct MusicaExternaVista: View {
     @State private var datos: ValorAdmin?
     @State private var activo = false
-    @State private var fuentes: [String: Bool] = [:]
-    @State private var jamendo = ""
     @State private var error: String?
     @State private var cargado = false
-
-    private let lista: [(String, String, String)] = [
-        ("archive", "Internet Archive", "Conciertos, netlabels, discos antiguos y música libre."),
-        ("audius", "Audius", "Música independiente para escuchar gratis."),
-        ("jamendo", "Jamendo", "Música Creative Commons (necesita un client_id gratis)."),
-        ("radio", "Radios en vivo", "Miles de radios de todo el mundo.")]
 
     var body: some View {
         Form {
             if let error { Section { Text(error).foregroundStyle(Tema.peligro) } }
             Section {
-                Toggle("Activar música de internet", isOn: $activo).tint(Tema.celeste)
-                    .onChange(of: activo) { _, v in if cargado { Task { await guardar(["activo": v]) } } }
+                Toggle("Activar YouTube Music", isOn: $activo).tint(Tema.celeste)
+                    .onChange(of: activo) { _, v in if cargado { Task { await guardar(["activo": v, "fuentes": ["youtube": true]]) } } }
             } footer: {
-                Text("Aparece en el buscador debajo de tus resultados, solo para administradores y colaboradores. Tus canciones no cambian; las de licencia libre se pueden guardar en el servidor con «＋».")
+                Text("Aparece en el buscador debajo de tus resultados, solo para administradores. Tus canciones no cambian; con «＋», favoritos, una playlist o descargar, la canción se guarda en el servidor (carpeta «Internet»).")
             }
-            Section("Fuentes") {
-                ForEach(lista, id: \.0) { f in
-                    Toggle(isOn: Binding(get: { fuentes[f.0] ?? true }, set: { v in
-                        fuentes[f.0] = v
-                        Task { await guardar(["fuentes": [f.0: v]]) }
-                    })) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(f.1)
-                            Text(f.2).font(.caption).foregroundStyle(Tema.secundario)
-                        }
-                    }
-                    .tint(Tema.celeste)
-                }
+            if datos?["youtubeInstalado"].verdadero == false {
+                Section { Text("ytmusicapi no está instalado en el servidor.").foregroundStyle(Tema.peligro) }
             }
-            Section {
-                TextField(datos?["jamendoConfigurado"].verdadero == true ? "Guardado (\(datos?["jamendoId"].cadena ?? ""))" : "client_id de Jamendo", text: $jamendo)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button("Guardar client_id") { Task { await guardar(["jamendoId": jamendo.trimmingCharacters(in: .whitespaces)]); jamendo = "" } }
-                    .disabled(jamendo.trimmingCharacters(in: .whitespaces).isEmpty)
-                if let url = URL(string: "https://devportal.jamendo.com/") {
-                    Link(destination: url) { Label("Obtener un client_id gratis", systemImage: "arrow.up.right.square") }
-                }
-            } header: { Text("Jamendo") }
         }
-        .navigationTitle("Música de internet")
+        .navigationTitle("YouTube Music")
         .navigationBarTitleDisplayMode(.inline)
         .task { await cargar() }
     }
@@ -65,8 +37,7 @@ struct MusicaExternaVista: View {
     private func aplicar(_ d: ValorAdmin) {
         datos = d
         cargado = false
-        activo = d["activo"].verdadero
-        for f in lista { fuentes[f.0] = d["fuentes"][f.0].verdadero }
+        activo = d["activo"].verdadero && d["fuentes"]["youtube"].verdadero
         DispatchQueue.main.async { cargado = true }
     }
 

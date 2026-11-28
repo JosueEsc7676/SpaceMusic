@@ -26,8 +26,9 @@ struct Principal: View {
     @ViewBuilder
     private func conCristal<V: View>(_ v: V) -> some View {
         if #available(iOS 26, *), Cristal.activo {
-            // Las pestañas siempre visibles (no se encogen al desplazar)
+            // Como Apple Music: al bajar la barra se encoge (el mini reproductor queda junto a ella) y al subir vuelve
             v.modifier(AccesorioReproductor(hayCancion: reproductor.actual != nil, visible: eventos.chatAbierto == nil))
+                .tabBarMinimizeBehavior(.onScrollDown)
         } else {
             v
         }
@@ -63,7 +64,7 @@ struct Principal: View {
             await Biblioteca.compartida.renovarSesionSiHaceFalta()
             guard !Task.isCancelled, Sesion.compartida.conectado else { return }
             // Se guarda la dirección de respaldo por si un día la principal no responde
-            Task { await Respaldo.recordar() }
+            Task { await Respaldo.recordar(); await Casa.revisar() }
             Eventos.compartido.conectar()
             await EscuchaJuntos.compartida.retomar()
             Eventos.pedirPermiso()

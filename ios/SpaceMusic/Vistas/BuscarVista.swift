@@ -8,7 +8,7 @@ struct BuscarVista: View {
     @State private var buscando = false
     @State private var error: String?
     @State private var pestana: PestanaBusqueda = .todo
-    /// Música de internet (Internet Archive, Audius, Jamendo, radios) para administradores y colaboradores.
+    /// Música de internet (YouTube Music, no oficial) solo para administradores.
     @State private var externas: BusquedaExterna?
     @State private var guardadas: Set<Int> = []
     @AppStorage("busquedasRecientes") private var recientesGuardadas = ""
@@ -49,7 +49,7 @@ struct BuscarVista: View {
                 let r: Busqueda = try await API.get("/api/buscar?q=\(API.codificar(q))")
                 if !Task.isCancelled { resultado = r; error = nil }
                 // Después de los resultados del servidor, lo que hay gratis en internet (si está activado)
-                if Sesion.compartida.puedeEditar, !Task.isCancelled {
+                if Sesion.compartida.esAdmin, !Task.isCancelled {
                     buscando = false
                     let x: BusquedaExterna? = try? await API.get("/api/externo/buscar?q=\(API.codificar(q))", tiempo: 15)
                     if !Task.isCancelled { externas = x }
@@ -154,7 +154,7 @@ struct BuscarVista: View {
     private func seccionExterna(_ x: BusquedaExterna) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Label("En internet", systemImage: "globe").font(.title3.weight(.bold))
+                Label("En YouTube Music", systemImage: "globe").font(.title3.weight(.bold))
                 Spacer()
                 Text("Gratis").font(.caption.weight(.semibold)).foregroundStyle(Tema.secundario)
             }
